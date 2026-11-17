@@ -17,8 +17,8 @@ import {
 import { backfillRepoConfig } from "../config-write";
 import type { AppActions, AppState } from "../context/state";
 import type { createThemeState } from "../context/theme";
+import type { ProviderView } from "../core/provider-model";
 import { dashboardSettings } from "../dashboard/settings";
-import type { ProviderView } from "../providers/provider";
 import type { SnykProviderConfig } from "../providers/snyk/use-snyk";
 
 type ThemeState = ReturnType<typeof createThemeState>;

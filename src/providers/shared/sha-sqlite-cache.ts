@@ -3,10 +3,10 @@ import { createHash } from "node:crypto";
 import { chmodSync, closeSync, mkdirSync, openSync } from "node:fs";
 import { realpath } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { DEFAULT_PROVIDER_CACHE_LIMIT, type ProviderCacheLimit } from "../../core/provider-settings";
 import { addDebugEvent, redactDebugValue } from "../../debug/events";
 import { monotonicNow, NEVER } from "../../utils/monotonic";
 import { storageRoot } from "../../utils/storage-path";
-import { DEFAULT_PROVIDER_CACHE_LIMIT, type ProviderCacheLimit } from "./auto-refresh";
 
 export const DEFAULT_PROVIDER_CACHE_ROOT = storageRoot("cache");
 const databases = new Map<string, Database>();
@@ -151,7 +151,7 @@ export function assertExactSha(sha: string): string {
   return sha.toLowerCase();
 }
 
-export { mergeById } from "../../utils/merge-by-id";
+export { mergeById } from "../../core/merge-by-id";
 
 /**
  * Merge each SHA's terminal results into its cached snapshot, then apply the count limit once.

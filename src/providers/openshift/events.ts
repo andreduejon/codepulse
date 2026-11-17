@@ -1,6 +1,6 @@
+import { openShiftStatusRows } from "../../core/openshift/resources";
+import type { OpenShiftEvent, OpenShiftResourceKind } from "../../core/openshift/types";
 import { formatRelativeDate } from "../../utils/date";
-import { openShiftStatusRows } from "./api";
-import type { OpenShiftEvent, OpenShiftResourceKind } from "./types";
 
 /** Kinds whose events say something about a failure. An ImageStreamTag has hardly any. */
 export const OPENSHIFT_EVENT_KINDS: ReadonlySet<OpenShiftResourceKind> = new Set([

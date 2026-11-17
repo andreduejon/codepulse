@@ -1,14 +1,14 @@
 /** The Jenkins service with its lifecycle, without Solid: the app is a plain object, Jenkins and the cache are fakes. */
 import { expect, mock, test } from "bun:test";
-import type { ProviderStatus } from "../../context/app-state-types";
 import { BANNER } from "../../debug/banner";
 import type { GraphRow } from "../../git/types";
-import type { JenkinsCacheEntry } from "../../providers/jenkins/merge";
-import type { JenkinsRun } from "../../providers/jenkins/types";
-import { DEFAULT_JENKINS_CONFIG } from "../../providers/jenkins/types";
-import type { GraphBadge } from "../../providers/provider";
 import { FetchLifecycle } from "../fetch-lifecycle";
+import type { GraphBadge } from "../provider-model";
+import type { ProviderStatus } from "../provider-status";
+import type { JenkinsCacheEntry } from "./merge";
 import { createJenkinsService, type JenkinsApiPort, type JenkinsCachePort } from "./service";
+import type { JenkinsRun } from "./types";
+import { DEFAULT_JENKINS_CONFIG } from "./types";
 
 const SHA = "b".repeat(40);
 const JOB = "https://jenkins.example.com/job/app/";

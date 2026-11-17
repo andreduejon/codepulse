@@ -1,8 +1,14 @@
 import { scopedMemory } from "../../components/detail-memory";
+import type {
+  JenkinsCommitData,
+  JenkinsFailedTest,
+  JenkinsJob,
+  JenkinsJobFetchResult,
+  JenkinsRun,
+} from "../../core/jenkins/types";
 import { JENKINS_LEGEND } from "../legends";
 import { detailEntry, type ProviderDetailSource } from "../shared/detail-entry";
 import { JenkinsDetailTab } from "./detail-tab";
-import type { JenkinsCommitData, JenkinsFailedTest, JenkinsJob, JenkinsJobFetchResult, JenkinsRun } from "./types";
 
 /** What Jenkins hands the detail view. */
 export interface JenkinsDetailSource extends ProviderDetailSource<JenkinsCommitData> {

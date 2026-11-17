@@ -8,7 +8,7 @@ import {
   isProviderLimit,
   PROVIDER_CACHE_LIMIT_OPTIONS,
   PROVIDER_LIMIT_OPTIONS,
-} from "./auto-refresh";
+} from "./provider-settings";
 
 describe("provider cache limits", () => {
   test("accepts and selects all bounded cache options with default 20", () => {

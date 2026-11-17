@@ -1,5 +1,5 @@
+import type { SnykFinding, SnykScanResult } from "../../core/snyk/types";
 import { findingIdentity } from "./parser";
-import type { SnykFinding, SnykScanResult } from "./types";
 
 /** A vulnerability in a package, whatever its version: a bump that keeps it vulnerable is not a change. */
 export const diffKey = (finding: SnykFinding) => `${findingIdentity(finding)}:${finding.dependency}`;

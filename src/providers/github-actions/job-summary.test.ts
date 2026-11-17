@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
+import type { GitHubJob, GitHubStep } from "../../core/github/types";
 import { githubJobLogEntries, githubJobSummary } from "./job-summary";
-import type { GitHubJob, GitHubStep } from "./types";
 
 const START = Date.parse("2026-11-10T10:00:00.000Z");
 const at = (seconds: number) => new Date(START + seconds * 1000).toISOString();

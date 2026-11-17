@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { OpenShiftListedInventory } from "./api";
-import { applyOpenShiftWatchEvent } from "./api";
-import type { OpenShiftResource } from "./types";
+import { applyOpenShiftWatchEvent } from "./resources";
+import type { OpenShiftListedInventory, OpenShiftResource } from "./types";
 import {
   appendOpenShiftLogFollow,
   isOpenShiftWatchGone,

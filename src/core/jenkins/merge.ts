@@ -2,7 +2,7 @@
  * Jenkins builds and stages as the cache keeps them, and how new ones merge in: plain functions, no storage. The cache
  * (cache.ts) and the provider service (core/jenkins/service.ts) both use them.
  */
-import { mergeById } from "../../utils/merge-by-id";
+import { mergeById } from "../merge-by-id";
 import type { JenkinsJob, JenkinsJobFetchResult, JenkinsRun, JenkinsStage, JenkinsTestReport } from "./types";
 
 export interface JenkinsCacheEntry {

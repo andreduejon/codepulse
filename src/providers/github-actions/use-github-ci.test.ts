@@ -4,13 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createRoot } from "solid-js";
 import { createAppState } from "../../context/state";
+import type { GitHubJob, GitHubWorkflowRun } from "../../core/github/types";
 import { BANNER } from "../../debug/banner";
 import { buildGraph } from "../../git/graph";
 import * as monotonic from "../../utils/monotonic";
 import { closeProviderCaches } from "../shared/sha-sqlite-cache";
 import * as api from "./api";
 import { GitHubCache } from "./cache";
-import type { GitHubJob, GitHubWorkflowRun } from "./types";
 import { useGitHubCI } from "./use-github-ci";
 
 const SHA = "e".repeat(40);

@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { createRoot, createSignal } from "solid-js";
 import { createAppState } from "../../context/state";
+import type { OpenShiftCommitData, OpenShiftListedInventory, OpenShiftResource } from "../../core/openshift/types";
 import { BANNER } from "../../debug/banner";
 import { buildGraph } from "../../git/graph";
 import * as api from "./api";
 import { OpenShiftCache, type OpenShiftCacheEntry } from "./cache";
-import type { OpenShiftCommitData, OpenShiftResource } from "./types";
 import {
   commitDataFromCacheEntry,
   commitHasDigestSeed,
@@ -63,7 +63,7 @@ function mountOpenShift(
     else process.env[tokenEnvVar] = original;
   });
   const entry = { sha: SHA, builds: [{ ...build, commitSha: SHA }] };
-  const listed: api.OpenShiftListedInventory = {
+  const listed: OpenShiftListedInventory = {
     resources: options.listedResources ?? [{ ...pod, commitSha: SHA }],
     controllers: [],
     failures: [],
@@ -415,7 +415,7 @@ describe("OpenShift cache below the fetch depth, saving", () => {
 });
 
 describe("OpenShift live list failures", () => {
-  const failedList = (successfulRequests: number, error: string): api.OpenShiftListedInventory => ({
+  const failedList = (successfulRequests: number, error: string): OpenShiftListedInventory => ({
     resources: [],
     controllers: [],
     failures: [{ namespace: "ns", kind: "Pod", path: "/api/v1/namespaces/ns/pods", error: "boom" }],
@@ -503,7 +503,7 @@ describe("OpenShift expired token", () => {
   test("a 401 stops automatic live requests until Reload commit retries", async () => {
     const mounted = mountOpenShift();
     await Bun.sleep(0);
-    const expired: api.OpenShiftListedInventory = {
+    const expired: OpenShiftListedInventory = {
       resources: [],
       controllers: [],
       failures: [],
@@ -539,7 +539,7 @@ describe("OpenShift without setup", () => {
 });
 
 describe("OpenShift auth recovery", () => {
-  const expiredList: api.OpenShiftListedInventory = {
+  const expiredList: OpenShiftListedInventory = {
     resources: [],
     controllers: [],
     failures: [],
@@ -604,7 +604,7 @@ describe("OpenShift auth recovery", () => {
 });
 
 describe("OpenShift auth recovery across inventory and live list", () => {
-  const expiredList: api.OpenShiftListedInventory = {
+  const expiredList: OpenShiftListedInventory = {
     resources: [],
     controllers: [],
     failures: [],

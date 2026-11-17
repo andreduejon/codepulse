@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { createProviderRegistry, providerDetailTab } from "../src/providers/provider";
+import { providerDetailTab } from "../src/core/provider-model";
+import { createProviderRegistry } from "../src/providers/provider";
 
 describe("provider order", () => {
   test("uses canonical order, not registration order", () => {

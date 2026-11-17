@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
+import type { SnykFinding, SnykScanResult } from "../../core/snyk/types";
 import { compareSnykScans, diffSnykScans, findSnykBaseline, snykBaselineNote } from "./scan-diff";
-import type { SnykFinding, SnykScanResult } from "./types";
 
 export const finding = (id: string, dependency: string, installedVersion: string, extra: Partial<SnykFinding> = {}) =>
   ({

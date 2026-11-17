@@ -1,6 +1,6 @@
 import { expect, mock, test } from "bun:test";
+import type { JenkinsFailedTest, JenkinsJob, JenkinsRun } from "../../core/jenkins/types";
 import { jenkinsBuildLogTarget, jenkinsTestFailureTarget } from "./log-target";
-import type { JenkinsFailedTest, JenkinsJob, JenkinsRun } from "./types";
 
 /** The log dialog's download signal: the targets pass it to every request. */
 const signal = new AbortController().signal;

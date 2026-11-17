@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { buildJenkinsCommitDataMap, buildJenkinsGraphBadges } from "../../core/jenkins/commit-data";
+import type { JenkinsRun } from "../../core/jenkins/types";
 import { BANNER } from "../../debug/banner";
 import { clearDebugEvents, getDebugEvents } from "../../debug/events";
 import {
-  buildJenkinsCommitDataMap,
-  buildJenkinsGraphBadges,
   deriveJenkinsJobLabel,
   extractCandidateShas,
   extractHeadShas,
@@ -18,7 +18,6 @@ import {
   normalizeJenkinsJobUrl,
   resolveJenkinsJobs,
 } from "./api";
-import type { JenkinsRun } from "./types";
 import { isSafeJenkinsRequestUrl, isValidJenkinsJobUrl } from "./validation";
 
 // ---------------------------------------------------------------------------

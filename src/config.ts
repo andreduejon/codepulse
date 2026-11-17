@@ -2,6 +2,14 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { DEFAULT_MAX_COUNT } from "./constants";
 import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL } from "./context/state";
+import { PROVIDER_ORDER, type ProviderView } from "./core/provider-model";
+import {
+  isProviderAutoRefreshSeconds,
+  isProviderCacheLimit,
+  isProviderLimit,
+  PROVIDER_CACHE_LIMIT_OPTIONS,
+  type ProviderCacheLimit,
+} from "./core/provider-settings";
 import {
   DASHBOARD_KNOT_MINUTES,
   DASHBOARD_WINDOW_DAYS,
@@ -19,14 +27,6 @@ import {
   OPENSHIFT_SERVER_URL_MAX_LENGTH,
   OPENSHIFT_TEXT_MAX_LENGTH,
 } from "./providers/openshift/validation";
-import { PROVIDER_ORDER, type ProviderView } from "./providers/provider";
-import {
-  isProviderAutoRefreshSeconds,
-  isProviderCacheLimit,
-  isProviderLimit,
-  PROVIDER_CACHE_LIMIT_OPTIONS,
-  type ProviderCacheLimit,
-} from "./providers/shared/auto-refresh";
 import { storageRoot } from "./utils/storage-path";
 
 const GENERAL_TEXT_MAX_LENGTH = 255;

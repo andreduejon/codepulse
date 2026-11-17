@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { SnykDependencyGraph } from "../src/core/snyk/types";
 import {
   applyOverrideRules,
   highestSatisfying,
@@ -14,7 +15,6 @@ import {
   projectOverrideRules,
 } from "../src/providers/snyk/overrides";
 import type { PackageRanges, RegistryLookup } from "../src/providers/snyk/registry";
-import type { SnykDependencyGraph } from "../src/providers/snyk/types";
 
 describe("overrideTarget", () => {
   test("is the last step of a selector, without its version", () => {

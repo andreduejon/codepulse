@@ -1,6 +1,8 @@
 import type { Accessor } from "solid-js";
+import type { GraphBadge, ProviderView } from "../core/provider-model";
+import type { ProviderStatus } from "../core/provider-status";
 import type { Branch, Commit, CommitDetail, GraphRow, TagInfo, UncommittedDetail } from "../git/types";
-import type { GraphBadge, ProviderRegistry, ProviderView } from "../providers/provider";
+import type { ProviderRegistry } from "../providers/provider";
 
 export type DetailTab =
   | "files"
@@ -16,13 +18,6 @@ export type DetailTab =
   | "snyk-deps";
 
 export type HighlightMode = "ancestry" | "path" | "search" | null;
-
-export type ProviderStatus =
-  | { kind: "idle" }
-  | { kind: "loading" }
-  | { kind: "warning"; message: string }
-  | { kind: "unavailable"; message: string }
-  | { kind: "error"; message: string };
 
 export interface RepoState {
   commits: Accessor<Commit[]>;

@@ -1,8 +1,8 @@
 import type { DetailTab, ProviderStatus } from "./context/state";
+import type { ProviderView } from "./core/provider-model";
+import type { SnykScanResult } from "./core/snyk/types";
 import { bannerParts } from "./debug/banner";
-import type { ProviderView } from "./providers/provider";
 import { snykPartialScanNotice, snykProjectNotice } from "./providers/snyk/project-notice";
-import type { SnykScanResult } from "./providers/snyk/types";
 
 /**
  * A notice pinned at the bottom of the details, under the tab content. The banner over the graph is for "can't

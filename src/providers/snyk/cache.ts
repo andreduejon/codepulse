@@ -1,6 +1,6 @@
+import type { SnykCacheLimit, SnykScanResult } from "../../core/snyk/types";
 import { DEFAULT_PROVIDER_CACHE_ROOT, ShaSqliteCache } from "../shared/sha-sqlite-cache";
 import { isSnykScanResult } from "./parser";
-import type { SnykCacheLimit, SnykScanResult } from "./types";
 
 export const DEFAULT_SNYK_CACHE_LIMIT: SnykCacheLimit = 20;
 export const DEFAULT_SNYK_CACHE_ROOT = DEFAULT_PROVIDER_CACHE_ROOT;

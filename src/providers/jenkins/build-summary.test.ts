@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
+import type { JenkinsJob, JenkinsStage } from "../../core/jenkins/types";
 import { jenkinsBuildSummary, jenkinsLogEntries } from "./build-summary";
-import type { JenkinsJob, JenkinsStage } from "./types";
 
 const START = Date.parse("2026-11-10T10:00:00.000Z");
 const at = (seconds: number) => new Date(START + seconds * 1000).toISOString();

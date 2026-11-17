@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import type { SnykDependencyGraph } from "../src/core/snyk/types";
 import {
   applyMavenManaged,
   mavenManagedVersions,
@@ -9,7 +10,6 @@ import {
   parsePom,
   parseXml,
 } from "../src/providers/snyk/maven-managed";
-import type { SnykDependencyGraph } from "../src/providers/snyk/types";
 
 const roots: string[] = [];
 afterEach(async () => {

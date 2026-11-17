@@ -1,15 +1,15 @@
 import { createEffect, createMemo, createSignal, For, on, Show, untrack } from "solid-js";
 import type { DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
+import type { OpenShiftCommitData, OpenShiftResource, OpenShiftStatus } from "../../core/openshift/types";
+import { type StatusCategory, statusIcon } from "../../core/status";
 import { useT } from "../../hooks/use-t";
 import { BUSY } from "../../utils/busy-text";
 import { ProviderActionRow, ProviderSummaryRow, ScrollingLabel, useDetailRowMouse } from "../shared/detail-rows";
 import { useDetailTree } from "../shared/detail-tree";
 import { type RowShortcut, useOpenRowShortcut } from "../shared/open-row";
-import { type StatusCategory, statusIcon } from "../shared/status";
 import { openShiftConsoleUrl } from "./console";
 import { openShiftStatusColor } from "./graph-columns";
-import type { OpenShiftCommitData, OpenShiftResource, OpenShiftStatus } from "./types";
 
 export interface OpenShiftDetailTabProps {
   mouseEnabled?: boolean;

@@ -1,5 +1,5 @@
 import type { Theme } from "../../context/theme";
-import type { SnykSeverity } from "./types";
+import type { SnykSeverity } from "../../core/snyk/types";
 
 export function severityColor(theme: Theme, severity: SnykSeverity): string {
   switch (severity) {

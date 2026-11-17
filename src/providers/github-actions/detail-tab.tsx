@@ -11,6 +11,13 @@
 import { createMemo, createSignal } from "solid-js";
 import type { DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
+import type {
+  GitHubCommitData,
+  GitHubJob,
+  GitHubJobFetchResult,
+  GitHubStep,
+  GitHubWorkflowRun,
+} from "../../core/github/types";
 import { BUSY } from "../../utils/busy-text";
 import type { RowShortcut } from "../shared/open-row";
 import {
@@ -20,7 +27,6 @@ import {
   type ProviderTreeStep,
 } from "../shared/provider-run-tree";
 import { annotationNotes } from "./annotations";
-import type { GitHubCommitData, GitHubJob, GitHubJobFetchResult, GitHubStep, GitHubWorkflowRun } from "./types";
 
 // ── Props ─────────────────────────────────────────────────────────────────
 

@@ -4,10 +4,10 @@ import { MouseButtons } from "@opentui/core/testing";
 import { testRender } from "@opentui/solid";
 import { createSignal, Show } from "solid-js";
 import { createThemeState, ThemeContext } from "../../context/theme";
+import type { OpenShiftEvent, OpenShiftResource } from "../../core/openshift/types";
 import { BANNER } from "../../debug/banner";
 import * as browser from "../../utils/open-url";
 import OpenShiftResourceDialog from "./resource-dialog";
-import type { OpenShiftEvent, OpenShiftResource } from "./types";
 
 const descendants = (node: Renderable): Renderable[] =>
   node.getChildren().flatMap(child => [child, ...descendants(child)]);

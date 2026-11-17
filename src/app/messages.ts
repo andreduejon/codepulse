@@ -8,6 +8,7 @@ import { isTabNoticeStatus, type TabNotice, tabNoticeFor } from "../app-tab-noti
 import type { UIMessage } from "../components/message-box";
 import { isUncommittedHash } from "../constants";
 import { type AppActions, type AppState, providerIdle, providerStatusMessage } from "../context/state";
+import { isProviderDetailView, providerDisplayName } from "../core/provider-model";
 import {
   DASHBOARD_FETCHING_PROVIDERS,
   dashboardFetchMessage,
@@ -16,7 +17,6 @@ import {
 } from "../dashboard/fetch-errors";
 import { BANNER, displayBanner } from "../debug/banner";
 import type { FastForwardResult } from "../git/repo";
-import { isProviderDetailView, providerDisplayName } from "../providers/provider";
 import type { UseSnykResult } from "../providers/snyk/use-snyk";
 import { fastForwardMessage } from "../utils/fast-forward-message";
 

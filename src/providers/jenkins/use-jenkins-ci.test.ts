@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { createRoot } from "solid-js";
 import { tabNoticeFor } from "../../app-tab-notice";
 import { createAppState } from "../../context/state";
+import type { JenkinsRun } from "../../core/jenkins/types";
 import { BANNER } from "../../debug/banner";
 import { buildGraph } from "../../git/graph";
 import type { Commit } from "../../git/types";
@@ -12,7 +13,6 @@ import * as monotonic from "../../utils/monotonic";
 import { closeProviderCaches } from "../shared/sha-sqlite-cache";
 import * as api from "./api";
 import { JenkinsCache } from "./cache";
-import type { JenkinsRun } from "./types";
 import { useJenkinsCI } from "./use-jenkins-ci";
 
 const SHA = "c".repeat(40);

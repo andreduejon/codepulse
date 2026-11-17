@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getTreeSitterClient } from "@opentui/core";
+import type { SnykScanResult } from "../src/core/snyk/types";
 import { GitHubCache } from "../src/providers/github-actions/cache";
 import { JenkinsCache } from "../src/providers/jenkins/cache";
 import { OpenShiftCache } from "../src/providers/openshift/cache";
@@ -17,7 +18,6 @@ import {
 } from "../src/providers/shared/cache-management";
 import { closeProviderCaches, providerCacheDatabase } from "../src/providers/shared/sha-sqlite-cache";
 import { SnykCache } from "../src/providers/snyk/cache";
-import type { SnykScanResult } from "../src/providers/snyk/types";
 
 const client = getTreeSitterClient();
 const cacheRoot = await mkdtemp(join(tmpdir(), "codepulse-sqlite-smoke-"));

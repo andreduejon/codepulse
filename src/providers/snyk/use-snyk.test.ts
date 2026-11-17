@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createRoot, createSignal } from "solid-js";
 import type { AppActions, AppState } from "../../context/state";
 import { createAppState } from "../../context/state";
+import type { SnykScanOptions, SnykScanResult } from "../../core/snyk/types";
 import { BANNER } from "../../debug/banner";
 import { buildGraph } from "../../git/graph";
-import type { SnykScanOptions, SnykScanResult } from "./types";
 import {
   collectSnykAutoScanTips,
   type SnykProviderConfig,

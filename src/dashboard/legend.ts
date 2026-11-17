@@ -1,8 +1,9 @@
 import type { Theme } from "../context/theme";
+import type { EventSource } from "../core/provider-model";
+import { statusIcon } from "../core/status";
 import { GITHUB_LEGEND, JENKINS_LEGEND, OPENSHIFT_LEGEND, SNYK_SEVERITY_LEGEND } from "../providers/legends";
-import type { EventSource } from "../providers/provider";
 import type { LegendItem } from "../providers/shared/detail-legend";
-import { statusColor, statusIcon } from "../providers/shared/status";
+import { statusColor } from "../providers/shared/status";
 import { severityColor } from "../providers/snyk/severity";
 import type { DashboardEvent } from "./events";
 

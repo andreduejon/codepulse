@@ -1,5 +1,11 @@
 /** A provider's status as the app shows it (idle, loading, a problem with its message), built without any UI. */
-import type { ProviderStatus } from "../context/app-state-types";
+
+export type ProviderStatus =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "warning"; message: string }
+  | { kind: "unavailable"; message: string }
+  | { kind: "error"; message: string };
 
 export const providerIdle = (): ProviderStatus => ({ kind: "idle" });
 export const providerLoading = (): ProviderStatus => ({ kind: "loading" });

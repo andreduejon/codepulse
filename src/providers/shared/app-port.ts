@@ -1,8 +1,8 @@
 /** The app port a provider service gets (core/provider-ports.ts), built from the app's state and actions. */
 import type { Accessor } from "solid-js";
 import type { AppActions, AppState } from "../../context/state";
+import type { ProviderView } from "../../core/provider-model";
 import type { ProviderAppPort } from "../../core/provider-ports";
-import type { ProviderView } from "../provider";
 
 export function providerAppPort(
   state: AppState,

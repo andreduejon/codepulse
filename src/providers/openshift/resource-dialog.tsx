@@ -1,6 +1,8 @@
 import { createEffect, createMemo, createSignal, onCleanup, untrack } from "solid-js";
 import type { LogViewState } from "../../components/dialogs/log-view";
 import { LogViewer, type LogViewerLine } from "../../components/dialogs/log-viewer";
+import type { OpenShiftEvent, OpenShiftResource } from "../../core/openshift/types";
+import { shouldFollowOpenShiftLog } from "../../core/openshift/watch";
 import { BUSY } from "../../utils/busy-text";
 import { openUrl } from "../../utils/open-url";
 import { stripTerminalControls } from "../../utils/terminal-text";
@@ -12,8 +14,6 @@ import {
   OPENSHIFT_NO_EVENTS,
   type OpenShiftEventLine,
 } from "./events";
-import type { OpenShiftEvent, OpenShiftResource } from "./types";
-import { shouldFollowOpenShiftLog } from "./watch";
 
 interface OpenShiftResourceDialogProps {
   resource: OpenShiftResource;

@@ -1,6 +1,6 @@
-import { DEFAULT_PROVIDER_CACHE_LIMIT, type ProviderCacheLimit } from "../shared/auto-refresh";
+import { type GitHubCacheEntry, isGitHubCacheEntry } from "../../core/github/merge";
+import { DEFAULT_PROVIDER_CACHE_LIMIT, type ProviderCacheLimit } from "../../core/provider-settings";
 import { DEFAULT_PROVIDER_CACHE_ROOT, ShaSqliteCache } from "../shared/sha-sqlite-cache";
-import { type GitHubCacheEntry, isGitHubCacheEntry } from "./merge";
 
 export const DEFAULT_GITHUB_CACHE_ROOT = DEFAULT_PROVIDER_CACHE_ROOT;
 
@@ -12,7 +12,7 @@ export {
   mergeGitHubEntry,
   mergeGitHubJobs,
   mergeGitHubRuns,
-} from "./merge";
+} from "../../core/github/merge";
 
 export class GitHubCache extends ShaSqliteCache<GitHubCacheEntry> {
   constructor(options: { root?: string; maxEntries?: ProviderCacheLimit } = {}) {

@@ -1,10 +1,10 @@
 import { MouseButton, type MouseEvent, type Renderable } from "@opentui/core";
 import { createSignal, Show } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
+import type { SnykScanResult } from "../../core/snyk/types";
 import { useT } from "../../hooks/use-t";
 import type { RowShortcut } from "../shared/open-row";
 import type { SnykBaseline } from "./scan-diff";
-import type { SnykScanResult } from "./types";
 import type { SnykViewMemory } from "./view-memory";
 
 export interface SnykDetailTabProps {

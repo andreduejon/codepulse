@@ -2,10 +2,11 @@
  * What every provider service gets from the app, and the part of the fetch lifecycle it uses. Plain types: the Solid
  * side builds them (providers/shared/app-port.ts).
  */
-import type { ProviderStatus } from "../context/app-state-types";
+
 import type { GraphRow } from "../git/types";
-import type { GraphBadge } from "../providers/provider";
 import type { FetchLifecycle } from "./fetch-lifecycle";
+import type { GraphBadge } from "./provider-model";
+import type { ProviderStatus } from "./provider-status";
 
 /** The app, as one provider sees it. */
 export interface ProviderAppPort {

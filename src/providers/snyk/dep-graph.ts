@@ -1,5 +1,10 @@
 import { posix, win32 } from "node:path";
-import type { SnykDependencyGraph, SnykDependencyNode, SnykDependencyPackage, SnykDependencyScope } from "./types";
+import type {
+  SnykDependencyGraph,
+  SnykDependencyNode,
+  SnykDependencyPackage,
+  SnykDependencyScope,
+} from "../../core/snyk/types";
 
 function unsupportedOutput(): never {
   throw new Error("Unsupported Snyk CLI output.");

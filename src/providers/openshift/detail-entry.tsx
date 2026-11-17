@@ -1,9 +1,9 @@
 import { scopedMemory } from "../../components/detail-memory";
+import type { OpenShiftCommitData, OpenShiftResource } from "../../core/openshift/types";
 import { BANNER } from "../../debug/banner";
 import { OPENSHIFT_LEGEND } from "../legends";
 import { detailEntry, type ProviderDetailSource } from "../shared/detail-entry";
 import { OpenShiftDetailTab } from "./detail-tab";
-import type { OpenShiftCommitData, OpenShiftResource } from "./types";
 
 /** What OpenShift hands the detail view. */
 export interface OpenShiftDetailSource extends ProviderDetailSource<OpenShiftCommitData> {

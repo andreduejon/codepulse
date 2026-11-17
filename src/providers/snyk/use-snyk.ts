@@ -8,11 +8,11 @@ import { createEffect, createSignal, onCleanup, untrack } from "solid-js";
 import type { AppActions, AppState } from "../../context/state";
 import { providerIdle, providerUnavailable } from "../../context/state";
 import { createSnykService, EXACT_SHA, type SnykSettings } from "../../core/snyk/service";
+import type { SnykScanResult } from "../../core/snyk/types";
 import { BANNER } from "../../debug/banner";
 import { providerAppPort } from "../shared/app-port";
 import { DEFAULT_SNYK_CACHE_LIMIT } from "./cache";
 import { getCachedSnykScan, scanSnykCommit } from "./scanner";
-import type { SnykScanResult } from "./types";
 
 export { collectSnykAutoScanTips, selectSnykCacheProbes } from "../../core/snyk/service";
 

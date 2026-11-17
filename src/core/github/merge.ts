@@ -2,7 +2,7 @@
  * GitHub's runs and jobs as the cache keeps them, and how new ones merge in: plain functions, no storage. The cache
  * (cache.ts) and the provider service (core/github/service.ts) both use them.
  */
-import { mergeById } from "../../utils/merge-by-id";
+import { mergeById } from "../merge-by-id";
 import type { GitHubAnnotation, GitHubJob, GitHubStep, GitHubWorkflowRun } from "./types";
 
 export interface GitHubCacheEntry {

@@ -1,11 +1,11 @@
 import { MouseButton, type ScrollBoxRenderable } from "@opentui/core";
 import { type Accessor, createEffect, createSignal, For, type JSX, onCleanup, Show } from "solid-js";
 import type { DetailTab } from "../context/state";
+import { providerDisplayName } from "../core/provider-model";
 import type { DashboardEvent } from "../dashboard/events";
 import { markLegend } from "../dashboard/legend";
 import { type CommitInfo, loadCommitInfo } from "../dashboard/load";
 import { useT } from "../hooks/use-t";
-import { providerDisplayName } from "../providers/provider";
 import { DetailLegend, type LegendItem } from "../providers/shared/detail-legend";
 import { formatDate } from "../utils/date";
 import { DashboardEventText } from "./dashboard-event-text";

@@ -1,17 +1,15 @@
-import { BANNER, bannerOrFallback, debugError } from "../../debug/banner";
-import type { GraphBadge } from "../provider";
-import { fetchWithRetry as fetchWithRetryPolicy, isAbortError, runLimited } from "../shared/http";
-import { categorize } from "../shared/status";
+import { isAbortError } from "../../core/abort";
 import {
   JENKINS_MULTIBRANCH_JOB_LIMIT,
-  type JenkinsCommitData,
   type JenkinsFailedTest,
   type JenkinsJob,
   type JenkinsJobConfig,
   type JenkinsRun,
   type JenkinsStage,
   type JenkinsTestReport,
-} from "./types";
+} from "../../core/jenkins/types";
+import { BANNER, bannerOrFallback, debugError } from "../../debug/banner";
+import { fetchWithRetry as fetchWithRetryPolicy, runLimited } from "../shared/http";
 import { isSafeJenkinsRequestUrl } from "./validation";
 
 interface JenkinsBuildApi {
@@ -699,46 +697,6 @@ export async function fetchJenkinsGraphDataForSHAs(
     branchJobs: resolved.branchJobs,
     lastBuilds,
   };
-}
-
-export function buildJenkinsCommitDataMap(runs: JenkinsRun[], resolved: boolean): Map<string, JenkinsCommitData> {
-  const map = new Map<string, JenkinsCommitData>();
-  for (const run of runs) {
-    const existing = map.get(run.headSha) ?? { sha: run.headSha, runs: [], resolved };
-    existing.runs.push(run);
-    existing.resolved = resolved;
-    map.set(run.headSha, existing);
-  }
-  for (const data of map.values()) data.runs.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  return map;
-}
-
-export function buildJenkinsGraphBadges(runs: JenkinsRun[]): Map<string, GraphBadge> {
-  const map = new Map<string, GraphBadge>();
-  for (const run of runs) {
-    const badge = map.get(run.headSha) ?? {
-      sha: run.headSha,
-      badge: "unknown" as const,
-      passCount: 0,
-      failCount: 0,
-      runningCount: 0,
-      latestRunAt: run.updatedAt,
-      latestStatus: "unknown" as const,
-    };
-    const category = categorize(run.status, run.conclusion);
-    if (category === "running") badge.runningCount++;
-    else if (category === "pass") badge.passCount++;
-    else if (category === "fail") badge.failCount++;
-    else badge.unknownCount = (badge.unknownCount ?? 0) + 1;
-    if (run.updatedAt >= badge.latestRunAt) {
-      badge.latestRunAt = run.updatedAt;
-      badge.latestStatus = category === "pass" || category === "fail" || category === "running" ? category : "unknown";
-    }
-    badge.badge =
-      badge.failCount > 0 ? "fail" : badge.runningCount > 0 ? "running" : badge.passCount > 0 ? "pass" : "unknown";
-    map.set(run.headSha, badge);
-  }
-  return map;
 }
 
 /** At most this many failed tests are kept and listed; the counts still say how many failed. */

@@ -1,20 +1,22 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { BANNER } from "../../debug/banner";
-import { clearDebugEvents, getDebugEvents } from "../../debug/events";
 import {
   buildOpenShiftCommitMap,
   buildOpenShiftGraphBadges,
   buildOpenShiftNamespaceMarkers,
   commitLabelSelector,
   commitShaFromItem,
+  resourceFromWatchObject,
+} from "../../core/openshift/resources";
+import type { OpenShiftCommitData, OpenShiftResource } from "../../core/openshift/types";
+import { BANNER } from "../../debug/banner";
+import { clearDebugEvents, getDebugEvents } from "../../debug/events";
+import {
   fetchOpenShiftEvents,
   fetchOpenShiftInventory,
   fetchOpenShiftResources,
   MAX_LIST_ITEMS,
   MAX_LIST_PAGES,
-  resourceFromWatchObject,
 } from "./api";
-import type { OpenShiftCommitData, OpenShiftResource } from "./types";
 
 const SHA = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 

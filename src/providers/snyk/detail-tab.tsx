@@ -2,6 +2,7 @@ import type { Renderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, on, Show } from "solid-js";
 import { DETAIL_PANEL_WIDTH_FRACTION } from "../../constants";
+import type { SnykFinding, SnykSeverity } from "../../core/snyk/types";
 import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useClipboard } from "../../hooks/use-clipboard";
 import { useT } from "../../hooks/use-t";
@@ -12,7 +13,6 @@ import { filterSnykFindings, SnykFilterRow, useSnykFilter } from "./filter";
 import { countUniqueFindings, groupSnykFixes, groupSnykVulnerabilities, type SnykVulnerabilityEntry } from "./parser";
 import { compareSnykScans, diffKey, snykBaselineNote } from "./scan-diff";
 import { SnykControlRow, type SnykDetailTabProps, snykScanIdentity, useSnykRows } from "./tab-shared";
-import type { SnykFinding, SnykSeverity } from "./types";
 import { useSnykTabMemory } from "./view-memory";
 import {
   detailLines,

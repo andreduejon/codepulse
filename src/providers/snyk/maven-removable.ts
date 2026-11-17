@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import type { SnykDependencyGraph, SnykDependencyPackage } from "../../core/snyk/types";
 import {
   effectiveProperties,
   interpolate,
@@ -12,7 +13,6 @@ import {
   parseXml,
   resolvedVersion,
 } from "./maven-managed";
-import type { SnykDependencyGraph, SnykDependencyPackage } from "./types";
 
 /**
  * Maven `removable`: a `<dependencyManagement>` pin of a package that every dependency bringing it already asks for at

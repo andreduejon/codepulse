@@ -1,8 +1,8 @@
 import { setLastMenuTab } from "./components/dialogs/menu-dialog";
 import type { AppActions, AppState } from "./context/app-state-types";
+import type { EventSource } from "./core/provider-model";
 import { clearDebugEvents } from "./debug/events";
 import type { CommandBarMode, DialogId } from "./hooks/use-keyboard-navigation";
-import type { EventSource } from "./providers/provider";
 
 /** What `:` commands can reach in the app. */
 export interface AppCommandContext {

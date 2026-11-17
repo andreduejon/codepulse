@@ -4,10 +4,10 @@ import { testRender } from "@opentui/solid";
 import type { JSX } from "solid-js";
 import { AppStateContext, createAppState } from "../../context/state";
 import { createThemeState, ThemeContext } from "../../context/theme";
+import type { GraphBadge } from "../../core/provider-model";
+import type { SnykScanResult } from "../../core/snyk/types";
 import { ActionsCountsColumn } from "../github-actions/graph-columns";
-import type { GraphBadge } from "../provider";
 import { SnykScanColumn } from "../snyk/graph-columns";
-import type { SnykScanResult } from "../snyk/types";
 
 const theme = createThemeState();
 

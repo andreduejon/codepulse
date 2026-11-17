@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { shouldReplaceSnykResult } from "../../core/snyk/results";
 import {
   compareVersions,
   groupSnykFixes,
@@ -6,7 +7,6 @@ import {
   isMatureExploit,
   isSnykScanResult,
   parseSnykOutput,
-  shouldReplaceSnykResult,
   snykFixKind,
   snykUpgrade,
 } from "./parser";

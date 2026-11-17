@@ -1,5 +1,5 @@
+import type { GitHubAnnotation } from "../../core/github/types";
 import type { ProviderTreeNote } from "../shared/provider-run-tree";
-import type { GitHubAnnotation } from "./types";
 
 /** The first line of an annotation's message: the rest is usually a stack. */
 export function annotationMessage(annotation: GitHubAnnotation): string {

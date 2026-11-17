@@ -1,5 +1,5 @@
 import { AUTHOR_COL_WIDTH, DATE_COL_WIDTH } from "../constants";
-import type { GraphBadge, GraphStatusCounts, ProviderView } from "./provider";
+import type { GraphBadge, GraphStatusCounts, ProviderView } from "../core/provider-model";
 import { statusCountChipsWidth } from "./shared/status-chips";
 import { LAST_SCAN_COL_WIDTH, severityColumnWidth } from "./snyk/graph-columns";
 

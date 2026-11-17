@@ -3,8 +3,8 @@ import { testRender } from "@opentui/solid";
 import { createSignal } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
 import { createThemeState, ThemeContext } from "../../context/theme";
+import type { JenkinsFailedTest, JenkinsJob, JenkinsRun, JenkinsStage } from "../../core/jenkins/types";
 import { JenkinsDetailTab } from "./detail-tab";
-import type { JenkinsFailedTest, JenkinsJob, JenkinsRun, JenkinsStage } from "./types";
 
 const SHA = "a".repeat(40);
 const START = Date.parse("2026-11-10T10:00:00.000Z");

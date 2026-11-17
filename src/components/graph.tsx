@@ -16,6 +16,8 @@ import {
   UNCOMMITTED_PLACEHOLDER,
 } from "../constants";
 import { useAppState } from "../context/state";
+import type { GraphBadge, ProviderView } from "../core/provider-model";
+import type { SnykScanResult } from "../core/snyk/types";
 import {
   computeBrightColumns,
   computeSingleViewportOffset,
@@ -44,10 +46,8 @@ import {
   OpenShiftColumnHeaders,
   OpenShiftCountsColumn,
 } from "../providers/openshift/graph-columns";
-import type { GraphBadge, ProviderView } from "../providers/provider";
 import { ScrollingLabel } from "../providers/shared/detail-rows";
 import { SnykColumnHeaders, SnykCountsColumn, SnykScanColumn } from "../providers/snyk/graph-columns";
-import type { SnykScanResult } from "../providers/snyk/types";
 import { formatRelativeDate } from "../utils/date";
 import { scheduleScrollIntoView } from "../utils/scroll";
 import { cellWidth } from "../utils/terminal-text";

@@ -1,6 +1,6 @@
-import { DEFAULT_PROVIDER_CACHE_LIMIT, type ProviderCacheLimit } from "../shared/auto-refresh";
+import { isJenkinsCacheEntry, type JenkinsCacheEntry } from "../../core/jenkins/merge";
+import { DEFAULT_PROVIDER_CACHE_LIMIT, type ProviderCacheLimit } from "../../core/provider-settings";
 import { DEFAULT_PROVIDER_CACHE_ROOT, ShaSqliteCache } from "../shared/sha-sqlite-cache";
-import { isJenkinsCacheEntry, type JenkinsCacheEntry } from "./merge";
 
 export const DEFAULT_JENKINS_CACHE_ROOT = DEFAULT_PROVIDER_CACHE_ROOT;
 
@@ -11,7 +11,7 @@ export {
   jobsMapFromCache,
   mergeJenkinsJobs,
   mergeJenkinsRuns,
-} from "./merge";
+} from "../../core/jenkins/merge";
 
 export class JenkinsCache extends ShaSqliteCache<JenkinsCacheEntry> {
   constructor(options: { root?: string; maxEntries?: ProviderCacheLimit } = {}) {

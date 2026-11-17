@@ -1,4 +1,4 @@
-import type { GraphBadge } from "../provider";
+import type { GraphBadge } from "./provider-model";
 
 export function collectTopSHAs(rows: readonly { commit: { hash: string } }[], limit: number): string[] {
   const shas: string[] = [];

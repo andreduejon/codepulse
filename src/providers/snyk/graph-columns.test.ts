@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { UNCOMMITTED_PLACEHOLDER } from "../../constants";
+import type { SnykScanResult } from "../../core/snyk/types";
 import { severityColumnWidth, snykScanLabel } from "./graph-columns";
-import type { SnykScanResult } from "./types";
 
 const scan = (partial = false): SnykScanResult => ({
   sha: "a".repeat(40),

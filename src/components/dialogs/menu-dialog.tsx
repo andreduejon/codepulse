@@ -4,6 +4,7 @@ import { batch, createEffect, createSignal, For } from "solid-js";
 import type { ConfigInfo } from "../../config";
 import { SHIFT_JUMP } from "../../constants";
 import { useTheme } from "../../context/theme";
+import type { ProviderView } from "../../core/provider-model";
 import type { DashboardSettings } from "../../dashboard/settings";
 import {
   COPYABLE_VISIBLE_WIDTH,
@@ -17,7 +18,6 @@ import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useClipboard } from "../../hooks/use-clipboard";
 import { useMenuItems } from "../../hooks/use-menu-items";
 import { useModalKeys } from "../../keyboard/dispatcher";
-import type { ProviderView } from "../../providers/provider";
 import { scrollIndexedItemIntoView } from "../../utils/scroll";
 import { KeyHint, KeyHintSeparator } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";

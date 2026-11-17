@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
+import type { OpenShiftResource } from "../../core/openshift/types";
 import { openShiftConsoleUrl } from "./console";
-import type { OpenShiftResource } from "./types";
 
 const resource = (kind: OpenShiftResource["kind"], name: string): OpenShiftResource => ({
   id: `${kind}/${name}`,

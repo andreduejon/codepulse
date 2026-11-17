@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { groupSnykVulnerabilities } from "./parser";
 import type {
   SnykDependencyGraph,
   SnykDependencyNode,
@@ -9,7 +8,8 @@ import type {
   SnykDependencyScope,
   SnykFinding,
   SnykSeverity,
-} from "./types";
+} from "../../core/snyk/types";
+import { groupSnykVulnerabilities } from "./parser";
 
 export interface DependencyTreeRow {
   key: string;

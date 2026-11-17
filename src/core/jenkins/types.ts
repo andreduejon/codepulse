@@ -5,7 +5,7 @@ import {
   type ProviderAutoRefreshSeconds,
   type ProviderCacheLimit,
   type ProviderLimit,
-} from "../shared/auto-refresh";
+} from "../provider-settings";
 
 export interface JenkinsJobConfig {
   label?: string;

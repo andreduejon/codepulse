@@ -2,9 +2,9 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { JenkinsJob, JenkinsRun } from "../../core/jenkins/types";
 import { closeProviderCaches } from "../shared/sha-sqlite-cache";
 import { isJenkinsCacheEntry, JenkinsCache } from "./cache";
-import type { JenkinsJob, JenkinsRun } from "./types";
 
 const roots: string[] = [];
 

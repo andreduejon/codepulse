@@ -1,5 +1,5 @@
+import type { JenkinsFailedTest, JenkinsTestReport, JenkinsTreeRow } from "../../core/jenkins/types";
 import type { ProviderTreeJob } from "../shared/provider-run-tree";
-import type { JenkinsFailedTest, JenkinsTestReport, JenkinsTreeRow } from "./types";
 
 /** The test's class without its package: `PaymentServiceTest`. */
 function shortClassName(className: string): string {

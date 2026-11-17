@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import type { SnykDependencyProjectResult, SnykDependencyScope } from "../../core/snyk/types";
 import {
   type DependencyGroupBy,
   type DependencyRows,
@@ -17,7 +18,6 @@ import {
   projectRow,
 } from "./deps-model";
 import { buildPackages } from "./deps-packages";
-import type { SnykDependencyProjectResult, SnykDependencyScope } from "./types";
 
 /** Filter results up to this many rows open fully; larger ones open one level and show match counts. */
 const FULL_EXPANSION_ROWS = 200;

@@ -12,13 +12,18 @@ import type { Accessor } from "solid-js";
 import { createEffect, createSignal, untrack } from "solid-js";
 import { type AppActions, type AppState, providerIdle } from "../../context/state";
 import { createGitHubService } from "../../core/github/service";
+import type {
+  GitHubCommitData,
+  GitHubJobFetchResult,
+  GitHubProviderConfig,
+  GitHubWorkflowRun,
+} from "../../core/github/types";
+import { DEFAULT_GITHUB_CONFIG } from "../../core/github/types";
+import { DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS } from "../../core/provider-settings";
 import { providerAppPort } from "../shared/app-port";
-import { DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS } from "../shared/auto-refresh";
 import { useProviderFetchLifecycle } from "../shared/use-provider-fetch-lifecycle";
 import * as api from "./api";
 import { GitHubCache } from "./cache";
-import type { GitHubCommitData, GitHubJobFetchResult, GitHubProviderConfig, GitHubWorkflowRun } from "./types";
-import { DEFAULT_GITHUB_CONFIG } from "./types";
 
 export interface UseGitHubCIResult {
   /** Retrieve all runs for a given commit SHA (null if not fetched yet). */

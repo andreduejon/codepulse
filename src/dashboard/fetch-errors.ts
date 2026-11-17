@@ -1,5 +1,5 @@
 import type { UIMessage } from "../components/message-box";
-import type { ProviderView } from "../providers/provider";
+import type { ProviderView } from "../core/provider-model";
 
 /** The providers whose error status the dashboard reports (Snyk's: a scan that failed, also on its own tab). */
 export const DASHBOARD_FETCHING_PROVIDERS = [

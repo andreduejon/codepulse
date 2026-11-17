@@ -1,7 +1,7 @@
+import type { JenkinsJob, JenkinsTestReport } from "../../core/jenkins/types";
 import { formatDuration } from "../../utils/date";
 import type { JobLogEntry, JobLogSummaryLine } from "../shared/job-log-dialog";
 import { stepsSummary, stepTime } from "../shared/log-summary";
-import type { JenkinsJob, JenkinsTestReport } from "./types";
 
 /** The log viewer's first entry for a build, before its stages: the summary, then the whole console. */
 const JENKINS_FULL_LOG = "full log";

@@ -1,6 +1,6 @@
-import type { JenkinsJobConfig } from "../providers/jenkins/types";
-import type { ProviderAutoRefreshSeconds, ProviderCacheLimit, ProviderLimit } from "../providers/shared/auto-refresh";
-import type { SnykCacheLimit } from "../providers/snyk/types";
+import type { JenkinsJobConfig } from "../core/jenkins/types";
+import type { ProviderAutoRefreshSeconds, ProviderCacheLimit, ProviderLimit } from "../core/provider-settings";
+import type { SnykCacheLimit } from "../core/snyk/types";
 
 export type MenuTab = "repository" | "branch" | "providers";
 

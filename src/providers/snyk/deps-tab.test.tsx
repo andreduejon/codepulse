@@ -6,11 +6,11 @@ import { batch, createSignal, Show } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
 import { createAppState } from "../../context/state";
 import { createThemeState, ThemeContext } from "../../context/theme";
+import type { SnykDependencyGraph, SnykDependencyProjectResult, SnykScanResult } from "../../core/snyk/types";
 import { handleDetailKey } from "../../hooks/handle-detail-keys";
 import * as clipboard from "../../hooks/use-clipboard";
 import { resetRepeatNav } from "../../utils/keyboard-nav-utils";
 import { SnykDependenciesTab } from "./deps-tab";
-import type { SnykDependencyGraph, SnykDependencyProjectResult, SnykScanResult } from "./types";
 
 function graphFixture(): SnykDependencyGraph {
   return {

@@ -9,8 +9,8 @@ import type { Component, JSX } from "solid-js";
 import type { DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
 import type { ProviderStatus } from "../../context/state";
+import type { ProviderDetailView } from "../../core/provider-model";
 import type { ProviderDetailSources } from "../detail-entries";
-import type { ProviderDetailView } from "../provider";
 import type { LegendItem } from "./detail-legend";
 import type { RowShortcut } from "./open-row";
 

@@ -10,10 +10,10 @@
 
 import { UNCOMMITTED_PLACEHOLDER } from "../../constants";
 import { useAppState } from "../../context/state";
+import type { GraphBadge } from "../../core/provider-model";
 import { useT } from "../../hooks/use-t";
 import { formatRelativeDate } from "../../utils/date";
 import { ciBadgeCounts } from "../graph-column-widths";
-import type { GraphBadge } from "../provider";
 import { statusColor } from "../shared/status";
 import { providerTextColor, StatusChips, statusCountChips } from "../shared/status-chips";
 

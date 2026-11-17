@@ -4,10 +4,10 @@ import { testRender } from "@opentui/solid";
 import { createSignal } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
 import { createThemeState, ThemeContext } from "../../context/theme";
+import type { SnykFinding, SnykScanResult } from "../../core/snyk/types";
 import * as clipboard from "../../hooks/use-clipboard";
 import { SnykDetailTab } from "./detail-tab";
 import { finding } from "./scan-diff.test";
-import type { SnykFinding, SnykScanResult } from "./types";
 
 const scanOf = (sha: string, findings: SnykFinding[]): SnykScanResult => ({
   sha,

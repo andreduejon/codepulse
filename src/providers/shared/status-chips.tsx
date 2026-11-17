@@ -1,8 +1,8 @@
 import { createMemo, For } from "solid-js";
 import { UNCOMMITTED_PLACEHOLDER } from "../../constants";
 import type { Theme } from "../../context/theme";
+import type { GraphStatusCounts } from "../../core/provider-model";
 import { useT } from "../../hooks/use-t";
-import type { GraphStatusCounts } from "../provider";
 import { statusColor } from "./status";
 
 /** One coloured count block in a provider graph column, rendered as ` text `. */

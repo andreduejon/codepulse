@@ -1,6 +1,6 @@
 import { lstat, readFile } from "node:fs/promises";
 import { join, posix, resolve } from "node:path";
-import type { SnykDependencyPackageManager } from "./types";
+import type { SnykDependencyPackageManager } from "../../core/snyk/types";
 
 export interface SnykDependencyProjectInput {
   targetFile: string;

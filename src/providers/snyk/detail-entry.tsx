@@ -1,11 +1,11 @@
 import { createMemo } from "solid-js";
 import { useAppState } from "../../context/state";
+import type { SnykScanResult } from "../../core/snyk/types";
 import { SNYK_SEVERITY_LEGEND } from "../legends";
 import { type DetailEntryContext, detailEntry, type ProviderDetailSource } from "../shared/detail-entry";
 import { SnykDependenciesTab } from "./deps-tab";
 import { SnykDetailTab } from "./detail-tab";
 import { findSnykBaseline } from "./scan-diff";
-import type { SnykScanResult } from "./types";
 import type { SnykViewMemory } from "./view-memory";
 import { VULNERABILITY_LEGEND } from "./vulnerabilities-model";
 

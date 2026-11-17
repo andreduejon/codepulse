@@ -1,13 +1,13 @@
 import { DATE_COL_WIDTH, UNCOMMITTED_PLACEHOLDER } from "../../constants";
 import { useAppState } from "../../context/state";
 import type { Theme } from "../../context/theme";
+import type { GraphBadge } from "../../core/provider-model";
+import type { SnykScanResult, SnykSeverity } from "../../core/snyk/types";
 import { useT } from "../../hooks/use-t";
 import { BUSY } from "../../utils/busy-text";
 import { formatRelativeDate } from "../../utils/date";
-import type { GraphBadge } from "../provider";
 import { providerTextColor, type StatusChip, StatusChips } from "../shared/status-chips";
 import { severityColor } from "./severity";
-import type { SnykScanResult, SnykSeverity } from "./types";
 
 export interface SnykGraphColumnProps {
   /** Exact scan for the row's commit, or null when that commit has not been scanned. */

@@ -2,10 +2,10 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { SnykDependencyGraph, SnykScanResult } from "../../core/snyk/types";
 import { closeProviderCaches, providerCacheDatabase } from "../shared/sha-sqlite-cache";
 import { SnykCache } from "./cache";
 import { isSnykScanResult } from "./parser";
-import type { SnykDependencyGraph, SnykScanResult } from "./types";
 
 const roots: string[] = [];
 

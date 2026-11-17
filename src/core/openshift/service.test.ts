@@ -1,15 +1,15 @@
 /** The OpenShift service with its lifecycle, without Solid: the app is a plain object, the cluster and cache are fakes. */
 import { expect, mock, test } from "bun:test";
-import type { ProviderStatus } from "../../context/app-state-types";
 import { BANNER } from "../../debug/banner";
 import type { GraphRow } from "../../git/types";
-import type { OpenShiftCacheEntry } from "../../providers/openshift/merge";
-import type { OpenShiftResource } from "../../providers/openshift/types";
-import { DEFAULT_OPENSHIFT_CONFIG } from "../../providers/openshift/types";
-import type { GraphBadge } from "../../providers/provider";
 import { FetchLifecycle } from "../fetch-lifecycle";
+import type { GraphBadge } from "../provider-model";
+import type { ProviderStatus } from "../provider-status";
 import { commitDataFromCacheEntry } from "./commit-data";
+import type { OpenShiftCacheEntry } from "./merge";
 import { createOpenShiftService, type OpenShiftApiPort, type OpenShiftCachePort } from "./service";
+import type { OpenShiftResource } from "./types";
+import { DEFAULT_OPENSHIFT_CONFIG } from "./types";
 
 const SHA = "c".repeat(40);
 const build: OpenShiftResource = {

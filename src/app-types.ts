@@ -1,9 +1,9 @@
 import type { ConfigInfo } from "./config";
 import type { CustomTheme, createThemeState } from "./context/theme";
+import type { ProviderView } from "./core/provider-model";
+import type { ProviderCacheLimit } from "./core/provider-settings";
 import type { Branch, Commit, GraphRow, TagInfo } from "./git/types";
 import type { StartupMode } from "./main";
-import type { ProviderView } from "./providers/provider";
-import type { ProviderCacheLimit } from "./providers/shared/auto-refresh";
 
 export interface AppProps {
   repoPath: string;

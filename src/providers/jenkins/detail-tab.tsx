@@ -1,10 +1,6 @@
 import { createMemo, createSignal } from "solid-js";
 import type { DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
-import { BUSY } from "../../utils/busy-text";
-import type { RowShortcut } from "../shared/open-row";
-import { ProviderRunTree, type ProviderTreeJob, type ProviderTreeRun } from "../shared/provider-run-tree";
-import { jenkinsTestsJob } from "./tests";
 import type {
   JenkinsCommitData,
   JenkinsFailedTest,
@@ -12,7 +8,11 @@ import type {
   JenkinsJobFetchResult,
   JenkinsRun,
   JenkinsTreeRow,
-} from "./types";
+} from "../../core/jenkins/types";
+import { BUSY } from "../../utils/busy-text";
+import type { RowShortcut } from "../shared/open-row";
+import { ProviderRunTree, type ProviderTreeJob, type ProviderTreeRun } from "../shared/provider-run-tree";
+import { jenkinsTestsJob } from "./tests";
 
 export interface JenkinsDetailTabProps {
   mouseEnabled?: boolean;

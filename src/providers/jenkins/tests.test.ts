@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
+import type { JenkinsTestReport } from "../../core/jenkins/types";
 import { jenkinsTestsJob, testFailureText } from "./tests";
-import type { JenkinsTestReport } from "./types";
 
 const report: JenkinsTestReport = {
   passCount: 1204,

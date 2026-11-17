@@ -1,6 +1,6 @@
 import { expect, mock, test } from "bun:test";
+import type { GitHubJob, GitHubWorkflowRun } from "../../core/github/types";
 import { githubJobLogTarget } from "./log-target";
-import type { GitHubJob, GitHubWorkflowRun } from "./types";
 
 /** The log dialog's download signal: the targets pass it to every request. */
 const signal = new AbortController().signal;

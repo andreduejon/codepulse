@@ -1,5 +1,14 @@
 import type { Accessor } from "solid-js";
 import {
+  cycleAutoRefreshSeconds,
+  cycleProviderCacheLimit,
+  cycleProviderLimit,
+  PROVIDER_AUTO_REFRESH_OPTIONS,
+  PROVIDER_CACHE_LIMIT_OPTIONS,
+  PROVIDER_LIMIT_OPTIONS,
+  PROVIDER_MS_TO_LABEL,
+} from "../core/provider-settings";
+import {
   DASHBOARD_KNOT_MINUTES,
   DASHBOARD_WINDOW_DAYS,
   type DashboardSettings,
@@ -13,15 +22,6 @@ import {
   isValidOpenShiftServerUrl,
   isValidOpenShiftText,
 } from "../providers/openshift/validation";
-import {
-  cycleAutoRefreshSeconds,
-  cycleProviderCacheLimit,
-  cycleProviderLimit,
-  PROVIDER_AUTO_REFRESH_OPTIONS,
-  PROVIDER_CACHE_LIMIT_OPTIONS,
-  PROVIDER_LIMIT_OPTIONS,
-  PROVIDER_MS_TO_LABEL,
-} from "../providers/shared/auto-refresh";
 import type {
   GitHubMenuConfig,
   JenkinsMenuConfig,

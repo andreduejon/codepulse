@@ -3,7 +3,7 @@ import {
   type ProviderAutoRefreshSeconds,
   type ProviderCacheLimit,
   type ProviderLimit,
-} from "../shared/auto-refresh";
+} from "../provider-settings";
 
 export type OpenShiftCacheLimit = ProviderCacheLimit;
 
@@ -120,4 +120,14 @@ export interface OpenShiftInventoryFailure {
   kind: OpenShiftInventoryKind;
   path: string;
   error: string;
+}
+
+/** What one listing of a cluster's namespaces found. */
+export interface OpenShiftListedInventory {
+  resources: OpenShiftResource[];
+  controllers: OpenShiftControllerReference[];
+  failures: OpenShiftInventoryFailure[];
+  successfulRequests: number;
+  error: string | null;
+  resourceVersions: Map<string, string>;
 }

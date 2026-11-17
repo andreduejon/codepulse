@@ -1,7 +1,7 @@
+import type { GitHubJob } from "../../core/github/types";
 import { formatDuration } from "../../utils/date";
 import type { JobLogEntry, JobLogSummaryLine } from "../shared/job-log-dialog";
 import { stepsSummary } from "../shared/log-summary";
-import type { GitHubJob } from "./types";
 
 /** The top of a job's log in the viewer: each step with its mark and time (the tree shows only the marks). */
 export function githubJobSummary(job: GitHubJob): JobLogSummaryLine[] {

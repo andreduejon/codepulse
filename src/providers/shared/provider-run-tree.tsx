@@ -1,6 +1,7 @@
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show, untrack } from "solid-js";
 import { createRememberedSignal, type DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
+import { categorize, statusIcon } from "../../core/status";
 import type { DebugEventSource } from "../../debug/events";
 import { useT } from "../../hooks/use-t";
 import { BUSY } from "../../utils/busy-text";
@@ -9,7 +10,7 @@ import { ProviderActionRow, ProviderSummaryRow, ScrollingLabel, useDetailRowMous
 import { useDetailTree } from "./detail-tree";
 import { type RowShortcut, useOpenRowShortcut } from "./open-row";
 import { fetchProviderJobs } from "./provider-job-fetch";
-import { categorize, statusColor, statusIcon } from "./status";
+import { statusColor } from "./status";
 
 export interface ProviderTreeStep {
   id: string;

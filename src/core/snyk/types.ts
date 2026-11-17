@@ -1,4 +1,4 @@
-import type { ProviderCacheLimit } from "../shared/auto-refresh";
+import type { ProviderCacheLimit } from "../provider-settings";
 
 export type SnykSeverity = "critical" | "high" | "medium" | "low";
 

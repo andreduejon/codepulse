@@ -7,13 +7,18 @@ import type { Accessor } from "solid-js";
 import { createEffect, createSignal, untrack } from "solid-js";
 import type { AppActions, AppState } from "../../context/state";
 import { createJenkinsService } from "../../core/jenkins/service";
+import type {
+  JenkinsCommitData,
+  JenkinsJobFetchResult,
+  JenkinsProviderConfig,
+  JenkinsRun,
+} from "../../core/jenkins/types";
+import { DEFAULT_JENKINS_CONFIG } from "../../core/jenkins/types";
+import { DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS } from "../../core/provider-settings";
 import { providerAppPort } from "../shared/app-port";
-import { DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS } from "../shared/auto-refresh";
 import { useProviderFetchLifecycle } from "../shared/use-provider-fetch-lifecycle";
 import * as api from "./api";
 import { JenkinsCache } from "./cache";
-import type { JenkinsCommitData, JenkinsJobFetchResult, JenkinsProviderConfig, JenkinsRun } from "./types";
-import { DEFAULT_JENKINS_CONFIG } from "./types";
 
 export interface UseJenkinsCIResult {
   getCommitData: (sha: string) => JenkinsCommitData | null;

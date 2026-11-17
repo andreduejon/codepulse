@@ -1,27 +1,29 @@
 import { afterEach, describe, expect, it, mock } from "bun:test";
-import { BANNER } from "../src/debug/banner";
-import { clearDebugEvents, getDebugEvents } from "../src/debug/events";
 import {
   aggregateRunsToGraphBadge,
   buildCommitDataMap,
   buildGraphBadges,
+  GQL_BATCH_SIZE,
+  mapRunToBadge,
+} from "../src/core/github/commit-data";
+import type { GitHubApiJob } from "../src/core/github/types";
+import { BANNER } from "../src/debug/banner";
+import { clearDebugEvents, getDebugEvents } from "../src/debug/events";
+import {
   fetchCIDataForSHAs,
   fetchJobAnnotations,
   fetchJobLog,
   fetchRunJobs,
-  GQL_BATCH_SIZE,
   getGitHubToken,
   getTokenSource,
   isGitHubJobsFieldSchemaError,
   isTrustedGitHubHost,
   MAX_CHECK_SUITE_PAGES,
   MAX_JOB_PAGES,
-  mapRunToBadge,
   nextGithubLink,
   normalizeGitHubHost,
   parseGitHubRemote,
 } from "../src/providers/github-actions/api";
-import type { GitHubApiJob } from "../src/providers/github-actions/types";
 
 // ── parseGitHubRemote ─────────────────────────────────────────────────────
 

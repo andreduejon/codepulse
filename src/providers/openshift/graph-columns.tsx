@@ -1,10 +1,10 @@
 import { useAppState } from "../../context/state";
 import type { Theme } from "../../context/theme";
+import type { OpenShiftStatus } from "../../core/openshift/types";
+import type { GraphBadge, GraphStatusCounts } from "../../core/provider-model";
 import { useT } from "../../hooks/use-t";
-import type { GraphBadge, GraphStatusCounts } from "../provider";
 import { statusColor } from "../shared/status";
 import { StatusChips, statusCountChips } from "../shared/status-chips";
-import type { OpenShiftStatus } from "./types";
 
 /** Status colors are semantic tokens, not provider accent (OpenShift brand is red). */
 export function openShiftStatusColor(t: Theme, status: OpenShiftStatus): string {

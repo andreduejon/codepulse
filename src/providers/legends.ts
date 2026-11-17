@@ -2,8 +2,10 @@
  * The marks each provider's detail tab explains below it. The dashboard explains a provider's events with the same
  * legend, so a mark means the same in both.
  */
+
+import { statusIcon } from "../core/status";
 import { type LegendItem, runLegend } from "./shared/detail-legend";
-import { statusColor, statusIcon } from "./shared/status";
+import { statusColor } from "./shared/status";
 import { severityColor } from "./snyk/severity";
 
 export const GITHUB_LEGEND: LegendItem[] = runLegend("cancelled");

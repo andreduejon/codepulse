@@ -6,27 +6,21 @@
  * Everything outside comes through ports; the Solid hook (providers/jenkins/use-jenkins-ci.ts) builds them.
  */
 import { BANNER, bannerOrFallback } from "../../debug/banner";
-import { collectRunningSHAs, collectTopSHAs } from "../../providers/github-actions/sha-selection";
 import type * as JenkinsApi from "../../providers/jenkins/api";
-import { buildJenkinsCommitDataMap, buildJenkinsGraphBadges } from "../../providers/jenkins/api";
+import type { ProviderFetchArgs } from "../fetch-lifecycle";
+import type { ProviderAppPort, ProviderLifecycle } from "../provider-ports";
+import { providerError, providerIdle, providerLoading, providerUnavailable, providerWarning } from "../provider-status";
+import { collectRunningSHAs, collectTopSHAs } from "../sha-selection";
+import { jobsSettled } from "../status";
+import { buildJenkinsCommitDataMap, buildJenkinsGraphBadges } from "./commit-data";
 import {
   isTerminalJenkinsRun,
   type JenkinsCacheEntry,
   jobsMapFromCache,
   mergeJenkinsJobs,
   mergeJenkinsRuns,
-} from "../../providers/jenkins/merge";
-import type {
-  JenkinsCommitData,
-  JenkinsJob,
-  JenkinsJobFetchResult,
-  JenkinsProviderConfig,
-  JenkinsRun,
-} from "../../providers/jenkins/types";
-import { jobsSettled } from "../../providers/shared/status";
-import type { ProviderFetchArgs } from "../fetch-lifecycle";
-import type { ProviderAppPort, ProviderLifecycle } from "../provider-ports";
-import { providerError, providerIdle, providerLoading, providerUnavailable, providerWarning } from "../provider-status";
+} from "./merge";
+import type { JenkinsCommitData, JenkinsJob, JenkinsJobFetchResult, JenkinsProviderConfig, JenkinsRun } from "./types";
 
 /** Jenkins' API: the requests the service makes. */
 export interface JenkinsApiPort {

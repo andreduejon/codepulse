@@ -1,0 +1,46 @@
+/** One status model for every CI provider: a run's or job's category, its icon, whether jobs settled. */
+
+export type StatusCategory = "pass" | "fail" | "cancelled" | "skipped" | "running" | "unknown";
+
+export function categorize(status: string, conclusion: string | null): StatusCategory {
+  if (status !== "completed") return "running";
+  switch (conclusion) {
+    case "success":
+      return "pass";
+    case "failure":
+    case "failed":
+    case "unstable":
+    case "timed_out":
+    case "startup_failure":
+      return "fail";
+    case "cancelled":
+      return "cancelled";
+    case "skipped":
+    case "neutral":
+      return "skipped";
+    default:
+      return "unknown";
+  }
+}
+
+export function statusIcon(category: StatusCategory): string {
+  switch (category) {
+    case "pass":
+      return "✓";
+    case "fail":
+      return "✗";
+    case "running":
+      return "●";
+    case "cancelled":
+      return "○";
+    case "skipped":
+      return "–";
+    default:
+      return "?";
+  }
+}
+
+/** Every job and step has finished: only then can a run's jobs be cached as final. */
+export function jobsSettled(jobs: readonly { status: string; steps: readonly { status: string }[] }[]): boolean {
+  return jobs.every(job => job.status === "completed" && job.steps.every(step => step.status === "completed"));
+}

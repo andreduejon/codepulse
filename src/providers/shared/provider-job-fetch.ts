@@ -1,6 +1,6 @@
+import { isAbortError } from "../../core/abort";
 import { debugError } from "../../debug/banner";
 import type { DebugEventSource } from "../../debug/events";
-import { isAbortError } from "./http";
 
 export type ProviderJobFetchOutcome<T> =
   | { kind: "result"; jobs: T[]; error: string | null }

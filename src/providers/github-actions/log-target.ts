@@ -1,6 +1,6 @@
+import type { GitHubJob, GitHubJobFetchResult, GitHubWorkflowRun } from "../../core/github/types";
 import type { JobLogTarget } from "../shared/job-log-dialog";
 import { githubJobLogEntries, githubJobSummary } from "./job-summary";
-import type { GitHubJob, GitHubJobFetchResult, GitHubWorkflowRun } from "./types";
 
 /** What a job log reads from the GitHub provider. */
 export interface GitHubLogReader {

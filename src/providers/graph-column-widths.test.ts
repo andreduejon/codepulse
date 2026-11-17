@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { AUTHOR_COL_WIDTH, DATE_COL_WIDTH } from "../constants";
-import { aggregateRunsToGraphBadge } from "./github-actions/api";
-import type { GitHubWorkflowRun } from "./github-actions/types";
+import { aggregateRunsToGraphBadge } from "../core/github/commit-data";
+import type { GitHubWorkflowRun } from "../core/github/types";
+import type { GraphBadge } from "../core/provider-model";
 import { graphColumnWidths } from "./graph-column-widths";
-import type { GraphBadge } from "./provider";
 import { chipsWidth, statusCountChipsWidth } from "./shared/status-chips";
 
 const badge = (overrides: Partial<GraphBadge>): GraphBadge => ({

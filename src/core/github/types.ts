@@ -13,7 +13,7 @@ import {
   type ProviderAutoRefreshSeconds,
   type ProviderCacheLimit,
   type ProviderLimit,
-} from "../shared/auto-refresh";
+} from "../provider-settings";
 
 // ── GitHub API response shapes ────────────────────────────────────────────/** Raw job as returned by GET /repos/{owner}/{repo}/actions/runs/{run_id}/jobs */
 export interface GitHubApiJob {

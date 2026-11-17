@@ -3,10 +3,9 @@
  * list may show. Plain functions; the service (service.ts) and the hook's tests use them.
  */
 
-import type { OpenShiftListedInventory } from "../../providers/openshift/api";
-import { cachedBuildToResource, mergeById, type OpenShiftCacheEntry } from "../../providers/openshift/merge";
-import type { OpenShiftCommitData, OpenShiftNamespaceData, OpenShiftResource } from "../../providers/openshift/types";
-import type { GraphBadge } from "../../providers/provider";
+import type { GraphBadge } from "../provider-model";
+import { cachedBuildToResource, mergeById, type OpenShiftCacheEntry } from "./merge";
+import type { OpenShiftCommitData, OpenShiftListedInventory, OpenShiftNamespaceData, OpenShiftResource } from "./types";
 
 /** A graph badge with no resources, for a commit that only carries namespace markers. */
 export function emptyGraphBadge(sha: string): GraphBadge {

@@ -2,15 +2,15 @@
  * The GitHub service with its lifecycle, without Solid: the app is a plain object, GitHub and the cache are fakes.
  */
 import { expect, mock, test } from "bun:test";
-import type { ProviderStatus } from "../../context/app-state-types";
 import { BANNER } from "../../debug/banner";
 import type { GraphRow } from "../../git/types";
-import type { GitHubCacheEntry } from "../../providers/github-actions/merge";
-import type { GitHubJob, GitHubRepo, GitHubWorkflowRun } from "../../providers/github-actions/types";
-import { DEFAULT_GITHUB_CONFIG } from "../../providers/github-actions/types";
-import type { GraphBadge } from "../../providers/provider";
 import { FetchLifecycle } from "../fetch-lifecycle";
+import type { GraphBadge } from "../provider-model";
+import type { ProviderStatus } from "../provider-status";
+import type { GitHubCacheEntry } from "./merge";
 import { createGitHubService, type GitHubApiPort, type GitHubCachePort } from "./service";
+import type { GitHubJob, GitHubRepo, GitHubWorkflowRun } from "./types";
+import { DEFAULT_GITHUB_CONFIG } from "./types";
 
 const SHA = "a".repeat(40);
 const REPO: GitHubRepo = { owner: "o", repo: "r", hostname: "github.com" } as GitHubRepo;

@@ -8,12 +8,17 @@ import type { Accessor } from "solid-js";
 import { createEffect, createMemo, createSignal, onCleanup, untrack } from "solid-js";
 import type { AppActions, AppState } from "../../context/state";
 import { createOpenShiftService, type OpenShiftLiveState } from "../../core/openshift/service";
+import type {
+  OpenShiftCommitData,
+  OpenShiftEvent,
+  OpenShiftProviderConfig,
+  OpenShiftResource,
+} from "../../core/openshift/types";
+import { DEFAULT_OPENSHIFT_AUTO_REFRESH_SECONDS, DEFAULT_OPENSHIFT_CONFIG } from "../../core/openshift/types";
 import { providerAppPort } from "../shared/app-port";
 import { useProviderFetchLifecycle } from "../shared/use-provider-fetch-lifecycle";
 import * as api from "./api";
 import { OpenShiftCache, type OpenShiftCacheEntry } from "./cache";
-import type { OpenShiftCommitData, OpenShiftEvent, OpenShiftProviderConfig, OpenShiftResource } from "./types";
-import { DEFAULT_OPENSHIFT_AUTO_REFRESH_SECONDS, DEFAULT_OPENSHIFT_CONFIG } from "./types";
 
 export {
   commitDataFromCacheEntry,

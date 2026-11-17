@@ -1,7 +1,7 @@
 import { For, Show } from "solid-js";
 import { type DetailTab, type ProviderStatus, useAppState } from "../context/state";
+import type { ProviderDetailView } from "../core/provider-model";
 import { DETAIL_ENTRIES, detailEntryFor, type ProviderDetailSources } from "../providers/detail-entries";
-import type { ProviderDetailView } from "../providers/provider";
 import type { DetailEntryContext } from "../providers/shared/detail-entry";
 import type { DetailMemory } from "./detail-memory";
 import type { DetailNavRef, DetailViewProps } from "./detail-types";

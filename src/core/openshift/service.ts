@@ -7,27 +7,12 @@
  * Everything outside comes through ports; the Solid hook (providers/openshift/use-openshift.ts) builds them.
  */
 import { BANNER, debugError } from "../../debug/banner";
-import { collectTopSHAs } from "../../providers/github-actions/sha-selection";
 import type * as OpenShiftApi from "../../providers/openshift/api";
-import {
-  applyOpenShiftWatchEvent,
-  buildOpenShiftCommitMap,
-  buildOpenShiftGraphBadges,
-  buildOpenShiftNamespaceMarkers,
-  isTerminalBuildStatus,
-  type OpenShiftListedInventory,
-  openShiftBuildLogUrl,
-  openShiftKindPath,
-  openShiftPodLogUrl,
-} from "../../providers/openshift/api";
-import { mergeById, type OpenShiftCacheEntry, toCachedBuild } from "../../providers/openshift/merge";
-import type { OpenShiftCommitData, OpenShiftProviderConfig, OpenShiftResource } from "../../providers/openshift/types";
-import { OPENSHIFT_WATCH_KINDS } from "../../providers/openshift/types";
-import { appendOpenShiftLogFollow } from "../../providers/openshift/watch";
-import { sleep } from "../../providers/shared/http";
+import { sleep } from "../abort";
 import type { ProviderFetchArgs } from "../fetch-lifecycle";
 import type { ProviderAppPort, ProviderLifecycle } from "../provider-ports";
 import { providerError, providerIdle, providerLoading, providerUnavailable, providerWarning } from "../provider-status";
+import { collectTopSHAs } from "../sha-selection";
 import {
   commitDataFromCacheEntry,
   emptyGraphBadge,
@@ -35,6 +20,20 @@ import {
   mergeLiveIntoCommit,
   selectOpenShiftCandidateSHAs,
 } from "./commit-data";
+import { mergeById, type OpenShiftCacheEntry, toCachedBuild } from "./merge";
+import {
+  applyOpenShiftWatchEvent,
+  buildOpenShiftCommitMap,
+  buildOpenShiftGraphBadges,
+  buildOpenShiftNamespaceMarkers,
+  isTerminalBuildStatus,
+  openShiftBuildLogUrl,
+  openShiftKindPath,
+  openShiftPodLogUrl,
+} from "./resources";
+import type { OpenShiftCommitData, OpenShiftProviderConfig, OpenShiftResource } from "./types";
+import { OPENSHIFT_WATCH_KINDS, type OpenShiftListedInventory } from "./types";
+import { appendOpenShiftLogFollow } from "./watch";
 
 /** OpenShift's API: the requests the service makes. */
 export interface OpenShiftApiPort {

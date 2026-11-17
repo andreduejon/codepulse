@@ -5,18 +5,18 @@
  */
 import type { Accessor } from "solid-js";
 import type { AppActions, AppState } from "../context/state";
+import type { GitHubJob, GitHubWorkflowRun } from "../core/github/types";
+import type { JenkinsFailedTest, JenkinsJob, JenkinsRun } from "../core/jenkins/types";
+import type { OpenShiftResource } from "../core/openshift/types";
+import type { ProviderView } from "../core/provider-model";
 import type { DashboardEvent } from "../dashboard/events";
 import { githubEvents, jenkinsEvents, openShiftEvents } from "../dashboard/events";
 import type { ProviderDetailSources } from "../providers/detail-entries";
 import { githubJobLogTarget } from "../providers/github-actions/log-target";
-import type { GitHubJob, GitHubWorkflowRun } from "../providers/github-actions/types";
 import { useGitHubCI } from "../providers/github-actions/use-github-ci";
 import { jenkinsBuildLogTarget, jenkinsTestFailureTarget } from "../providers/jenkins/log-target";
-import type { JenkinsFailedTest, JenkinsJob, JenkinsRun } from "../providers/jenkins/types";
 import { useJenkinsCI } from "../providers/jenkins/use-jenkins-ci";
-import type { OpenShiftResource } from "../providers/openshift/types";
 import { useOpenShift } from "../providers/openshift/use-openshift";
-import type { ProviderView } from "../providers/provider";
 import type { JobLogTarget } from "../providers/shared/job-log-dialog";
 import { useSnyk } from "../providers/snyk/use-snyk";
 import type { RepoSettings } from "./repo-settings";

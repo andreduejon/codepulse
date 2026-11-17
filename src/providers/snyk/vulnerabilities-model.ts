@@ -1,4 +1,5 @@
 import type { Theme } from "../../context/theme";
+import type { SnykSeverity } from "../../core/snyk/types";
 import type { LegendItem } from "../shared/detail-legend";
 import {
   isMatureExploit,
@@ -8,7 +9,6 @@ import {
   type SnykVulnerabilityEntry,
   snykUpgrade,
 } from "./parser";
-import type { SnykSeverity } from "./types";
 
 export type Section = {
   key: string;

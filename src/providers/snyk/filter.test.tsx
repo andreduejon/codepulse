@@ -6,9 +6,9 @@ import { createSignal } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
 import { createAppState } from "../../context/state";
 import { createThemeState, ThemeContext } from "../../context/theme";
+import type { SnykFinding } from "../../core/snyk/types";
 import { type CommandBarMode, type DialogId, useKeyboardNavigation } from "../../hooks/use-keyboard-navigation";
 import { filterSnykFindings, SnykFilterRow, useSnykFilter } from "./filter";
-import type { SnykFinding } from "./types";
 
 test("finding filter matches package/version, title, CVE and ID without mutating input", () => {
   const finding: SnykFinding = {

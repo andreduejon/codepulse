@@ -1,5 +1,5 @@
+import type { OpenShiftCacheLimit } from "../../core/openshift/types";
 import { DEFAULT_PROVIDER_CACHE_ROOT, ShaSqliteCache } from "../shared/sha-sqlite-cache";
-import type { OpenShiftCacheLimit } from "./types";
 
 export const DEFAULT_OPENSHIFT_CACHE_LIMIT: OpenShiftCacheLimit = 20;
 export const DEFAULT_OPENSHIFT_CACHE_ROOT = DEFAULT_PROVIDER_CACHE_ROOT;
@@ -12,9 +12,13 @@ export {
   type OpenShiftCacheEntry,
   type OpenShiftCacheOptions,
   toCachedBuild,
-} from "./merge";
+} from "../../core/openshift/merge";
 
-import { isOpenShiftCacheEntry, type OpenShiftCacheEntry, type OpenShiftCacheOptions } from "./merge";
+import {
+  isOpenShiftCacheEntry,
+  type OpenShiftCacheEntry,
+  type OpenShiftCacheOptions,
+} from "../../core/openshift/merge";
 
 export class OpenShiftCache extends ShaSqliteCache<OpenShiftCacheEntry> {
   constructor(options: OpenShiftCacheOptions = {}) {

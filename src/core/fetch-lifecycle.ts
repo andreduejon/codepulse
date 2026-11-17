@@ -8,9 +8,10 @@
  * The Solid adapter (providers/shared/use-provider-fetch-lifecycle.ts) calls those methods from effects; a test can
  * call them directly.
  */
-import { collectTopSHAs } from "../providers/github-actions/sha-selection";
-import { isAbortError } from "../providers/shared/http";
+
 import { monotonicNow, NEVER } from "../utils/monotonic";
+import { isAbortError } from "./abort";
+import { collectTopSHAs } from "./sha-selection";
 
 export const DEFAULT_INITIAL_SHA_LIMIT = 100;
 

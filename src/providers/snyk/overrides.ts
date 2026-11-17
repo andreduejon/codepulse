@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join, posix } from "node:path";
+import type { SnykDependencyGraph, SnykDependencyPackage } from "../../core/snyk/types";
 import type { RegistryLookup } from "./registry";
-import type { SnykDependencyGraph, SnykDependencyPackage } from "./types";
 
 /** One override: the package it targets, the version spec it forces, and the parent it is limited to. */
 export interface OverrideRule {

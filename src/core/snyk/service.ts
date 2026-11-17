@@ -7,12 +7,12 @@
  * service what changed (the graph's commits, the branches, suspension, another repository).
  */
 import { BANNER } from "../../debug/banner";
-import { buildSnykGraphBadges } from "../../providers/snyk/badges";
-import { shouldReplaceSnykResult } from "../../providers/snyk/parser";
 import type * as Scanner from "../../providers/snyk/scanner";
-import type { SnykCacheLimit, SnykScanResult } from "../../providers/snyk/types";
 import type { ProviderAppPort } from "../provider-ports";
 import { providerError, providerIdle, providerLoading, providerUnavailable, providerWarning } from "../provider-status";
+import { buildSnykGraphBadges } from "./badges";
+import { shouldReplaceSnykResult } from "./results";
+import type { SnykCacheLimit, SnykScanResult } from "./types";
 
 export const EXACT_SHA = /^[0-9a-f]{40,64}$/i;
 

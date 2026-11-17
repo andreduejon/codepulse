@@ -4,9 +4,9 @@ import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import type { ProviderCacheLimit } from "../../core/provider-settings";
 import { clearDebugEvents, getDebugEvents } from "../../debug/events";
 import * as monotonic from "../../utils/monotonic";
-import type { ProviderCacheLimit } from "./auto-refresh";
 import {
   closeProviderCaches,
   mergeById,

@@ -2,9 +2,9 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { GitHubJob, GitHubWorkflowRun } from "../../core/github/types";
 import { closeProviderCaches } from "../shared/sha-sqlite-cache";
 import { GitHubCache, isGitHubCacheEntry } from "./cache";
-import type { GitHubJob, GitHubWorkflowRun } from "./types";
 
 const roots: string[] = [];
 

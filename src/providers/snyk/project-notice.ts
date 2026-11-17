@@ -1,4 +1,4 @@
-import type { SnykDependencyProjectResult, SnykScanResult } from "./types";
+import type { SnykDependencyProjectResult, SnykScanResult } from "../../core/snyk/types";
 
 /** Projects shown before the notice collapses the rest into `+N more`. */
 const NOTICE_MAX_ENTRIES = 5;

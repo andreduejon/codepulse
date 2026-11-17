@@ -1,3 +1,4 @@
+import { abortError, isAbortError, sleep } from "../../core/abort";
 import { addDebugEvent, type DebugEventSource, redactDebugValue } from "../../debug/events";
 import { monotonicNow } from "../../utils/monotonic";
 
@@ -18,35 +19,8 @@ function requestMessage(url: string, init: RequestInit): string {
   }
 }
 
-export const sleep = (ms: number, signal?: AbortSignal | null) =>
-  new Promise<void>((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(abortError(signal));
-      return;
-    }
-    const timer = setTimeout(() => {
-      signal?.removeEventListener("abort", onAbort);
-      resolve();
-    }, ms);
-    const onAbort = () => {
-      clearTimeout(timer);
-      reject(abortError(signal));
-    };
-    signal?.addEventListener("abort", onAbort, { once: true });
-  });
-
-function abortError(signal?: AbortSignal | null): Error {
-  return signal?.reason instanceof Error ? signal.reason : new DOMException("The operation was aborted.", "AbortError");
-}
-
 export function isRetryableStatus(status: number): boolean {
   return status === 408 || status === 429 || status >= 500;
-}
-
-export function isAbortError(err: unknown, signal?: AbortSignal | null): boolean {
-  if (signal?.aborted) return true;
-  if (!(err instanceof Error)) return false;
-  return err.name === "AbortError" || err.message === "The operation was aborted.";
 }
 
 export async function runLimited<T>(

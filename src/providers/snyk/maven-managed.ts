@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join, posix } from "node:path";
-import type { SnykDependencyGraph } from "./types";
+import type { SnykDependencyGraph } from "../../core/snyk/types";
 
 /** An XML element with its child elements and its own text; enough for a POM, which has no mixed content. */
 export interface XmlElement {

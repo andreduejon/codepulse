@@ -3,10 +3,10 @@
 import { createEffect, createMemo, createSignal, onCleanup } from "solid-js";
 import type { LogViewState } from "../../components/dialogs/log-view";
 import { LogViewer, type LogViewerNavigation } from "../../components/dialogs/log-viewer";
+import type { StatusCategory } from "../../core/status";
 import { BUSY } from "../../utils/busy-text";
 import { openUrl } from "../../utils/open-url";
 import { stripTerminalControls } from "../../utils/terminal-text";
-import type { StatusCategory } from "./status";
 
 type LogLineKind = "group" | "error" | "warning" | "normal" | "muted";
 type LogViewMode = "all" | "issues" | "errors" | "raw";

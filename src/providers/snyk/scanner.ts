@@ -1,6 +1,14 @@
 import { lstat, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, posix, relative, resolve } from "node:path";
+import { shouldReplaceSnykResult } from "../../core/snyk/results";
+import type {
+  SnykCacheLimit,
+  SnykDependencyGraph,
+  SnykDependencyProjectResult,
+  SnykScanOptions,
+  SnykScanResult,
+} from "../../core/snyk/types";
 import { BANNER } from "../../debug/banner";
 import { addDebugEvent, redactDebugValue } from "../../debug/events";
 import { monotonicNow } from "../../utils/monotonic";
@@ -11,16 +19,9 @@ import { snykFailureReason } from "./failure-reason";
 import { applyMavenManaged, mavenManagedVersions, PomIndex, type PomSource } from "./maven-managed";
 import { LocalRepositoryPoms, markRemovableManaged, mavenLocalRepository } from "./maven-removable";
 import { applyOverrideRules, manifestRanges, markRemovableOverrides, projectOverrideRules } from "./overrides";
-import { parseSnykOutput, shouldReplaceSnykResult } from "./parser";
+import { parseSnykOutput } from "./parser";
 import { discoverSnykDependencyProjects, type SnykDependencyProjectInput } from "./projects";
 import { createRegistryLookup, RegistryCache, type RegistryLookup } from "./registry";
-import type {
-  SnykCacheLimit,
-  SnykDependencyGraph,
-  SnykDependencyProjectResult,
-  SnykScanOptions,
-  SnykScanResult,
-} from "./types";
 
 export interface SnykCommandResult {
   stdout: string;

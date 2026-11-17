@@ -1,4 +1,4 @@
-import type { GraphBadge } from "../provider";
+import type { GraphBadge } from "../provider-model";
 import type { SnykScanResult, SnykSeverityCounts } from "./types";
 
 export function snykSeverityCountsToGraphBadge(

@@ -1,8 +1,8 @@
 import { scopedMemory } from "../../components/detail-memory";
+import type { GitHubCommitData, GitHubJob, GitHubJobFetchResult, GitHubWorkflowRun } from "../../core/github/types";
 import { GITHUB_LEGEND } from "../legends";
 import { detailEntry, type ProviderDetailSource } from "../shared/detail-entry";
 import { ActionsDetailTab } from "./detail-tab";
-import type { GitHubCommitData, GitHubJob, GitHubJobFetchResult, GitHubWorkflowRun } from "./types";
 
 /** What GitHub Actions hands the detail view. */
 export interface GitHubDetailSource extends ProviderDetailSource<GitHubCommitData> {

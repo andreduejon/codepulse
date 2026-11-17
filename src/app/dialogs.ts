@@ -5,9 +5,9 @@
  */
 import { type Accessor, createEffect, createSignal, on, untrack } from "solid-js";
 import type { AppState } from "../context/state";
+import type { OpenShiftResource } from "../core/openshift/types";
 import type { DiffTarget } from "../git/types";
 import type { DialogId } from "../hooks/use-keyboard-navigation";
-import type { OpenShiftResource } from "../providers/openshift/types";
 import type { JobLogTarget } from "../providers/shared/job-log-dialog";
 import { DETAIL_CHILD_DIALOGS } from "../utils/keyboard-nav-utils";
 

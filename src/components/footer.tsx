@@ -1,10 +1,10 @@
 import type { BoxRenderable } from "@opentui/core";
 import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import { useAppState } from "../context/state";
+import { providerDisplayName } from "../core/provider-model";
 import type { DashboardState } from "../dashboard/use-dashboard";
 import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { useT } from "../hooks/use-t";
-import { providerDisplayName } from "../providers/provider";
 import { endTruncate } from "../utils/truncate";
 import { fitHints, KeyHint, KeyHintSeparator, type RankedHint } from "./key-hint";
 

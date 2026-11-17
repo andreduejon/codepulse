@@ -6,10 +6,10 @@ import { writeConfig } from "../config-write";
 import { AUTO_REFRESH_MS, INTERVAL_OPTIONS, MAX_COUNT_OPTIONS, MS_TO_LABEL } from "../constants";
 import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL, useAppState } from "../context/state";
 import type { Theme } from "../context/theme";
+import { type ProviderDetailView, type ProviderView, providerDisplayName } from "../core/provider-model";
+import { DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS } from "../core/provider-settings";
 import { type DashboardSettings, DEFAULT_DASHBOARD_SETTINGS } from "../dashboard/settings";
 import { getTokenSource } from "../providers/github-actions/api";
-import { type ProviderDetailView, type ProviderView, providerDisplayName } from "../providers/provider";
-import { DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS } from "../providers/shared/auto-refresh";
 import {
   COPYABLE_VISIBLE_WIDTH,
   type GitHubMenuConfig,

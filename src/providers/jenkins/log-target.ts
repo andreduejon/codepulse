@@ -1,8 +1,8 @@
+import type { JenkinsFailedTest, JenkinsJob, JenkinsJobFetchResult, JenkinsRun } from "../../core/jenkins/types";
 import type { JobLogTarget } from "../shared/job-log-dialog";
 import { isWholeBuildEntry, jenkinsBuildSummary, jenkinsLogEntries } from "./build-summary";
 import { sliceStageLog } from "./stage-log";
 import { testFailureText, testLabel } from "./tests";
-import type { JenkinsFailedTest, JenkinsJob, JenkinsJobFetchResult, JenkinsRun } from "./types";
 
 const STAGE_IN_PARALLEL = "Runs in parallel: the full log, with the other branches' lines";
 const STAGE_NOT_IN_LOG = "Not in the log yet: the full log";

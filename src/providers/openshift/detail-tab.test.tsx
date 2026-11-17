@@ -6,10 +6,10 @@ import { createSignal, Show } from "solid-js";
 import { createDetailMemory, type DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
 import { createThemeState, ThemeContext } from "../../context/theme";
+import { resourceFromWatchObject } from "../../core/openshift/resources";
+import type { OpenShiftCommitData, OpenShiftResource } from "../../core/openshift/types";
 import * as browser from "../../utils/open-url";
-import { resourceFromWatchObject } from "./api";
 import { OpenShiftDetailTab } from "./detail-tab";
-import type { OpenShiftCommitData, OpenShiftResource } from "./types";
 
 const SHA = "a".repeat(40);
 const CONSOLE = "https://console.example.com";

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import type { SnykDependencyPackage, SnykDependencyProjectResult } from "../../core/snyk/types";
 import {
   type DependencyRows,
   type DependencyScopeFilter,
@@ -17,7 +18,6 @@ import {
   projectRow,
 } from "./deps-model";
 import { compareVersions } from "./parser";
-import type { SnykDependencyPackage, SnykDependencyProjectResult } from "./types";
 
 interface PackageEntry {
   pkg: SnykDependencyPackage;

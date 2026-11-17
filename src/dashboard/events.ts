@@ -2,12 +2,13 @@
  * The dashboard's events: what each provider did for an app, one event per commit, run, build or scan, at the time it
  * happened. `dashboardRows` lays them out as knots on the app's rope.
  */
+
+import type { EventSource } from "../core/provider-model";
+import type { SnykScanResult, SnykSeverity } from "../core/snyk/types";
+import { categorize, type StatusCategory } from "../core/status";
 import type { GitHubCacheEntry } from "../providers/github-actions/cache";
 import type { JenkinsCacheEntry } from "../providers/jenkins/cache";
 import type { OpenShiftCacheEntry } from "../providers/openshift/cache";
-import type { EventSource } from "../providers/provider";
-import { categorize, type StatusCategory } from "../providers/shared/status";
-import type { SnykScanResult, SnykSeverity } from "../providers/snyk/types";
 import { formatDuration } from "../utils/date";
 
 /** One line of an event's side panel: a label and its value. */

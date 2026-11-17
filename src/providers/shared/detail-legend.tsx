@@ -1,7 +1,8 @@
 import { For, Show } from "solid-js";
 import type { Theme } from "../../context/theme";
+import { statusIcon } from "../../core/status";
 import { useT } from "../../hooks/use-t";
-import { statusColor, statusIcon } from "./status";
+import { statusColor } from "./status";
 
 /** One legend entry: its markers, each in its own colour, then a muted label. */
 export type LegendItem = [markers: [string, (theme: Theme) => string][], label: string];

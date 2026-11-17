@@ -1,14 +1,13 @@
 import { BANNER, bannerOrFallback, debugError } from "../../debug/banner";
 import { addDebugEvent } from "../../debug/events";
 import type * as GitHubApi from "../../providers/github-actions/api";
-import { buildCommitDataMap, buildGraphBadges, GQL_BATCH_SIZE } from "../../providers/github-actions/api";
-import {
-  type GitHubCacheEntry,
-  isTerminalGitHubRun,
-  mergeGitHubEntry,
-  mergeGitHubRuns,
-} from "../../providers/github-actions/merge";
-import { collectRunningSHAs, collectTopSHAs } from "../../providers/github-actions/sha-selection";
+import type { ProviderFetchArgs } from "../fetch-lifecycle";
+import type { ProviderAppPort, ProviderLifecycle } from "../provider-ports";
+import { providerError, providerIdle, providerLoading, providerUnavailable } from "../provider-status";
+import { collectRunningSHAs, collectTopSHAs } from "../sha-selection";
+import { jobsSettled } from "../status";
+import { buildCommitDataMap, buildGraphBadges, GQL_BATCH_SIZE } from "./commit-data";
+import { type GitHubCacheEntry, isTerminalGitHubRun, mergeGitHubEntry, mergeGitHubRuns } from "./merge";
 import type {
   GitHubCommitData,
   GitHubJob,
@@ -16,11 +15,7 @@ import type {
   GitHubProviderConfig,
   GitHubRepo,
   GitHubWorkflowRun,
-} from "../../providers/github-actions/types";
-import { jobsSettled } from "../../providers/shared/status";
-import type { ProviderFetchArgs } from "../fetch-lifecycle";
-import type { ProviderAppPort, ProviderLifecycle } from "../provider-ports";
-import { providerError, providerIdle, providerLoading, providerUnavailable } from "../provider-status";
+} from "./types";
 
 /** The app, as GitHub sees it. */
 export type GitHubAppPort = ProviderAppPort;

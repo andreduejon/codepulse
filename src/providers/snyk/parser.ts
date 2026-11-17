@@ -1,6 +1,6 @@
 import { posix, win32 } from "node:path";
+import type { SnykFinding, SnykScanResult, SnykSeverity, SnykSeverityCounts } from "../../core/snyk/types";
 import { isSnykDependencyGraph, normalizeSnykTargetFile } from "./dep-graph";
-import type { SnykFinding, SnykScanResult, SnykSeverity, SnykSeverityCounts } from "./types";
 
 export interface SnykParseOptions {
   sha: string;
@@ -312,20 +312,6 @@ export function countUniqueFindings(findings: SnykFinding[]): SnykSeverityCounts
   // Same unit as the Vulnerabilities tab: one per vulnerability, manifest and package.
   for (const entry of groupSnykVulnerabilities(findings)) counts[entry.finding.severity]++;
   return counts;
-}
-
-/**
- * A partial result never replaces a complete one on its own; a rescan the user started does, so the failed projects
- * it names stay visible instead of an older snapshot that may have missed them.
- */
-export function shouldReplaceSnykResult(
-  existing: SnykScanResult | undefined,
-  incoming: SnykScanResult,
-  rescan = false,
-): boolean {
-  if (!existing) return true;
-  if (incoming.partial && !existing.partial && !rescan) return false;
-  return existing.scannedAt <= incoming.scannedAt;
 }
 
 export function parseSnykOutput(raw: string | unknown, options: SnykParseOptions): SnykScanResult {
