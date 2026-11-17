@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { createRoot, createSignal } from "solid-js";
 import { createAppState } from "../src/context/state";
 import type { FastForwardResult } from "../src/core/git/log";
+import { gitCli } from "../src/git/git-cli";
 import { fastForwardBranches, runGit } from "../src/git/repo";
 import { useDataLoader } from "../src/hooks/use-data-loader";
 
@@ -199,6 +200,7 @@ function mount(repoPath: string, fastForward: boolean) {
     const [enabled, setEnabled] = createSignal(fastForward);
     const loader = useDataLoader({
       repoPath: () => repoPath,
+      git: gitCli(),
       state,
       actions,
       autoFastForward: enabled,

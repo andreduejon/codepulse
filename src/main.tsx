@@ -5,9 +5,10 @@ import type { AppProps } from "./app-types";
 import { parseArgs } from "./cli/parse-args";
 import { loadCustomThemes } from "./context/custom-themes";
 import { addDebugEvent, redactDebugValue } from "./core/debug-events";
+import type { GitPort } from "./core/git/port";
 import { type KnownRepoInfo, mergeOptions, reportConfigWarnings } from "./core/settings/config";
 import type { SettingsPort } from "./core/settings/port";
-import { getRepoRoot, isGitAvailable, isGitRepo } from "./git/repo";
+import { gitCli } from "./git/git-cli";
 import { cleanupInactiveProviderCaches } from "./providers/shared/cache-management";
 import { closeProviderCaches } from "./providers/shared/sha-sqlite-cache";
 import { fileSettings } from "./settings-file";
@@ -23,7 +24,11 @@ export type StartupMode =
  * Everything before the first frame: arguments, config, themes and which screen to show. The demo's headless player
  * (`bun run demo --play`) starts the app through this too, so it boots the way the real app does.
  */
-export async function startupProps(argv: string[], settings: SettingsPort = fileSettings()): Promise<AppProps> {
+export async function startupProps(
+  argv: string[],
+  settings: SettingsPort = fileSettings(),
+  git: GitPort = gitCli(),
+): Promise<AppProps> {
   const cli = parseArgs(argv);
   try {
     cleanupInactiveProviderCaches();
@@ -33,7 +38,7 @@ export async function startupProps(argv: string[], settings: SettingsPort = file
   }
   const normalizedCli = {
     ...cli,
-    repoPath: (await getRepoRoot(cli.repoPath)) ?? cli.repoPath,
+    repoPath: (await git.getRepoRoot(cli.repoPath)) ?? cli.repoPath,
   };
 
   const configInfo = settings.info(normalizedCli.repoPath);
@@ -44,7 +49,7 @@ export async function startupProps(argv: string[], settings: SettingsPort = file
 
   let startupMode: StartupMode;
 
-  if (!(await isGitAvailable())) {
+  if (!(await git.isGitAvailable())) {
     // Fatal — can't do anything without git
     startupMode = { kind: "error", message: "Git is not installed or not on PATH." };
   } else if (!existsSync(opts.repoPath)) {
@@ -63,7 +68,7 @@ export async function startupProps(argv: string[], settings: SettingsPort = file
       messagePath: opts.repoPath,
       knownRepos: settings.knownRepos(),
     };
-  } else if (!(await isGitRepo(opts.repoPath))) {
+  } else if (!(await git.isGitRepo(opts.repoPath))) {
     // Not a git repo — show project selector with message
     startupMode = {
       kind: "selector",
@@ -90,6 +95,7 @@ export async function startupProps(argv: string[], settings: SettingsPort = file
     autoFetchInterval: opts.autoFetchInterval,
     configInfo,
     settings,
+    git,
     startupMode,
     initialGithubConfig: config.providers?.github,
     initialJenkinsConfig: config.providers?.jenkins,

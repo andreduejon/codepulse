@@ -3,11 +3,13 @@
  * row, jumping to a child or parent from the details, a branch view, and the scroll positions of both. The details'
  * cursor, tab and focus are the graph's own (`state.detailFor("graph")`); the Dashboard has its own.
  */
+
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { type Accessor, batch, createEffect } from "solid-js";
 import type { DetailNavRef } from "../components/detail-types";
 import type { AppActions, AppState } from "../context/state";
 import type { FastForwardResult } from "../core/git/log";
+import type { GitPort } from "../core/git/port";
 import { useDataLoader } from "../hooks/use-data-loader";
 import { useDetailLoader } from "../hooks/use-detail-loader";
 
@@ -15,6 +17,8 @@ export function useGraphController(opts: {
   state: AppState;
   actions: AppActions;
   repoPath: Accessor<string>;
+  /** Git, through the app's port. */
+  git: GitPort;
   /** The branch the command line asked for, for the first load. */
   initialBranch?: string;
   autoFastForward: Accessor<boolean>;
@@ -38,6 +42,7 @@ export function useGraphController(opts: {
   // All Git data: the first load, pages, fetch, and the refresh timers.
   const { loadData, loadMoreData, handleFetch } = useDataLoader({
     repoPath: opts.repoPath,
+    git: opts.git,
     initialBranch: opts.initialBranch,
     state,
     actions,
@@ -48,6 +53,7 @@ export function useGraphController(opts: {
   // The selected commit's details, once the cursor rests (stale loads are cancelled); an empty tab gives way.
   useDetailLoader({
     repoPath: opts.repoPath,
+    git: opts.git,
     state,
     actions,
     getIsJumpNavigation: () => isJumpNavigation,

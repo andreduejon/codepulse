@@ -3,8 +3,10 @@
  * switches between (normal, search, path, ancestry). Running a `:` command is the app's (it reaches everything), so it
  * comes in as `runCommand`.
  */
+
 import { type Accessor, batch, createSignal } from "solid-js";
 import type { AppActions, AppState } from "../context/state";
+import type { GitPort } from "../core/git/port";
 import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { usePathFilter } from "../hooks/use-path-filter";
 import { computeDisplacedIndex } from "../utils/keyboard-nav-utils";
@@ -15,6 +17,8 @@ export function useCommandBar(opts: {
   state: AppState;
   actions: AppActions;
   repoPath: Accessor<string>;
+  /** Git, through the app's port. */
+  git: GitPort;
   clearAnchor: () => void;
   runCommand: (command: string) => void;
 }) {
@@ -30,6 +34,7 @@ export function useCommandBar(opts: {
   // Path mode: applies on Enter, and is worked out again as the graph changes.
   const { handlePathExecute } = usePathFilter({
     repoPath: opts.repoPath,
+    git: opts.git,
     state,
     actions,
     clearAnchor,

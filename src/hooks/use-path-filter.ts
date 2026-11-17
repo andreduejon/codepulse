@@ -16,14 +16,17 @@
  * @param setSearchInputValue Setter for the live search input value.
  * @param clearSearchDebounce Callback to cancel the pending search debounce timer.
  */
+
 import { type Accessor, createEffect } from "solid-js";
 import type { createAppState } from "../context/state";
-import { getPathMatchingHashes } from "../git/repo";
+import type { GitPort } from "../core/git/port";
 
 type AppState = ReturnType<typeof createAppState>["state"];
 type AppActions = ReturnType<typeof createAppState>["actions"];
 
 interface UsePathFilterOptions {
+  /** Git, through the app's port. */
+  git: GitPort;
   repoPath: Accessor<string>;
   state: AppState;
   actions: AppActions;
@@ -34,6 +37,7 @@ interface UsePathFilterOptions {
 
 export function usePathFilter({
   repoPath,
+  git,
   state,
   actions,
   clearAnchor,
@@ -58,55 +62,57 @@ export function usePathFilter({
     previousIdentity = identity;
     const version = ++queryVersion;
     if (!pf) return;
-    getPathMatchingHashes(path, pf, {
-      branch: viewBranch ?? undefined,
-      all: effectiveAll,
-    }).then(hashes => {
-      // Only update if path filter is still the same (guard against race)
-      const currentBranch = state.viewingBranch();
-      const currentAll = currentBranch ? false : state.showAllBranches();
-      if (
-        version === queryVersion &&
-        state.pathFilter() === pf &&
-        repoPath() === path &&
-        currentBranch === viewBranch &&
-        currentAll === effectiveAll
-      ) {
-        actions.setPathMatchSet(hashes.size > 0 ? hashes : new Set());
-        // If cursor is on a non-matching row, jump to the nearest match
-        const matchSet = hashes;
-        if (matchSet.size > 0) {
-          const rows = state.graphRows();
-          const curIdx = state.cursorIndex();
-          if (curIdx >= rows.length || !matchSet.has(rows[curIdx].commit.hash)) {
-            let fwd = -1;
-            for (let i = curIdx + 1; i < rows.length; i++) {
-              if (matchSet.has(rows[i].commit.hash)) {
-                fwd = i;
-                break;
+    git
+      .getPathMatchingHashes(path, pf, {
+        branch: viewBranch ?? undefined,
+        all: effectiveAll,
+      })
+      .then(hashes => {
+        // Only update if path filter is still the same (guard against race)
+        const currentBranch = state.viewingBranch();
+        const currentAll = currentBranch ? false : state.showAllBranches();
+        if (
+          version === queryVersion &&
+          state.pathFilter() === pf &&
+          repoPath() === path &&
+          currentBranch === viewBranch &&
+          currentAll === effectiveAll
+        ) {
+          actions.setPathMatchSet(hashes.size > 0 ? hashes : new Set());
+          // If cursor is on a non-matching row, jump to the nearest match
+          const matchSet = hashes;
+          if (matchSet.size > 0) {
+            const rows = state.graphRows();
+            const curIdx = state.cursorIndex();
+            if (curIdx >= rows.length || !matchSet.has(rows[curIdx].commit.hash)) {
+              let fwd = -1;
+              for (let i = curIdx + 1; i < rows.length; i++) {
+                if (matchSet.has(rows[i].commit.hash)) {
+                  fwd = i;
+                  break;
+                }
               }
-            }
-            let bwd = -1;
-            for (let i = curIdx - 1; i >= 0; i--) {
-              if (matchSet.has(rows[i].commit.hash)) {
-                bwd = i;
-                break;
+              let bwd = -1;
+              for (let i = curIdx - 1; i >= 0; i--) {
+                if (matchSet.has(rows[i].commit.hash)) {
+                  bwd = i;
+                  break;
+                }
               }
-            }
-            let target: number;
-            if (fwd >= 0 && bwd >= 0) {
-              target = curIdx - bwd <= fwd - curIdx ? bwd : fwd;
-            } else {
-              target = fwd >= 0 ? fwd : bwd;
-            }
-            if (target >= 0) {
-              actions.setCursorIndex(target);
-              actions.setScrollTargetIndex(target);
+              let target: number;
+              if (fwd >= 0 && bwd >= 0) {
+                target = curIdx - bwd <= fwd - curIdx ? bwd : fwd;
+              } else {
+                target = fwd >= 0 ? fwd : bwd;
+              }
+              if (target >= 0) {
+                actions.setCursorIndex(target);
+                actions.setScrollTargetIndex(target);
+              }
             }
           }
         }
-      }
-    });
+      });
   });
 
   /**
@@ -132,7 +138,7 @@ export function usePathFilter({
     const viewBranch = state.viewingBranch();
     const effectiveAll = viewBranch ? false : state.showAllBranches();
     const path = repoPath();
-    const hashes = await getPathMatchingHashes(path, newPath, {
+    const hashes = await git.getPathMatchingHashes(path, newPath, {
       branch: viewBranch ?? undefined,
       all: effectiveAll,
     });

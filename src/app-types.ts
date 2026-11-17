@@ -1,4 +1,5 @@
 import type { CustomTheme, createThemeState } from "./context/theme";
+import type { GitPort } from "./core/git/port";
 import type { Branch, Commit, GraphRow, TagInfo } from "./core/git/types";
 import type { ProviderView } from "./core/provider-model";
 import type { ProviderCacheLimit } from "./core/provider-settings";
@@ -18,6 +19,8 @@ export interface AppProps {
   configInfo?: ConfigInfo;
   /** Where the settings are kept: the user's settings file unless the caller gives another. */
   settings?: SettingsPort;
+  /** Git: the Git command line unless the caller gives another. */
+  git?: GitPort;
   startupMode: StartupMode;
   initialGithubConfig?: {
     enabled?: boolean;

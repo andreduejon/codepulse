@@ -6,6 +6,7 @@ import { createEffect, createRoot, createSignal, untrack } from "solid-js";
 import type { DetailNavRef } from "../src/components/detail-types";
 import { createAppState } from "../src/context/state";
 import { isUncommittedHash } from "../src/core/git/types";
+import { gitCli } from "../src/git/git-cli";
 import { runGit } from "../src/git/repo";
 import { useDataLoader } from "../src/hooks/use-data-loader";
 import { useDetailLoader } from "../src/hooks/use-detail-loader";
@@ -41,10 +42,11 @@ function mount(repoPath: string, maxCount: number, withDetail = false, getCommit
     disposers.push(dispose);
     const { state, actions } = createAppState(maxCount, 0, 0);
     const [path, setPath] = createSignal(repoPath);
-    const loader = useDataLoader({ repoPath: path, state, actions });
+    const loader = useDataLoader({ repoPath: path, git: gitCli(), state, actions });
     if (withDetail) {
       useDetailLoader({
         repoPath: path,
+        git: gitCli(),
         state,
         actions,
         getIsJumpNavigation: () => false,

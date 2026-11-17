@@ -1,9 +1,9 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, type JSX, onCleanup, Show } from "solid-js";
+import { useGit } from "../../context/git";
 import { useAppState } from "../../context/state";
 import type { BlameLine, DiffTarget, FileContent, FileDiff } from "../../core/git/types";
-import { getFileBlame, getFileContent, getFileDiff } from "../../git/repo";
 import { useT } from "../../hooks/use-t";
 import { useModalKeys } from "../../keyboard/dispatcher";
 import {
@@ -55,6 +55,7 @@ interface DiffBlameDialogProps {
 export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
   const renderer = useRenderer();
   const { state } = useAppState();
+  const git = useGit();
   const t = useT();
   const dimensions = useTerminalDimensions();
 
@@ -101,8 +102,8 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
     (async () => {
       try {
         const [diffResult, fileResult] = await Promise.all([
-          getFileDiff(state.repoPath(), commitHash, filePath, source, request.controller.signal),
-          getFileContent(state.repoPath(), commitHash, filePath, source, request.controller.signal),
+          git.getFileDiff(state.repoPath(), commitHash, filePath, source, request.controller.signal),
+          git.getFileContent(state.repoPath(), commitHash, filePath, source, request.controller.signal),
         ]);
         if (!isActiveAbortableRequest(diffRequestState, request)) return;
         setDiff(diffResult);
@@ -131,7 +132,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
     setBlameLoading(true);
     setBlameError(null);
     try {
-      const result = await getFileBlame(
+      const result = await git.getFileBlame(
         state.repoPath(),
         props.target.commitHash,
         props.target.filePath,

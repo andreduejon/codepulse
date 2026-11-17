@@ -4,19 +4,8 @@ import { BANNER, bannerOrFallback, debugError } from "../core/banner";
 import { buildGraph, getMaxGraphColumns } from "../core/git/graph";
 import type { FastForwardResult } from "../core/git/log";
 import { mergeCommitPages } from "../core/git/merge-pages";
+import type { GitPort } from "../core/git/port";
 import { isUncommittedHash } from "../core/git/types";
-import {
-  fastForwardBranches,
-  fetchRemote,
-  getBranches,
-  getCommits,
-  getCurrentBranch,
-  getLastFetchTime,
-  getRemoteUrl,
-  getStashList,
-  getTagDetails,
-  getWorkingTreeStatus,
-} from "../git/repo";
 import {
   buildStashByParent,
   computeSilentMaxCount,
@@ -27,6 +16,8 @@ import {
 } from "../utils/data-loader-utils";
 
 interface UseDataLoaderOptions {
+  /** Git, through the app's port. */
+  git: GitPort;
   /** Absolute path to the git repository. */
   repoPath: Accessor<string>;
   /** Initial branch to scope the log to on mount. */
@@ -67,6 +58,7 @@ interface UseDataLoaderResult {
  */
 export function useDataLoader({
   repoPath,
+  git,
   initialBranch,
   state,
   actions,
@@ -113,13 +105,13 @@ export function useDataLoader({
 
       const logOptions = { branch: effectiveBranch, all: effectiveAll };
       let [commits, branches, currentBranch, remoteUrl, tagDetails, stashes, wtStatus] = await Promise.all([
-        getCommits(path, { ...logOptions, maxCount: silentMaxCount }, ctrl.signal),
-        getBranches(path, ctrl.signal),
-        getCurrentBranch(path, ctrl.signal),
-        getRemoteUrl(path, ctrl.signal),
-        getTagDetails(path, ctrl.signal),
-        getStashList(path, ctrl.signal),
-        getWorkingTreeStatus(path, ctrl.signal),
+        git.getCommits(path, { ...logOptions, maxCount: silentMaxCount }, ctrl.signal),
+        git.getBranches(path, ctrl.signal),
+        git.getCurrentBranch(path, ctrl.signal),
+        git.getRemoteUrl(path, ctrl.signal),
+        git.getTagDetails(path, ctrl.signal),
+        git.getStashList(path, ctrl.signal),
+        git.getWorkingTreeStatus(path, ctrl.signal),
       ]);
 
       // If we were superseded by a newer loadData call, discard results
@@ -133,7 +125,7 @@ export function useDataLoader({
         !silent && logIncludesHead && !findCurrentHeadHash(commits) && commits.length >= count && count < pageSize * 16;
       ) {
         count *= 2;
-        commits = await getCommits(path, { ...logOptions, maxCount: count }, ctrl.signal);
+        commits = await git.getCommits(path, { ...logOptions, maxCount: count }, ctrl.signal);
         if (ctrl.signal.aborted || repoPath() !== path) return;
       }
 
@@ -227,7 +219,7 @@ export function useDataLoader({
       const viewBranch = state.viewingBranch();
       const effectiveAll = viewBranch ? false : state.showAllBranches();
 
-      const newCommits = await getCommits(
+      const newCommits = await git.getCommits(
         path,
         {
           maxCount: pageSize,
@@ -288,14 +280,14 @@ export function useDataLoader({
     const isCurrent = () => operation === fetchOperation && repoPath() === path;
     actions.setFetching(true);
     try {
-      const result = await fetchRemote(path);
+      const result = await git.fetchRemote(path);
       if (!isCurrent()) return;
       if (result.ok) {
-        const fetchTime = await getLastFetchTime(path);
+        const fetchTime = await git.getLastFetchTime(path);
         if (!isCurrent()) return;
         actions.setLastFetchTime(fetchTime);
         if (fastForward) {
-          const moved = await fastForwardBranches(path);
+          const moved = await git.fastForwardBranches(path);
           if (!isCurrent()) return;
           onFastForward?.(moved, mode === "pull");
         }
@@ -326,7 +318,7 @@ export function useDataLoader({
       void loadData(path === initialRepoPath ? initialBranch : undefined, stickyHash);
     });
     // Load initial fetch time
-    getLastFetchTime(path).then(time => {
+    git.getLastFetchTime(path).then(time => {
       if (repoPath() === path) actions.setLastFetchTime(time);
     });
   });

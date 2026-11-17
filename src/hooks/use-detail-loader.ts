@@ -2,9 +2,9 @@ import { type Accessor, createEffect, on, onCleanup, untrack } from "solid-js";
 import type { DetailNavRef } from "../components/detail-types";
 import type { AppActions, AppState } from "../context/state";
 import { BANNER, bannerOrFallback } from "../core/banner";
+import type { GitPort } from "../core/git/port";
 import { isUncommittedHash } from "../core/git/types";
 import { isProviderDetailView } from "../core/provider-model";
-import { getCommitDetail, getUncommittedDetail } from "../git/repo";
 import { getAvailableTabs, getDefaultDetailTab } from "../utils/tab-utils";
 
 const DETAIL_DEBOUNCE_MS = 150;
@@ -15,6 +15,8 @@ function cancelPending(timer: ReturnType<typeof setTimeout> | null, ctrl: AbortC
 }
 
 interface UseDetailLoaderOptions {
+  /** Git, through the app's port. */
+  git: GitPort;
   /** Absolute path to the git repository. */
   repoPath: Accessor<string>;
   /** Reactive app state — passed directly to avoid reading from context before the Provider renders. */
@@ -58,6 +60,7 @@ interface UseDetailLoaderOptions {
  */
 export function useDetailLoader({
   repoPath,
+  git,
   state,
   actions,
   getIsJumpNavigation,
@@ -127,7 +130,7 @@ export function useDetailLoader({
       try {
         if (isUncommitted) {
           // Uncommitted node: load staged/unstaged/untracked file lists in parallel
-          const ud = await getUncommittedDetail(path, ctrl.signal);
+          const ud = await git.getUncommittedDetail(path, ctrl.signal);
           if (notSuperseded()) {
             actions.setUncommittedDetail(ud);
             // Also set a basic CommitDetail so any fallback code still has commit info
@@ -135,7 +138,7 @@ export function useDetailLoader({
             actions.setDetailLoading(false);
           }
         } else {
-          const detail = await getCommitDetail(path, commit.hash, commit, ctrl.signal);
+          const detail = await git.getCommitDetail(path, commit.hash, commit, ctrl.signal);
           if (notSuperseded()) {
             actions.setCommitDetail(detail);
             actions.setDetailLoading(false);
@@ -231,7 +234,8 @@ export function useDetailLoader({
         workingTreeCtrl?.abort();
         const ctrl = new AbortController();
         workingTreeCtrl = ctrl;
-        getUncommittedDetail(path, ctrl.signal)
+        git
+          .getUncommittedDetail(path, ctrl.signal)
           .then(ud => {
             if (ctrl.signal.aborted || repoPath() !== path || state.selectedCommit()?.hash !== commit.hash) return;
             actions.setUncommittedDetail(ud);

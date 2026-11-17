@@ -2,9 +2,9 @@ import type { Accessor } from "solid-js";
 import { createMemo } from "solid-js";
 import { createRememberedSignal, type DetailMemory } from "../components/detail-memory";
 import { computeFileWidths } from "../components/detail-types";
+import { useGit } from "../context/git";
 import { useAppState } from "../context/state";
 import type { Commit, FileChange } from "../core/git/types";
-import { getStashFiles } from "../git/repo";
 import type { FileTreeRow } from "../utils/file-tree";
 import { buildFileTree, flattenFileTree } from "../utils/file-tree";
 
@@ -43,6 +43,7 @@ export interface StashState {
  */
 export function useStashState(commit: Accessor<Commit | null | undefined>, memory?: DetailMemory): StashState {
   const { state } = useAppState();
+  const git = useGit();
 
   const stashEntries = createMemo((): Commit[] => {
     const c = commit();
@@ -83,7 +84,7 @@ export function useStashState(commit: Accessor<Commit | null | undefined>, memor
 
     // Lazy load files if not cached
     if (!stashFileCache().has(stashHash)) {
-      const files = await getStashFiles(state.repoPath(), stashHash);
+      const files = await git.getStashFiles(state.repoPath(), stashHash);
       setStashFileCache(prev => {
         const m = new Map(prev);
         m.set(stashHash, files);
