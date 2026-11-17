@@ -1,0 +1,295 @@
+{
+  "machine": "darwin 27.0.0 arm64, Apple M4 Max × 16, Bun 1.4.4",
+  "date": "2026-11-17",
+  "commit": "6cd1bca",
+  "measurements": [
+    {
+      "scenario": "functions",
+      "name": "git log, 200 commits",
+      "value": 58.7,
+      "unit": "ms"
+    },
+    {
+      "scenario": "functions",
+      "name": "graph build, 200 commits",
+      "value": 0.5,
+      "unit": "ms"
+    },
+    {
+      "scenario": "functions",
+      "name": "git log, 2000 commits",
+      "value": 73,
+      "unit": "ms"
+    },
+    {
+      "scenario": "functions",
+      "name": "graph build, 2000 commits",
+      "value": 7,
+      "unit": "ms"
+    },
+    {
+      "scenario": "functions",
+      "name": "git log, 20000 commits",
+      "value": 120,
+      "unit": "ms"
+    },
+    {
+      "scenario": "functions",
+      "name": "graph build, 20000 commits",
+      "value": 91.8,
+      "unit": "ms"
+    },
+    {
+      "scenario": "functions",
+      "name": "refresh Git reads, 200 commits loaded",
+      "value": 70.9,
+      "unit": "ms"
+    },
+    {
+      "scenario": "functions",
+      "name": "refresh Git reads, 2000 commits loaded",
+      "value": 75.9,
+      "unit": "ms"
+    },
+    {
+      "scenario": "functions",
+      "name": "Dashboard read, 7 days",
+      "value": 22.2,
+      "unit": "ms"
+    },
+    {
+      "scenario": "functions",
+      "name": "Dashboard read, 7 days: events",
+      "value": 1000,
+      "unit": "count"
+    },
+    {
+      "scenario": "functions",
+      "name": "SQLite write, one entry (of 200 in a row)",
+      "value": 0.1,
+      "unit": "ms"
+    },
+    {
+      "scenario": "functions",
+      "name": "SQLite read every entry (200)",
+      "value": 0.3,
+      "unit": "ms"
+    },
+    {
+      "scenario": "graph",
+      "name": "graph mount, 200 rows",
+      "value": 61.5,
+      "unit": "ms"
+    },
+    {
+      "scenario": "graph",
+      "name": "graph mount, 200 rows: JavaScript heap per 1,000 rows",
+      "value": 84.3,
+      "unit": "MB"
+    },
+    {
+      "scenario": "graph",
+      "name": "graph mount, 1000 rows",
+      "value": 192,
+      "unit": "ms"
+    },
+    {
+      "scenario": "graph",
+      "name": "graph mount, 1000 rows: JavaScript heap per 1,000 rows",
+      "value": 68.8,
+      "unit": "MB"
+    },
+    {
+      "scenario": "graph",
+      "name": "graph mount, 2000 rows",
+      "value": 405.8,
+      "unit": "ms"
+    },
+    {
+      "scenario": "graph",
+      "name": "graph mount, 2000 rows: JavaScript heap per 1,000 rows",
+      "value": 63,
+      "unit": "MB"
+    },
+    {
+      "scenario": "graph",
+      "name": "graph refresh with one new commit, 1,000 rows",
+      "value": 181.1,
+      "unit": "ms"
+    },
+    {
+      "scenario": "graph",
+      "name": "graph cursor move, 1,000 rows",
+      "value": 3.5,
+      "unit": "ms"
+    },
+    {
+      "scenario": "graph",
+      "name": "graph, 20 refreshes: JavaScript heap retained",
+      "value": 0.4,
+      "unit": "MB"
+    },
+    {
+      "scenario": "graph",
+      "name": "graph, baseline before rows: JavaScript heap",
+      "value": 25.9,
+      "unit": "MB"
+    },
+    {
+      "scenario": "app",
+      "name": "app startup until the graph shows",
+      "value": 150.8,
+      "unit": "ms"
+    },
+    {
+      "scenario": "app",
+      "name": "app after startup (200 rows): process memory",
+      "value": 191.9,
+      "unit": "MB"
+    },
+    {
+      "scenario": "app",
+      "name": "app after startup (200 rows): JavaScript heap",
+      "value": 48.1,
+      "unit": "MB"
+    },
+    {
+      "scenario": "app",
+      "name": "app key j, graph",
+      "value": 0.7,
+      "unit": "ms"
+    },
+    {
+      "scenario": "app",
+      "name": "app key k, graph",
+      "value": 0.5,
+      "unit": "ms"
+    },
+    {
+      "scenario": "app",
+      "name": "app page of 200 older commits",
+      "value": 267.4,
+      "unit": "ms"
+    },
+    {
+      "scenario": "app",
+      "name": "app rows after 5 pages",
+      "value": 1200,
+      "unit": "count"
+    },
+    {
+      "scenario": "app",
+      "name": "app after 5 pages: process memory",
+      "value": 587.3,
+      "unit": "MB"
+    },
+    {
+      "scenario": "app",
+      "name": "app after 5 pages: JavaScript heap",
+      "value": 121.1,
+      "unit": "MB"
+    },
+    {
+      "scenario": "app",
+      "name": "app key k, 1,200 rows",
+      "value": 4.4,
+      "unit": "ms"
+    },
+    {
+      "scenario": "dashboard",
+      "name": "Dashboard open until its events show",
+      "value": 179.5,
+      "unit": "ms"
+    },
+    {
+      "scenario": "dashboard",
+      "name": "Dashboard events",
+      "value": 1000,
+      "unit": "count"
+    },
+    {
+      "scenario": "dashboard",
+      "name": "Dashboard open: process memory",
+      "value": 311.3,
+      "unit": "MB"
+    },
+    {
+      "scenario": "dashboard",
+      "name": "Dashboard open: JavaScript heap",
+      "value": 100,
+      "unit": "MB"
+    },
+    {
+      "scenario": "dashboard",
+      "name": "Dashboard open: JavaScript heap added",
+      "value": 52.4,
+      "unit": "MB"
+    },
+    {
+      "scenario": "dashboard",
+      "name": "app key j, Dashboard",
+      "value": 38,
+      "unit": "ms"
+    },
+    {
+      "scenario": "switching",
+      "name": "app switch to another app of the group",
+      "value": 64.5,
+      "unit": "ms"
+    },
+    {
+      "scenario": "switching",
+      "name": "after 12 switches between 3 apps: process memory",
+      "value": 236,
+      "unit": "MB"
+    },
+    {
+      "scenario": "switching",
+      "name": "after 12 switches between 3 apps: JavaScript heap",
+      "value": 52.8,
+      "unit": "MB"
+    },
+    {
+      "scenario": "switching",
+      "name": "switches 5 to 12: JavaScript heap added",
+      "value": 0.6,
+      "unit": "MB"
+    },
+    {
+      "scenario": "log",
+      "name": "log of 20,000 lines: open until it shows",
+      "value": 646,
+      "unit": "ms"
+    },
+    {
+      "scenario": "log",
+      "name": "log of 20,000 lines open: process memory",
+      "value": 931.7,
+      "unit": "MB"
+    },
+    {
+      "scenario": "log",
+      "name": "log of 20,000 lines open: JavaScript heap",
+      "value": 326.8,
+      "unit": "MB"
+    },
+    {
+      "scenario": "log",
+      "name": "log of 20,000 lines open: JavaScript heap added",
+      "value": 303.5,
+      "unit": "MB"
+    },
+    {
+      "scenario": "log",
+      "name": "log of 20,000 lines: key G",
+      "value": 58,
+      "unit": "ms"
+    },
+    {
+      "scenario": "log",
+      "name": "log, 10 more opens and closes: JavaScript heap retained",
+      "value": 1.8,
+      "unit": "MB"
+    }
+  ]
+}

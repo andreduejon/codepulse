@@ -72,3 +72,9 @@ bun run demo:golden                                          # the kept screens:
   new screens; check their diff shows only the intended change.
 - When a state you need is missing, add it to `scripts/demo/scenario.ts` (or `packages.ts`) instead of testing
   against a real server.
+
+## Checking performance
+
+`bun run bench --compare` measures speed and memory on large generated repositories and prints each number beside
+the baseline's (see [docs/bench.md](docs/bench.md)). Run it before and after a change that touches loading,
+rendering, caches or memory. Compare on the same machine only.
