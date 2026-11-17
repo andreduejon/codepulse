@@ -1,7 +1,6 @@
 import {
   MouseButton,
   type MouseEvent,
-  type Renderable,
   type ScrollBoxRenderable,
   type StyledText,
   type TextRenderable,
@@ -32,6 +31,7 @@ import {
   sliceGraphToViewport,
 } from "../git/graph";
 import type { GraphRow, RefInfo } from "../git/types";
+import { useScrollWindow } from "../hooks/use-scroll-window";
 import { useT } from "../hooks/use-t";
 import {
   ActionsColumnHeaders,
@@ -49,7 +49,7 @@ import { ScrollingLabel } from "../providers/shared/detail-rows";
 import { SnykColumnHeaders, SnykCountsColumn, SnykScanColumn } from "../providers/snyk/graph-columns";
 import type { SnykScanResult } from "../providers/snyk/types";
 import { formatRelativeDate } from "../utils/date";
-import { scheduleScrollIntoView, scrollElementIntoView } from "../utils/scroll";
+import { scheduleScrollIntoView } from "../utils/scroll";
 import { cellWidth } from "../utils/terminal-text";
 import Badge from "./badge";
 
@@ -219,7 +219,6 @@ function GraphLine(
     onMouseDown: (event: MouseEvent) => void;
     mouseEnabled?: () => boolean;
     viewportOffset: () => number;
-    rowRef?: (el: Renderable) => void;
     /** Whether ancestry highlighting is currently active (any commit selected).
      *  Derived from brightColumnsByHash in the parent — avoids a second signal read. */
     ancestryActive: () => boolean;
@@ -465,7 +464,6 @@ function GraphLine(
     // biome-ignore lint/a11y/noStaticElementInteractions: TUI block uses existing keyboard graph navigation, not DOM roles.
     // biome-ignore lint/a11y/useKeyWithMouseEvents: Keyboard selection already highlights the active commit block.
     <box
-      ref={(el: Renderable) => props.rowRef?.(el)}
       flexDirection="column"
       width="100%"
       backgroundColor={
@@ -646,6 +644,16 @@ function rowHasConnections(row: GraphRow): boolean {
   );
 }
 
+/**
+ * How many lines a row takes: its fan-out rows above the commit (the last merges into the commit's line when the commit
+ * has no connections of its own), the commit's line, and the connector below it unless it is the last row.
+ */
+export function graphRowHeight(row: GraphRow, isLast: boolean): number {
+  const fanOut = row.fanOutRows?.length ?? 0;
+  const above = fanOut > 0 && !rowHasConnections(row) ? fanOut - 1 : fanOut;
+  return above + 1 + (isLast ? 0 : 1);
+}
+
 interface FanOutDisplay {
   /** StyledText content for each fan-out row rendered above the commit row. */
   fanOutAboveContents: StyledText[];
@@ -723,16 +731,20 @@ export default function GraphView(
   // All rows share the same offset, giving a horizontal "scroll" effect.
   const [viewportOffset, setViewportOffset] = createSignal(0);
 
-  // Refs for programmatic scroll-into-view
   let scrollboxRef: ScrollBoxRenderable | undefined;
-  /** Each row's element by index, for scrolling it into view. Kept as long as the rows: shorter graphs shorten it. */
-  const rowRefs: (Renderable | undefined)[] = [];
-  createEffect(() => {
-    const count = state.graphRows().length;
-    if (rowRefs.length > count) rowRefs.length = count;
+  /** Only the rows near the screen are mounted: the others take their height as empty space. */
+  const rowWindow = useScrollWindow({
+    heights: () => {
+      const rows = state.graphRows();
+      return rows.map((row, index) => graphRowHeight(row, index === rows.length - 1));
+    },
+    screenHeight: () => dimensions().height,
+  });
+  const shownRows = createMemo(() => {
+    const { start, end } = rowWindow.range();
+    return state.graphRows().slice(start, end);
   });
   const scrollSchedule: { scrollTimer?: ReturnType<typeof setTimeout> } = {};
-  let lastScrollIndex = -1;
 
   createEffect(() => {
     const rows = state.graphRows();
@@ -748,17 +760,9 @@ export default function GraphView(
     setViewportOffset(prev => computeSingleViewportOffset(prev, nodeCol, MAX_GRAPH_COLUMNS, maxCols));
   });
 
-  /** Scroll a row at `idx` into view within the scrollbox. */
-  const scrollRowIntoView = (idx: number) => {
-    const direction: -1 | 0 | 1 = idx > lastScrollIndex ? 1 : idx < lastScrollIndex ? -1 : 0;
-    lastScrollIndex = idx;
-    scheduleScrollIntoView(scrollSchedule, () => {
-      const sb = scrollboxRef;
-      const rowEl = rowRefs[idx];
-      if (!sb || !rowEl) return false;
-      return scrollElementIntoView(sb, rowEl, 1, direction);
-    });
-  };
+  /** Scroll the row at `idx` into view (again after the next layout when its lines aren't there yet). */
+  const scrollRowIntoView = (idx: number) =>
+    scheduleScrollIntoView(scrollSchedule, () => rowWindow.scrollIntoView(idx));
 
   // Scroll the target row into view (triggered by keyboard nav / selection).
   createEffect(() => {
@@ -772,9 +776,9 @@ export default function GraphView(
   });
 
   // Deferred scroll-into-view after filter clear: polls until Yoga layout is ready.
-  // When clearing a search filter, newly rendered rows don't have computed layout
-  // yet because @opentui's requestAnimationFrame fires BEFORE the render pass.
-  // We poll every 16ms until the target row has a valid layout, then scroll to it.
+  // When clearing a search filter, the graph's new height isn't laid out yet
+  // because @opentui's requestAnimationFrame fires BEFORE the render pass.
+  // We poll every 16ms until the content reaches the target row, then scroll to it.
   let pendingScrollPollId: ReturnType<typeof setTimeout> | undefined;
   onCleanup(() => clearTimeout(pendingScrollPollId));
   createEffect(() => {
@@ -793,9 +797,7 @@ export default function GraphView(
         actions.setPendingScrollHash(null);
         return;
       }
-      const rowEl = rowRefs[idx];
-      if (rowEl && rowEl.getComputedLayout().height > 0) {
-        scrollRowIntoView(idx);
+      if (rowWindow.scrollIntoView(idx)) {
         actions.setPendingScrollHash(null);
         return;
       }
@@ -855,6 +857,7 @@ export default function GraphView(
     <scrollbox
       ref={el => {
         scrollboxRef = el;
+        rowWindow.attach(el);
         props.scrollboxRef?.(el);
       }}
       flexGrow={1}
@@ -893,23 +896,10 @@ export default function GraphView(
     >
       <box flexDirection="column" flexGrow={1}>
         <Show when={!state.loading()}>
-          <For each={state.graphRows()}>
-            {(row, index) => {
-              // Capture the element ref so we can reactively update rowRefs
-              // when <For> reindexes this element (e.g. after data reload).
-              // Ref callbacks only fire on creation; this effect re-runs
-              // whenever index() changes, keeping rowRefs in sync.
-              let elRef: Renderable | undefined;
-              /** Where this row last put its element. */
-              let at = -1;
-              createEffect(() => {
-                at = index();
-                if (elRef) rowRefs[at] = elRef;
-              });
-              // A row that goes (a shorter graph, a reload) lets go of its element, unless another row took the slot.
-              onCleanup(() => {
-                if (at >= 0 && rowRefs[at] === elRef) rowRefs[at] = undefined;
-              });
+          <box height={rowWindow.before()} flexShrink={0} />
+          <For each={shownRows()}>
+            {(row, shownIndex) => {
+              const index = () => rowWindow.range().start + shownIndex();
               return (
                 <GraphLine
                   row={row}
@@ -941,15 +931,11 @@ export default function GraphView(
                   brightCommitHorizontals={() => brightColumnsByHash()?.commitHorizontal.get(row.commit.hash)}
                   snykGetCommitData={props.snykGetCommitData}
                   snykIsScanning={props.snykIsScanning}
-                  rowRef={el => {
-                    elRef = el;
-                    at = index();
-                    rowRefs[at] = el;
-                  }}
                 />
               );
             }}
           </For>
+          <box height={rowWindow.after()} flexShrink={0} />
           <Show when={state.historyError()}>
             <box paddingLeft={2} height={1} flexShrink={0}>
               <text wrapMode="none" truncate fg={t().warning}>

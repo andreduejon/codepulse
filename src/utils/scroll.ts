@@ -1,4 +1,5 @@
 import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
+import { scrollDeltaFor } from "../core/scroll-window";
 
 const SCROLL_RETRY_MS = 16;
 
@@ -24,23 +25,10 @@ export function scrollElementIntoView(
 ): boolean {
   if (!hasScrollLayout(el)) return false;
   const rowTop = el.screenY;
-  const rowBottom = rowTop + el.height;
   const viewportTop = scrollbox.viewport.screenY;
   const viewportHeight = scrollbox.viewport.height;
   if (!Number.isFinite(viewportHeight) || viewportHeight <= 0) return false;
-  const viewportBottom = viewportTop + viewportHeight;
-  const usableHeight = Math.max(1, viewportHeight - padding * 2);
-
-  let delta = 0;
-  if (el.height > usableHeight) {
-    if (rowTop < viewportTop + padding || rowTop >= viewportBottom - padding) {
-      delta = rowTop - viewportTop - padding;
-    }
-  } else if (rowTop < viewportTop + padding) {
-    delta = rowTop - viewportTop - padding;
-  } else if (rowBottom > viewportBottom - padding) {
-    delta = rowBottom - viewportBottom + padding;
-  }
+  const delta = scrollDeltaFor(rowTop, el.height, viewportTop, viewportHeight, padding);
 
   // Stale screenY after a cursor move often looks like y=0 and yanks the
   // viewport to the top. Ignore a delta that fights the move direction.
