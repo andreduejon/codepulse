@@ -14,10 +14,10 @@ import {
 import { useDialogHost } from "./app/dialogs";
 import { useMessageCenter } from "./app/messages";
 import { useProviderHost } from "./app/providers";
+import { useRepoSession } from "./app/repo-session";
 import { useRepoSettings } from "./app/repo-settings";
 import { runAppCommand } from "./app-commands";
-import { applyRepoSession, captureRepoSession } from "./app-repo-session";
-import type { AppContentProps, RepoSessionSnapshot } from "./app-types";
+import type { AppContentProps } from "./app-types";
 import CacheScreen from "./components/cache-screen";
 import CommandBar from "./components/command-bar";
 import { DashboardCommitFields, DashboardDetail, type DashboardDetailTab } from "./components/dashboard-detail";
@@ -40,15 +40,8 @@ import GraphView, { ColumnHeader } from "./components/graph";
 import MessageBox from "./components/message-box";
 import ProjectSelector from "./components/project-selector";
 import SetupScreen from "./components/setup-screen";
-import { getKnownRepoInfos, mergeOptions, startViewFor } from "./config";
 import { backfillRepoConfig, writeConfig } from "./config-write";
-import {
-  COMPACT_THRESHOLD_WIDTH,
-  DEFAULT_MAX_COUNT,
-  MIN_TERMINAL_HEIGHT,
-  MIN_TERMINAL_WIDTH,
-  RECENT_APPS,
-} from "./constants";
+import { COMPACT_THRESHOLD_WIDTH, DEFAULT_MAX_COUNT, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH } from "./constants";
 import { AppStateContext, createAppState, type DetailTab } from "./context/state";
 import { ThemeContext } from "./context/theme";
 import type { DashboardEvent } from "./dashboard/events";
@@ -66,14 +59,12 @@ import { providerAccent, providerColors } from "./providers/colors";
 import { detailEntryFor } from "./providers/detail-entries";
 import OpenShiftResourceDialog from "./providers/openshift/resource-dialog";
 import { type EventSource, isProviderDetailView, type ProviderView, providerDetailTab } from "./providers/provider";
-import { type CacheRepositorySummary, evictRepositoryCache } from "./providers/shared/cache-management";
 import JobLogDialog from "./providers/shared/job-log-dialog";
-import { repositoryIdentity, setProviderCacheSuspended } from "./providers/shared/sha-sqlite-cache";
+import { setProviderCacheSuspended } from "./providers/shared/sha-sqlite-cache";
 import type { SnykProviderConfig } from "./providers/snyk/use-snyk";
-import { nextGroupRepoPath, repoDisplayName } from "./utils/group-repos";
+import { repoDisplayName } from "./utils/group-repos";
 import { computeDisplacedIndex } from "./utils/keyboard-nav-utils";
 import { openUrl } from "./utils/open-url";
-import { rememberRecent } from "./utils/recent";
 
 export function AppContent(props: Readonly<AppContentProps>) {
   const { state, actions } = createAppState(
@@ -111,7 +102,6 @@ export function AppContent(props: Readonly<AppContentProps>) {
     setAutoFastForward,
     display: repoDisplayConfig,
     setDisplay: setRepoDisplayConfig,
-    read: readConfig,
     reload: reloadRuntimeConfig,
   } = settings;
 
@@ -127,8 +117,6 @@ export function AppContent(props: Readonly<AppContentProps>) {
 
   // Setup screen visibility — shown when startup mode is "setup"
   const [setupVisible, setSetupVisible] = createSignal(props.startupMode.kind === "setup");
-  // Repo selector visibility — shown when "Switch repository" is selected from menu
-  const [repoSelectorVisible, setRepoSelectorVisible] = createSignal(false);
 
   const {
     screenMessage,
@@ -188,16 +176,6 @@ export function AppContent(props: Readonly<AppContentProps>) {
   // Ref for programmatic scrolling of the detail panel
   let graphScrollboxRef: ScrollBoxRenderable | undefined;
   let detailScrollboxRef: ScrollBoxRenderable | undefined;
-  let cacheGraphScrollTop = 0;
-  const [pendingGraphScrollTop, setPendingGraphScrollTop] = createSignal<number | null>(null);
-  let scrollRestoreVersion = 0;
-  let scrollRestoreTimers: ReturnType<typeof setTimeout>[] = [];
-
-  const cancelScrollRestore = () => {
-    scrollRestoreVersion++;
-    for (const timer of scrollRestoreTimers) clearTimeout(timer);
-    scrollRestoreTimers = [];
-  };
 
   // Navigation ref for interactive detail panel items
   const detailNavRef: DetailNavRef = {
@@ -235,45 +213,6 @@ export function AppContent(props: Readonly<AppContentProps>) {
 
   const refreshActiveProvider = providers.refreshActive;
 
-  const knownRepoInfos = () => getKnownRepoInfos();
-  const currentRepoDisplayConfig = () => repoDisplayConfig();
-  /** The apps left last keep their graph, so coming back shows it at once; older ones read again. */
-  let repoSessionCache: ReadonlyMap<string, RepoSessionSnapshot> = new Map();
-
-  const saveRepoSessionSnapshot = (path: string) => {
-    if (!path || state.repoPath() !== path || state.graphRows().length === 0) return;
-    const snapshot = captureRepoSession(state, graphScrollboxRef?.scrollTop ?? 0);
-    repoSessionCache = rememberRecent(repoSessionCache, path, snapshot, RECENT_APPS);
-  };
-
-  const restoreRepoSessionSnapshot = (snapshot: RepoSessionSnapshot) => {
-    applyRepoSession(actions, snapshot);
-    setPendingGraphScrollTop(snapshot.graphScrollTop);
-  };
-
-  createEffect(() => {
-    const top = pendingGraphScrollTop();
-    if (top == null || state.loading()) return;
-    cancelScrollRestore();
-    const version = scrollRestoreVersion;
-    const path = activeRepoPath();
-    const restore = () => {
-      if (version !== scrollRestoreVersion || activeRepoPath() !== path || state.loading()) return;
-      graphScrollboxRef?.scrollTo(top);
-    };
-    scrollRestoreTimers = [
-      setTimeout(restore, 0),
-      setTimeout(restore, 16),
-      setTimeout(() => {
-        restore();
-        if (version !== scrollRestoreVersion || activeRepoPath() !== path || state.loading()) return;
-        setPendingGraphScrollTop(null);
-        scrollRestoreTimers = [];
-      }, 50),
-    ];
-    onCleanup(cancelScrollRestore);
-  });
-
   const resetTransientRepoState = () => {
     setDialog(null);
     setCommandBarMode("idle");
@@ -293,52 +232,35 @@ export function AppContent(props: Readonly<AppContentProps>) {
     actions.setDetailCursorIndex(0);
   };
 
-  const switchRepoPath = (nextPath: string) => {
-    const currentPath = activeRepoPath();
-    if (!nextPath || nextPath === currentPath) return;
-    cancelScrollRestore();
-    setPendingGraphScrollTop(null);
-    saveRepoSessionSnapshot(currentPath);
-    actions.setActiveProviderView("git");
-    providers.invalidateAll();
-    actions.clearProviderState();
-    resetTransientRepoState();
-    setRepoSelectorVisible(false);
-    // Its own Preferences, before its graph loads: they are per repository, like at startup.
-    const nextConfig = readConfig(nextPath);
-    const nextOptions = mergeOptions({ repoPath: nextPath }, nextConfig);
-    actions.setAutoFetchInterval(nextOptions.autoFetchInterval);
-    actions.setAutoRefreshInterval(nextOptions.autoRefreshInterval);
-    actions.setMaxCount(nextOptions.maxCount);
-    actions.setShowAllBranches(nextConfig.showAllBranches ?? true);
-    // One update: the loader sets the new path as soon as the active one changes, and nothing may see the new path
-    // with the previous repository's branches (Snyk would scan their tips in the wrong repository).
-    batch(() => {
-      setActiveRepoPath(nextPath);
-      const snapshot = repoSessionCache.get(nextPath);
-      if (snapshot) {
-        restoreRepoSessionSnapshot(snapshot);
-      } else {
-        // A repository not shown yet in this session opens in its start view; one shown before, where it was left.
-        actions.setActiveProviderView(startViewFor(nextConfig));
-        actions.setCommits([]);
-        actions.setGraphRows([]);
-        actions.setBranches([]);
-        actions.setCurrentBranch("");
-        actions.setRepoPath(nextPath);
-        actions.setRemoteUrl("");
-        actions.setTagDetails(new Map());
-        actions.setStashByParent(new Map());
-        actions.setLoading(true);
-      }
-    });
-  };
-
-  const switchGroupRepo = (direction: 1 | -1) => {
-    const nextPath = nextGroupRepoPath(knownRepoInfos(), activeRepoPath(), direction, currentRepoDisplayConfig());
-    if (!nextPath) return;
-    switchRepoPath(nextPath);
-  };
+  const session = useRepoSession({
+    state,
+    actions,
+    repoPath: activeRepoPath,
+    setRepoPath: setActiveRepoPath,
+    settings,
+    providers,
+    cacheScreenVisible,
+    setCacheScreenVisible,
+    clearTransient: resetTransientRepoState,
+    graphScroll: {
+      top: () => graphScrollboxRef?.scrollTop ?? 0,
+      scrollTo: top => graphScrollboxRef?.scrollTo(top),
+    },
+    closeDialog: () => setDialog(null),
+    isDisposed: () => disposed,
+  });
+  const {
+    knownRepos: knownRepoInfos,
+    switchTo: switchRepoPath,
+    switchInGroup: switchGroupRepo,
+    selectorVisible: repoSelectorVisible,
+    setSelectorVisible: setRepoSelectorVisible,
+    pendingGraphScrollTop,
+    openCacheScreen,
+    closeCacheScreen,
+    evictCache: evictCacheRepository,
+  } = session;
+  const currentRepoDisplayConfig = () => repoDisplayConfig();
 
   // ── Dashboard ─────────────────────────────────────────────────────────────
   /** The open repository: another app of its group is a click on its badge away. */
@@ -750,12 +672,6 @@ export function AppContent(props: Readonly<AppContentProps>) {
     }
   });
 
-  const openCacheScreen = () => {
-    cacheGraphScrollTop = graphScrollboxRef?.scrollTop ?? 0;
-    setDialog(null);
-    setCacheScreenVisible(true);
-  };
-
   /** Switch the graph to view a specific branch perspective. */
   const handleViewBranch = (branch: string | null) => {
     actions.setViewingBranch(branch);
@@ -790,21 +706,6 @@ export function AppContent(props: Readonly<AppContentProps>) {
       setCommandBarMode,
       setCommandBarValue,
     });
-
-  const evictCacheRepository = async (repo: CacheRepositorySummary) => {
-    const { hash } = await repositoryIdentity(activeRepoPath());
-    if (disposed || !cacheScreenVisible()) throw new Error("Cache screen is closed.");
-    const removed = evictRepositoryCache(repo.repoHash);
-    if (hash === repo.repoHash) {
-      providers.invalidateAll();
-    }
-    return removed;
-  };
-
-  const closeCacheScreen = () => {
-    setCacheScreenVisible(false);
-    setPendingGraphScrollTop(cacheGraphScrollTop);
-  };
 
   /**
    * Apply a path filter from the command bar PATH_INPUT mode.
