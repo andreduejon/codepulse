@@ -12,6 +12,7 @@ import type { Accessor } from "solid-js";
 import { createEffect, createSignal, untrack } from "solid-js";
 import { type AppActions, type AppState, providerIdle } from "../../context/state";
 import { createGitHubService } from "../../core/github/service";
+import { providerAppPort } from "../shared/app-port";
 import { DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS } from "../shared/auto-refresh";
 import { useProviderFetchLifecycle } from "../shared/use-provider-fetch-lifecycle";
 import * as api from "./api";
@@ -89,17 +90,7 @@ export function useGitHubCI(opts: {
   const [dataVersion, setDataVersion] = createSignal(0);
   let lifecycle!: ReturnType<typeof useProviderFetchLifecycle>;
   const service = createGitHubService({
-    app: {
-      repoPath: state.repoPath,
-      graphRows: state.graphRows,
-      badges: () => state.graphBadgesFor("github-actions"),
-      status: () => state.providerStatusFor("github-actions"),
-      setStatus: status => actions.setProviderStatus("github-actions", status),
-      setBadges: badges => actions.setGraphBadges("github-actions", badges),
-      noteSuccess: () => actions.setProviderLastSuccessfulRefresh("github-actions", new Date()),
-      suspended: () => opts.suspended?.() ?? false,
-      view: state.activeProviderView,
-    },
+    app: providerAppPort(state, actions, "github-actions", opts.suspended),
     // Through the module at call time: tests replace these functions.
     api: {
       fetchCIDataForSHAs: (...args) => api.fetchCIDataForSHAs(...args),

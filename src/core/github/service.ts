@@ -1,12 +1,3 @@
-/**
- * GitHub Actions for one open repository, without any UI framework: which commits to ask GitHub about, their runs
- * and jobs, failed jobs' annotations, what the cache keeps, and the freeze after an expired token. When it fetches is
- * the fetch lifecycle's (core/fetch-lifecycle.ts): this service gives it what to run.
- *
- * Everything outside comes through ports: the app (repository, graph, status, badges), GitHub's API, the cache, the
- * token, the lifecycle. The Solid hook (providers/github-actions/use-github-ci.ts) builds them; a test can fake them.
- */
-import type { ProviderStatus } from "../../context/app-state-types";
 import { BANNER, bannerOrFallback, debugError } from "../../debug/banner";
 import { addDebugEvent } from "../../debug/events";
 import type * as GitHubApi from "../../providers/github-actions/api";
@@ -26,25 +17,13 @@ import type {
   GitHubRepo,
   GitHubWorkflowRun,
 } from "../../providers/github-actions/types";
-import type { GraphBadge } from "../../providers/provider";
 import { jobsSettled } from "../../providers/shared/status";
-import type { FetchLifecycle, ProviderFetchArgs } from "../fetch-lifecycle";
+import type { ProviderFetchArgs } from "../fetch-lifecycle";
+import type { ProviderAppPort, ProviderLifecycle } from "../provider-ports";
 import { providerError, providerIdle, providerLoading, providerUnavailable } from "../provider-status";
 
 /** The app, as GitHub sees it. */
-export interface GitHubAppPort {
-  repoPath: () => string;
-  graphRows: () => readonly { commit: { hash: string } }[];
-  /** GitHub's own badges (on the dashboard, the shown view's are none). */
-  badges: () => ReadonlyMap<string, GraphBadge>;
-  status: () => ProviderStatus;
-  setStatus: (status: ProviderStatus) => void;
-  setBadges: (badges: Map<string, GraphBadge>) => void;
-  /** A fetch that worked: the menu's Last refresh. */
-  noteSuccess: () => void;
-  suspended: () => boolean;
-  view: () => string;
-}
+export type GitHubAppPort = ProviderAppPort;
 
 /** GitHub's API: the requests the service makes. */
 export interface GitHubApiPort {
@@ -68,18 +47,7 @@ export interface GitHubCachePort {
   ) => Promise<number>;
 }
 
-/** What of the lifecycle the service uses while it fetches. */
-export type GitHubLifecycle = Pick<
-  FetchLifecycle,
-  | "getEpoch"
-  | "isCurrent"
-  | "noteFetchStarted"
-  | "noteRefreshSettled"
-  | "noteFetchResult"
-  | "runRequest"
-  | "fetchInitial"
-  | "startAutoRefresh"
->;
+export type GitHubLifecycle = ProviderLifecycle;
 
 export interface GitHubServicePorts {
   app: GitHubAppPort;

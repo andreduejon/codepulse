@@ -4,6 +4,7 @@
 import { expect, mock, test } from "bun:test";
 import type { ProviderStatus } from "../../context/app-state-types";
 import { BANNER } from "../../debug/banner";
+import type { GraphRow } from "../../git/types";
 import type { GitHubCacheEntry } from "../../providers/github-actions/merge";
 import type { GitHubJob, GitHubRepo, GitHubWorkflowRun } from "../../providers/github-actions/types";
 import { DEFAULT_GITHUB_CONFIG } from "../../providers/github-actions/types";
@@ -43,7 +44,7 @@ const job: GitHubJob = {
 function harness() {
   const app = {
     repoPath: "/repo",
-    rows: [{ commit: { hash: SHA } }],
+    rows: [{ commit: { hash: SHA, refs: [] } }] as unknown as GraphRow[],
     status: { kind: "idle" } as ProviderStatus,
     badges: new Map<string, GraphBadge>(),
   };
