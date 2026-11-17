@@ -1,28 +1,17 @@
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
-import { createEffect, createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import { useCommandBar } from "./app/commands";
 import { useDashboardController } from "./app/dashboard-controller";
-import { DialogLayer } from "./app/dialog-layer";
 import { useDialogHost } from "./app/dialogs";
 import { useGraphController } from "./app/graph-controller";
+import { AppLayout } from "./app/layout";
 import { useMessageCenter } from "./app/messages";
 import { useProviderHost } from "./app/providers";
 import { useRepoSession } from "./app/repo-session";
 import { useRepoSettings } from "./app/repo-settings";
 import type { AppContentProps } from "./app-types";
-import CacheScreen from "./components/cache-screen";
-import CommandBar from "./components/command-bar";
-import { DashboardDetail } from "./components/dashboard-detail";
-import { DashboardView } from "./components/dashboard-view";
 import { createDetailMemory } from "./components/detail-memory";
-import DetailPanel from "./components/detail-panel";
 import type { DetailNavRef } from "./components/detail-types";
-import ErrorScreen from "./components/error-screen";
-import Footer from "./components/footer";
-import GraphView, { ColumnHeader } from "./components/graph";
-import MessageBox from "./components/message-box";
-import ProjectSelector from "./components/project-selector";
-import SetupScreen from "./components/setup-screen";
 import { COMPACT_THRESHOLD_WIDTH, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH } from "./constants";
 import { CacheStoreContext } from "./context/cache-store";
 import { GitContext } from "./context/git";
@@ -32,7 +21,6 @@ import { ThemeContext } from "./context/theme";
 import { runAppCommand } from "./core/commands";
 import { DEFAULT_MAX_COUNT } from "./core/settings/config";
 import { loadAppEvents } from "./dashboard/load";
-import { openGraphDetails } from "./hooks/handle-graph-keys";
 import { useAncestry } from "./hooks/use-ancestry";
 import { useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
 import { portsFrom } from "./ports";
@@ -72,7 +60,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     actions,
     port: settingsPort,
   });
-  const { autoFastForward, display: repoDisplayConfig, reload: reloadRuntimeConfig } = settings;
+  const { autoFastForward, reload: reloadRuntimeConfig } = settings;
 
   const providers = useProviderHost({
     state,
@@ -82,20 +70,14 @@ export function AppContent(props: Readonly<AppContentProps>) {
     onOpenJobLog: target => openJobLog(target),
     onOpenResource: resource => handleOpenOpenShiftResource(resource),
   });
-  const { openShift, snyk } = providers;
+  const { snyk } = providers;
 
   // Setup screen visibility — shown when startup mode is "setup"
   const [setupVisible, setSetupVisible] = createSignal(props.startupMode.kind === "setup");
 
-  const {
-    screenMessage,
-    tabNotice,
-    setGitNotice,
-    showFastForward,
-    forgetFastForward,
-    clearScreenMessage,
-    dismissTabNotice,
-  } = useMessageCenter({ state, actions, snyk });
+  const messages = useMessageCenter({ state, actions, snyk });
+  const { tabNotice, setGitNotice, showFastForward, forgetFastForward, clearScreenMessage, dismissTabNotice } =
+    messages;
 
   const handleSetupComplete = () => {
     // Backfill all default settings so the user can see and edit them in the config file
@@ -122,7 +104,6 @@ export function AppContent(props: Readonly<AppContentProps>) {
     commandBarValue,
     setCommandBarValue,
     handlePathExecute,
-    selectMode,
     applySearch,
   } = commandBar;
 
@@ -138,15 +119,9 @@ export function AppContent(props: Readonly<AppContentProps>) {
   });
 
   const dialogs = useDialogHost({ state, layoutMode });
-  const {
-    dialog,
-    setDialog,
-    openDiff: handleOpenDiff,
-    openJobLog,
-    openResource: handleOpenOpenShiftResource,
-  } = dialogs;
+  const { dialog, setDialog, openJobLog, openResource: handleOpenOpenShiftResource } = dialogs;
   /** The mouse works on the graph, the dashboard and their panels while no dialog covers them. */
-  const mouseEnabled = () => dialog() == null;
+  const _mouseEnabled = () => dialog() == null;
 
   // Navigation ref for interactive detail panel items
   const detailNavRef: DetailNavRef = {
@@ -197,17 +172,11 @@ export function AppContent(props: Readonly<AppContentProps>) {
     isDisposed: () => disposed,
   });
   const {
-    knownRepos: knownRepoInfos,
     switchTo: switchRepoPath,
     switchInGroup: switchGroupRepo,
-    selectorVisible: repoSelectorVisible,
     setSelectorVisible: setRepoSelectorVisible,
-    pendingGraphScrollTop,
     openCacheScreen,
-    closeCacheScreen,
-    evictCache: evictCacheRepository,
   } = session;
-  const currentRepoDisplayConfig = () => repoDisplayConfig();
 
   // ── Dashboard ─────────────────────────────────────────────────────────────
   /** One for both layouts and both views: a resize keeps open folders, runs and namespaces. */
@@ -229,16 +198,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     setGitNotice,
     closeSearch: commandBar.closeSearch,
   });
-  const {
-    dashboard,
-    dashboardShown,
-    dashboardAppName,
-    showSelectedInGraph,
-    dashboardTabProps,
-    refreshDashboard,
-    handleDashboardKey,
-    setDetailScrollbox: setDashboardDetailScrollbox,
-  } = dashboardController;
+  const { dashboard, handleDashboardKey } = dashboardController;
 
   const handleReloadAll = async () => {
     reloadRuntimeConfig();
@@ -369,230 +329,27 @@ export function AppContent(props: Readonly<AppContentProps>) {
     <SettingsContext.Provider value={settingsPort}>
       <GitContext.Provider value={gitPort}>
         <CacheStoreContext.Provider value={cacheStore}>
-          <ThemeContext.Provider
-            value={{
-              ...themeState,
-              theme: providerTheme,
-            }}
-          >
+          <ThemeContext.Provider value={{ ...themeState, theme: providerTheme }}>
             <AppStateContext.Provider value={{ state, actions }}>
-              <Show
-                when={cacheScreenVisible() || layoutMode() !== "too-small"}
-                fallback={
-                  <ErrorScreen
-                    error={`Terminal too small (${dimensions().width}\u00d7${dimensions().height})\nResize to at least ${MIN_TERMINAL_WIDTH} columns and ${MIN_TERMINAL_HEIGHT} rows.`}
-                  />
-                }
-              >
-                <Show
-                  when={!setupVisible()}
-                  fallback={
-                    <SetupScreen
-                      repoPath={activeRepoPath()}
-                      onComplete={handleSetupComplete}
-                      onQuit={() => renderer.destroy()}
-                    />
-                  }
-                >
-                  <Show
-                    when={!repoSelectorVisible() && !cacheScreenVisible()}
-                    fallback={
-                      <Show
-                        when={cacheScreenVisible()}
-                        fallback={
-                          <ProjectSelector
-                            knownRepos={knownRepoInfos()}
-                            currentRepo={activeRepoPath()}
-                            onSelectRepo={switchRepoPath}
-                            onCancel={() => setRepoSelectorVisible(false)}
-                          />
-                        }
-                      >
-                        <CacheScreen
-                          currentRepo={activeRepoPath()}
-                          onEvict={evictCacheRepository}
-                          onClose={closeCacheScreen}
-                        />
-                      </Show>
-                    }
-                  >
-                    <box
-                      flexDirection="column"
-                      width="100%"
-                      height="100%"
-                      backgroundColor={themeState.theme().background}
-                    >
-                      {/* Main content area */}
-                      <box flexDirection="row" flexGrow={1}>
-                        {/* Left panel - graph + search + footer, all on grey background */}
-                        <box
-                          flexDirection="column"
-                          flexGrow={1}
-                          flexShrink={1}
-                          backgroundColor={themeState.theme().backgroundPanel}
-                          paddingX={2}
-                        >
-                          <Show when={dashboardShown()}>
-                            <box flexDirection="column" flexGrow={1} paddingBottom={1}>
-                              <DashboardView
-                                dashboard={dashboard}
-                                mouseEnabled={mouseEnabled}
-                                onRowClick={() => actions.setDetailFocused(false)}
-                              />
-                            </box>
-                          </Show>
-                          {/* Graph area: kept behind the dashboard, so it comes back where it was */}
-                          <box flexDirection="column" flexGrow={1} paddingBottom={1} visible={!dashboardShown()}>
-                            {/* Sticky column headers - above scrollbox */}
-                            <ColumnHeader />
-
-                            <GraphView
-                              mouseEnabled={mouseEnabled}
-                              onSelectRow={graph.selectRow}
-                              onLoadMore={loadMoreData}
-                              snykGetCommitData={snyk.getCommitData}
-                              snykIsScanning={snyk.isScanning}
-                              scrollboxRef={graph.setGraphScrollbox}
-                              suppressAutoScroll={() => pendingGraphScrollTop() != null}
-                            />
-                          </box>
-
-                          <box flexDirection="column" flexShrink={0} width="100%">
-                            <Show when={screenMessage()}>
-                              {msg => (
-                                <box flexDirection="column" width="100%" flexShrink={0}>
-                                  <MessageBox
-                                    kind={msg().kind}
-                                    source={msg().source}
-                                    title={msg().title}
-                                    message={msg().message}
-                                    detail={msg().detail}
-                                    onDismiss={clearScreenMessage}
-                                    mouseEnabled={mouseEnabled()}
-                                  />
-                                  <box height={1} />
-                                </box>
-                              )}
-                            </Show>
-
-                            {/* Command bar section */}
-                            <CommandBar
-                              onSelectMode={selectMode}
-                              onSelectProject={switchRepoPath}
-                              mouseEnabled={mouseEnabled}
-                              commandBarMode={commandBarMode}
-                              commandBarValue={commandBarValue}
-                              searchInputValue={searchInputValue}
-                              searchFocused={searchFocused}
-                              onInput={commandBar.onInput}
-                              detailFocused={state.detailFocused}
-                              knownRepos={knownRepoInfos()}
-                              currentRepo={activeRepoPath()}
-                              currentGroup={currentRepoDisplayConfig().group}
-                              currentAppName={currentRepoDisplayConfig().appName}
-                              dashboard={dashboard}
-                            />
-
-                            {/* Footer - hotkey hints, 1 char gap above, right-aligned */}
-                            <box height={1} />
-                            <Footer
-                              onConfirm={onFooterEnter}
-                              onClose={onFooterEscape}
-                              mouseEnabled={mouseEnabled()}
-                              onOpenDetails={() => {
-                                if (!mouseEnabled()) return;
-                                openGraphDetails({ state, actions, layoutMode, setDialog, detailNavRef });
-                              }}
-                              commandBarMode={commandBarMode}
-                              filterActive={!!state.highlightSet() || !!state.viewingBranch()}
-                              compact={layoutMode() === "compact"}
-                              dashboard={dashboard}
-                              onDashboardRefresh={refreshDashboard}
-                            />
-                          </box>
-                        </box>
-
-                        {/* Detail panel - right, hidden in compact/too-small mode */}
-                        {/* Dashboard details - right, like the commit details beside the graph */}
-                        <Show when={layoutMode() === "normal" && dashboardShown()}>
-                          <box
-                            flexDirection="column"
-                            width="25%"
-                            minWidth={60}
-                            flexShrink={0}
-                            paddingX={2}
-                            paddingBottom={1}
-                          >
-                            <DashboardDetail
-                              event={dashboard.selected}
-                              appName={dashboardAppName}
-                              onShowInGraph={showSelectedInGraph}
-                              mouseEnabled={mouseEnabled}
-                              scrollboxRef={element => {
-                                setDashboardDetailScrollbox(element);
-                              }}
-                              {...dashboardTabProps()}
-                            />
-                          </box>
-                        </Show>
-                        <Show when={layoutMode() === "normal" && !dashboardShown()}>
-                          <box
-                            flexDirection="column"
-                            width="25%"
-                            minWidth={60}
-                            flexShrink={0}
-                            paddingX={2}
-                            paddingBottom={1}
-                          >
-                            <DetailPanel
-                              mouseEnabled={mouseEnabled()}
-                              onMouseFocus={() => {
-                                commandBar.leave();
-                                actions.setDetailFocused(true);
-                              }}
-                              scrollboxRef={graph.setDetailScrollbox}
-                              navRef={detailNavRef}
-                              searchFocused={searchFocused()}
-                              onJumpToCommit={graph.jumpToCommit}
-                              onOpenDiff={handleOpenDiff}
-                              {...providerDetailProps}
-                            />
-                          </box>
-                        </Show>
-                      </box>
-
-                      <DialogLayer
-                        dialogs={dialogs}
-                        settings={settings}
-                        dashboard={dashboardController}
-                        openShift={openShift}
-                        repoPath={activeRepoPath}
-                        configInfo={props.configInfo}
-                        menu={{
-                          onReload: () => void handleReloadAll(),
-                          onFetch: () => void handleFetchAll(),
-                          onPull: () => void handlePullAll(),
-                          onOpenCache: openCacheScreen,
-                          onViewBranch: graph.viewBranch,
-                          onSwitchRepo: () => {
-                            setDialog(null);
-                            setRepoSelectorVisible(true);
-                          },
-                        }}
-                        details={{
-                          navRef: detailNavRef,
-                          setScrollbox: graph.setDetailScrollbox,
-                          searchFocused,
-                          onJumpToCommit: graph.jumpToCommit,
-                          providerProps: providerDetailProps,
-                          message: screenMessage,
-                          onDismissMessage: clearScreenMessage,
-                        }}
-                      />
-                    </box>
-                  </Show>
-                </Show>
-              </Show>
+              <AppLayout
+                baseTheme={themeState.theme}
+                layoutMode={layoutMode}
+                repoPath={activeRepoPath}
+                configInfo={props.configInfo}
+                setup={{ visible: setupVisible, onComplete: handleSetupComplete }}
+                session={session}
+                cacheScreenVisible={cacheScreenVisible}
+                settings={settings}
+                providers={providers}
+                dialogs={dialogs}
+                messages={messages}
+                commandBar={commandBar}
+                graph={graph}
+                dashboard={dashboardController}
+                keys={{ onEnter: onFooterEnter, onEscape: onFooterEscape }}
+                run={{ reloadAll: handleReloadAll, fetchAll: handleFetchAll, pullAll: handlePullAll }}
+                detail={{ navRef: detailNavRef, providerProps: providerDetailProps }}
+              />
             </AppStateContext.Provider>
           </ThemeContext.Provider>
         </CacheStoreContext.Provider>
