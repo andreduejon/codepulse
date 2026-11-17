@@ -32,13 +32,11 @@ import { ThemeContext } from "./context/theme";
 import { runAppCommand } from "./core/commands";
 import { DEFAULT_MAX_COUNT } from "./core/settings/config";
 import { loadAppEvents } from "./dashboard/load";
-import { gitCli } from "./git/git-cli";
 import { openGraphDetails } from "./hooks/handle-graph-keys";
 import { useAncestry } from "./hooks/use-ancestry";
 import { useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
+import { portsFrom } from "./ports";
 import { providerAccent } from "./providers/colors";
-import { providerCacheStore } from "./providers/shared/cache-store";
-import { fileSettings } from "./settings-file";
 
 export function AppContent(props: Readonly<AppContentProps>) {
   const { state, actions } = createAppState(
@@ -53,7 +51,9 @@ export function AppContent(props: Readonly<AppContentProps>) {
   const [cacheScreenVisible, setCacheScreenVisible] = createSignal(false);
   let disposed = false;
   /** The providers' cache, as the cache screen manages it. */
-  const cacheStore = props.cacheStore ?? providerCacheStore();
+  /** The adapters the app runs on: given by startupProps, the terminal app's otherwise. */
+  const ports = portsFrom(props);
+  const cacheStore = ports.cacheStore;
   createEffect(() => cacheStore.setSuspended(cacheScreenVisible()));
   onCleanup(() => {
     disposed = true;
@@ -61,9 +61,9 @@ export function AppContent(props: Readonly<AppContentProps>) {
   });
 
   /** Where the settings are kept. */
-  const settingsPort = props.settings ?? fileSettings();
+  const settingsPort = ports.settings;
   /** Git, through the app's port. */
-  const gitPort = props.git ?? gitCli();
+  const gitPort = ports.git;
   const settings = useRepoSettings({
     repoPath: activeRepoPath,
     initial: props,

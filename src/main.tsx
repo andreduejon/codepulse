@@ -5,13 +5,10 @@ import type { AppProps } from "./app-types";
 import { parseArgs } from "./cli/parse-args";
 import { loadCustomThemes } from "./context/custom-themes";
 import { addDebugEvent, redactDebugValue } from "./core/debug-events";
-import type { GitPort } from "./core/git/port";
 import { type KnownRepoInfo, mergeOptions, reportConfigWarnings } from "./core/settings/config";
-import type { SettingsPort } from "./core/settings/port";
-import { gitCli } from "./git/git-cli";
+import { type AppPorts, portsFrom } from "./ports";
 import { cleanupInactiveProviderCaches } from "./providers/shared/cache-management";
 import { closeProviderCaches } from "./providers/shared/sha-sqlite-cache";
-import { fileSettings } from "./settings-file";
 
 /** Startup mode determines which screen the app shows first. */
 export type StartupMode =
@@ -24,11 +21,8 @@ export type StartupMode =
  * Everything before the first frame: arguments, config, themes and which screen to show. The demo's headless player
  * (`bun run demo --play`) starts the app through this too, so it boots the way the real app does.
  */
-export async function startupProps(
-  argv: string[],
-  settings: SettingsPort = fileSettings(),
-  git: GitPort = gitCli(),
-): Promise<AppProps> {
+export async function startupProps(argv: string[], ports: Partial<AppPorts> = {}): Promise<AppProps> {
+  const { settings, git, cacheStore } = portsFrom(ports);
   const cli = parseArgs(argv);
   try {
     cleanupInactiveProviderCaches();
@@ -96,6 +90,7 @@ export async function startupProps(
     configInfo,
     settings,
     git,
+    cacheStore,
     startupMode,
     initialGithubConfig: config.providers?.github,
     initialJenkinsConfig: config.providers?.jenkins,

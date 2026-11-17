@@ -48,7 +48,7 @@ flowchart LR
 | Core | `src/core` | only `src/core` and plain packages; no Solid, OpenTUI, Bun or Node runtime APIs |
 | Adapters | `src/git`, `src/providers/*/{api,cache,scanner}`, `src/providers/shared/{http,sha-sqlite-cache,cache-management,cache-store}`, `src/config.ts`, `src/config-write.ts`, `src/settings-file.ts`, `src/dashboard/load.ts` | core, Bun and Node |
 | UI | `src/components`, `src/hooks`, `src/app`, `src/keyboard`, `src/utils`, `src/dashboard`, the providers' hooks and tabs | core, Solid, OpenTUI; adapters only through ports |
-| Root | `src/main.tsx`, `src/app-content.tsx`, the contexts' defaults in `src/context` | everything: it builds the adapters and hands them on |
+| Root | `src/ports.ts`, `src/main.tsx`, `src/app-content.tsx`, the contexts' defaults in `src/context` | everything: it builds the adapters and hands them on |
 
 Three checks keep the layers apart:
 
@@ -69,7 +69,9 @@ Three checks keep the layers apart:
 | the Dashboard's sources | `core/dashboard/load.ts` | `src/dashboard/load.ts` (the provider caches) | `app-content` |
 | the app's state, for a provider | `core/provider-ports.ts` | `src/providers/shared/app-port.ts` | the provider's hook |
 
-A hook called while its component sets up takes a port as a parameter; a component below the root reads it from its
+`src/ports.ts` builds the terminal app's adapters in one place: `startupProps` takes them from it (or the ports a caller
+gives), the app gets them as props, and the contexts fall back to them for a component rendered on its own. A hook
+called while its component sets up takes a port as a parameter; a component below the root reads it from its
 context (see the Solid rules in AGENTS.md). The adapters' port objects call their modules' functions when they run, so
 a test's `spyOn` on such a function sees the app's calls.
 
@@ -88,12 +90,21 @@ adapts it: it runs the effects, makes the service's reads reactive and stops it 
 | GitHub, Jenkins, OpenShift, Snyk | `core/<provider>/service.ts` | `providers/<provider>/use-*.ts` |
 | which rows a long list mounts | `core/scroll-window.ts` | `hooks/use-scroll-window.ts` |
 
+## Providers
+
+Each provider is a module (`src/providers/<provider>/module.ts`) that meets one contract (`providers/module.ts`): `start`
+gets the app's state, its settings and where its rows open, and returns the provider with what every caller reads from
+it: its data for a commit, starting over, fetching again, the events it holds for the Dashboard, and its detail tab's
+source. The provider host (`src/app/providers.ts`) starts the modules and is the rest of the app's one way to them.
+
 ## State
 
 The app's state is Solid signals in `src/context/state.ts`: the repository, the graph, the cursor, the providers'
 status and badges, and one detail slot each for the graph and the Dashboard. The services read and change it through
-narrow ports that the state fits. The key handlers (`src/hooks/handle-*-keys.ts`, `use-keyboard-navigation.ts`) and
-the `:` commands (`src/app-commands.ts`) change it directly.
+narrow ports that the state fits. The state's shape and its rules are a port in core (`core/app-state.ts`):
+which highlight wins, which commits a search matches, how far a cursor moves. What the app does is core commands over
+that port: the `:` commands (`core/commands.ts`) and moving through the graph (`core/navigation.ts`); the key handlers
+in `src/hooks` map keys to them and keep focus, dialogs and the command bar, which are the terminal's.
 
 Process-wide objects a host could give each app its own of: the cache registry (`ProviderCacheRegistry`, one database
 connection per cache folder) and the debug log (`DebugLog`).
