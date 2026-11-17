@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- The Dashboard and the graph keep details of their own: coming back to one, its
+  tab, cursor and focus are where you left them, whatever you did in the other.
 - Moving through the Dashboard redraws only the row the cursor leaves and the row
   it reaches: with 1,000 events a key takes 4 ms instead of 38 ms.
 - GitHub, Jenkins and OpenShift save a fetch's runs and builds to the cache in one
@@ -18,6 +20,9 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- In the compact layout, the graph's details no longer stay over the Dashboard.
+  Back in the graph they open again as you left them, with the keyboard in them;
+  before, they showed while the keys moved the graph behind them.
 - OpenShift waits longer between automatic requests after failures, as GitHub and
   Jenkins do. On the Dashboard, a cluster that fails is no longer asked again on
   every visit.

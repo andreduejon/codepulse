@@ -67,6 +67,9 @@ export function useDetailLoader({
 }: UseDetailLoaderOptions): void {
   let detailAbortCtrl: AbortController | null = null;
   let detailDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The graph's details: the Dashboard has its own, which the graph's commit leaves alone. */
+  const graphDetail = state.detailFor("graph");
+  const setGraphDetail = actions.detailFor("graph");
 
   // Load commit detail whenever the selected commit changes.
   createEffect(() => {
@@ -97,10 +100,10 @@ export function useDetailLoader({
      * effects run synchronously when a signal updates, this flag is still
      * true when this effect fires.
      */
-    // The dashboard shows an event's provider tabs with the same tab state: the graph's commit leaves it alone.
+    // A provider's default tab needs a provider view: while the Dashboard shows, the graph's tab waits for one.
     if (!getIsJumpNavigation() && activeProvider !== "dashboard") {
-      actions.setDetailActiveTab(getDefaultDetailTab(commit, activeProvider));
-      actions.setDetailCursorIndex(0);
+      setGraphDetail.setDetailActiveTab(getDefaultDetailTab(commit, activeProvider));
+      setGraphDetail.setDetailCursorIndex(0);
       // Clear any stale jump direction on normal (non-jump) navigation
       detailNavRef.pendingJumpDirection = null;
     }
@@ -155,7 +158,7 @@ export function useDetailLoader({
     const commit = state.selectedCommit();
     const cd = state.commitDetail();
     const ud = state.uncommittedDetail();
-    const tab = state.detailActiveTab();
+    const tab = graphDetail.detailActiveTab();
     if (!commit) return;
 
     const isUncommitted = isUncommittedHash(commit.hash);
@@ -171,8 +174,8 @@ export function useDetailLoader({
         getCommitData,
       });
       if (!available.includes(tab)) {
-        actions.setDetailActiveTab(getDefaultDetailTab(commit, provider));
-        actions.setDetailCursorIndex(0);
+        setGraphDetail.setDetailActiveTab(getDefaultDetailTab(commit, provider));
+        setGraphDetail.setDetailCursorIndex(0);
         actions.setDetailCursorAction(null);
       }
       return;
@@ -211,7 +214,7 @@ export function useDetailLoader({
       providerLoading: getProviderLoading?.(),
     });
     if (available.length > 0) {
-      actions.setDetailActiveTab(available[0]);
+      setGraphDetail.setDetailActiveTab(available[0]);
     }
   });
 

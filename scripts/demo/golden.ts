@@ -37,6 +37,15 @@ export const GOLDEN_PLAYS: readonly GoldenPlay[] = [
     args: [...COMPACT, "--play", "j j enter shot:dialog right shot:info esc shot:closed"],
   },
   {
+    name: "views-compact",
+    covers: "the graph's compact details and the Dashboard: each keeps its own, away and back",
+    args: [
+      ...COMPACT,
+      "--play",
+      "j j enter shot:details tab tab tab tab tab shot:dashboard tab shot:back j shot:after-j",
+    ],
+  },
+  {
     name: "highlights",
     covers: "search, ancestry and path modes, and Esc out of each",
     args: [

@@ -3,7 +3,7 @@
  * them, and where closing one goes back to. In the compact layout the details are a dialog too: a dialog opened from
  * them returns to them, and resizing across the side panel's width moves the details between dialog and panel.
  */
-import { type Accessor, createEffect, createSignal, untrack } from "solid-js";
+import { type Accessor, createEffect, createSignal, on, untrack } from "solid-js";
 import type { AppActions, AppState } from "../context/state";
 import type { DiffTarget } from "../git/types";
 import type { DialogId } from "../hooks/use-keyboard-navigation";
@@ -43,6 +43,22 @@ export function useDialogHost(opts: { state: AppState; actions: AppActions; layo
       setDialog(null);
     }
   });
+
+  // The compact details belong to the graph: the Dashboard closes them (it has its own), and back in the graph, with
+  // its details still focused, they open again as they were left.
+  createEffect(
+    on(
+      dashboardShown,
+      shown => {
+        if (untrack(layoutMode) !== "compact") return;
+        const current = untrack(dialog);
+        if (shown && current === "detail") setDialog(null);
+        else if (!shown && current === null && untrack(() => state.detailFor("graph").detailFocused()))
+          setDialog("detail");
+      },
+      { defer: true },
+    ),
+  );
 
   return {
     dialog,

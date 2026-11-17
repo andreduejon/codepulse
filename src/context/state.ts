@@ -1,15 +1,18 @@
-import { batch, createContext, createMemo, createSignal, useContext } from "solid-js";
+import { batch, createContext, createMemo, createSignal, untrack, useContext } from "solid-js";
 import { DEFAULT_MAX_COUNT } from "../constants";
 import type { Branch, Commit, CommitDetail, GraphRow, TagInfo, UncommittedDetail } from "../git/types";
 import type { KeyboardScope } from "../keyboard/scope";
 import { createProviderRegistry, type GraphBadge, type ProviderView } from "../providers/provider";
 import { matchCommit, parseSearchQuery } from "../search";
-import type { AppActions, AppState, DetailTab, HighlightMode, ProviderStatus } from "./app-state-types";
+import type { AppActions, AppState, DetailOwner, DetailTab, HighlightMode, ProviderStatus } from "./app-state-types";
 
 export type {
   AppActions,
   AppState,
   DetailActions,
+  DetailOwner,
+  DetailSlotActions,
+  DetailSlotState,
   DetailState,
   DetailTab,
   FilterActions,
@@ -77,12 +80,44 @@ export function createAppState(
   const [ancestrySet, setAncestrySet] = createSignal<Set<string> | null>(null);
 
   // ── Detail panel ──────────────────────────────────────────────────
-  const [detailFocused, setDetailFocused] = createSignal(false);
-  const [detailCursorIndex, setDetailCursorIndex] = createSignal(-1);
+  /**
+   * The details' cursor, tab and focus, one set per view that has details: the graph's (Git and the provider views)
+   * and the Dashboard's. Moving between them leaves each where it was. `state.detailFocused()` and the others read the
+   * shown view's; `detailFor` reaches one by name.
+   */
+  const makeDetailSlot = (initialTab: DetailTab) => {
+    const [focused, setFocused] = createSignal(false);
+    const [cursorIndex, setCursorIndex] = createSignal(-1);
+    const [cursorAction, setCursorAction] = createSignal<string | null>(null);
+    const [activeTab, setActiveTab] = createSignal<DetailTab>(initialTab);
+    const [cursorShortcut, setCursorShortcut] = createSignal<{ key: string; desc: string } | null>(null);
+    const moveCursor = (delta: number, itemCount: number) => {
+      if (itemCount === 0) return;
+      setCursorIndex(Math.max(0, Math.min(itemCount - 1, cursorIndex() + delta)));
+    };
+    return {
+      state: {
+        detailFocused: focused,
+        detailCursorIndex: cursorIndex,
+        detailCursorAction: cursorAction,
+        detailActiveTab: activeTab,
+        detailCursorShortcut: cursorShortcut,
+      },
+      actions: {
+        setDetailFocused: (value: boolean) => setFocused(value),
+        setDetailCursorIndex: (value: number) => setCursorIndex(value),
+        moveDetailCursor: moveCursor,
+        setDetailCursorAction: (value: string | null) => setCursorAction(value),
+        setDetailActiveTab: (value: DetailTab) => setActiveTab(value),
+        setDetailCursorShortcut: (value: { key: string; desc: string } | null) => setCursorShortcut(value),
+      },
+    };
+  };
+  const detailSlots: Record<DetailOwner, ReturnType<typeof makeDetailSlot>> = {
+    graph: makeDetailSlot("files"),
+    dashboard: makeDetailSlot("info"),
+  };
   const [detailLoading, setDetailLoading] = createSignal(false);
-  const [detailCursorAction, setDetailCursorAction] = createSignal<string | null>(null);
-  const [detailActiveTab, setDetailActiveTab] = createSignal<DetailTab>("files");
-  const [detailCursorShortcut, setDetailCursorShortcut] = createSignal<{ key: string; desc: string } | null>(null);
   const [snykPendingFilter, setSnykPendingFilter] = createSignal<string | null>(null);
   const [uncommittedDetail, setUncommittedDetail] = createSignal<UncommittedDetail | null>(null);
   const [workingTreeReads, setWorkingTreeReads] = createSignal(0);
@@ -113,6 +148,10 @@ export function createAppState(
 
   // ── Provider / CI ─────────────────────────────────────────────────
   const [activeProviderView, setActiveProviderView] = createSignal<ProviderView>("git");
+  /** The view whose details show: read tracked by what shows them, untracked by what changes them. */
+  const detailOwner = (): DetailOwner => (activeProviderView() === "dashboard" ? "dashboard" : "graph");
+  const shownDetail = () => detailSlots[detailOwner()];
+  const changedDetail = () => detailSlots[untrack(detailOwner)];
   const [providerGraphBadges, setProviderGraphBadges] = createSignal<Map<ProviderView, Map<string, GraphBadge>>>(
     new Map(),
   );
@@ -206,13 +245,6 @@ export function createAppState(
     setScrollTargetIndex(newIndex);
   };
 
-  const moveDetailCursor = (delta: number, itemCount: number) => {
-    if (itemCount === 0) return;
-    const cur = detailCursorIndex();
-    const next = Math.max(0, Math.min(itemCount - 1, cur + delta));
-    setDetailCursorIndex(next);
-  };
-
   const state: AppState = {
     commits,
     graphRows,
@@ -234,8 +266,8 @@ export function createAppState(
     maxCount,
     autoRefreshInterval,
     autoFetchInterval,
-    detailFocused,
-    detailCursorIndex,
+    detailFocused: () => shownDetail().state.detailFocused(),
+    detailCursorIndex: () => shownDetail().state.detailCursorIndex(),
     scrollTargetIndex,
     pendingScrollHash,
     lastFetchTime,
@@ -244,9 +276,10 @@ export function createAppState(
     hasMore,
     historyError,
     detailLoading,
-    detailCursorAction,
-    detailActiveTab,
-    detailCursorShortcut,
+    detailCursorAction: () => shownDetail().state.detailCursorAction(),
+    detailActiveTab: () => shownDetail().state.detailActiveTab(),
+    detailCursorShortcut: () => shownDetail().state.detailCursorShortcut(),
+    detailFor: owner => detailSlots[owner].state,
     snykPendingFilter,
     uncommittedDetail,
     workingTreeReads,
@@ -275,9 +308,9 @@ export function createAppState(
     setLoading,
     setShowAllBranches,
     setSearchQuery,
-    setDetailFocused,
-    setDetailCursorIndex,
-    moveDetailCursor,
+    setDetailFocused: value => changedDetail().actions.setDetailFocused(value),
+    setDetailCursorIndex: value => changedDetail().actions.setDetailCursorIndex(value),
+    moveDetailCursor: (delta, itemCount) => changedDetail().actions.moveDetailCursor(delta, itemCount),
     setCommits,
     setGraphRows,
     setBranches,
@@ -297,9 +330,10 @@ export function createAppState(
     setHistoryError,
     setAncestrySet,
     setDetailLoading,
-    setDetailCursorAction,
-    setDetailActiveTab,
-    setDetailCursorShortcut,
+    setDetailCursorAction: value => changedDetail().actions.setDetailCursorAction(value),
+    setDetailActiveTab: value => changedDetail().actions.setDetailActiveTab(value),
+    setDetailCursorShortcut: value => changedDetail().actions.setDetailCursorShortcut(value),
+    detailFor: owner => detailSlots[owner].actions,
     setSnykPendingFilter,
     setUncommittedDetail,
     noteWorkingTreeRead: () => setWorkingTreeReads(count => count + 1),

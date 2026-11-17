@@ -36,7 +36,8 @@ export function useDashboardController(opts: {
   providers: ProviderHost;
   dialogs: Pick<DialogHost, "dialog" | "setDialog">;
   layoutMode: Accessor<LayoutMode>;
-  detailNavRef: DetailNavRef;
+  /** The graph's details: "Show in provider" opens them on the event's commit. */
+  graphNavRef: DetailNavRef;
   detailMemory: ReturnType<typeof createDetailMemory>;
   theme: Accessor<Theme>;
   /** Opens another repository (an event of another app). */
@@ -45,32 +46,34 @@ export function useDashboardController(opts: {
   /** The graph's search and path filter close: they don't work on the Dashboard. */
   closeSearch: () => void;
 }) {
-  // The names the code had in app-content, so it moved unchanged.
-  const { state, actions, layoutMode, detailNavRef, providers } = opts;
+  const { state, actions, layoutMode, providers } = opts;
   const { dialog, setDialog } = opts.dialogs;
-  const activeRepoPath = opts.repoPath;
-  const currentRepoDisplayConfig = opts.settings.display;
-  const dashboardConfig = opts.settings.dashboard;
-  const switchRepoPath = opts.switchTo;
-  const setGitNotice = opts.setGitNotice;
-  const refreshActiveProvider = providers.refreshActive;
-  const snyk = providers.snyk;
-  const providerDetailProps = { providers: providers.detailSources, memory: opts.detailMemory };
-  const themeState = { theme: opts.theme };
+  /** The Dashboard's own details: cursor, tab and focus, apart from the graph's. */
+  const detail = state.detailFor("dashboard");
+  const setDetail = actions.detailFor("dashboard");
+  /** The Dashboard's own rows to activate and scroll to: the graph's details never call into them, nor these into it. */
+  const detailNavRef: DetailNavRef = {
+    itemCount: 0,
+    activateCurrentItem: () => false,
+    lastJumpFrom: null,
+    pendingJumpDirection: null,
+    scrollToFile: () => {},
+    itemRefs: [],
+  };
 
   // ── Dashboard ─────────────────────────────────────────────────────────────
   /** The open repository: another app of its group is a click on its badge away. */
   const dashboardApp = createMemo(
     (): DashboardApp => ({
-      path: activeRepoPath(),
-      name: repoDisplayName({ path: activeRepoPath(), ...currentRepoDisplayConfig() }),
+      path: opts.repoPath(),
+      name: repoDisplayName({ path: opts.repoPath(), ...opts.settings.display() }),
     }),
   );
   const dashboardShown = () => state.activeProviderView() === "dashboard";
   /** What the open app's providers hold now, as dashboard events: a running build is only here, not in a cache. */
   const heldDashboardEvents = createMemo(() => {
     if (!dashboardShown()) return [];
-    return providers.heldEvents(activeRepoPath());
+    return providers.heldEvents(opts.repoPath());
   });
   /** The providers turned on: the dashboard leaves out a turned-off one's cached events. */
   const dashboardSources = createMemo(() => {
@@ -82,20 +85,20 @@ export function useDashboardController(opts: {
     active: dashboardShown,
     live: heldDashboardEvents,
     shownSources: dashboardSources,
-    settings: dashboardConfig,
+    settings: opts.settings.dashboard,
     // The graph read again (a refresh, a fetch, a new commit): its main branch may have moved.
     changes: () => state.graphRows(),
   });
   // A scan on the dashboard: its cached result, also for a commit the graph doesn't hold (Snyk reads the graph's).
   createEffect(() => {
     const event = dashboard.selected();
-    if (dashboardShown() && event?.source === "snyk") void snyk.readCachedScan(event.sha);
+    if (dashboardShown() && event?.source === "snyk") void providers.snyk.readCachedScan(event.sha);
   });
   const dashboardAppName = () => dashboardApp().name;
   // No commit details or graph search beside the dashboard; its own details leave with it.
   createEffect(() => {
     if (dashboardShown()) {
-      actions.setDetailFocused(false);
+      setDetail.setDetailFocused(false);
       untrack(opts.closeSearch);
     } else if (untrack(dialog) === "dashboard-event") setDialog(null);
   });
@@ -105,7 +108,7 @@ export function useDashboardController(opts: {
   const [pendingGraphJump, setPendingGraphJump] = createSignal<{ sha: string; view: ProviderView } | null>(null);
   /** The event's commit in its provider's view, with that provider's details open on it. */
   const showInGraph = (event: DashboardEvent) => {
-    if (event.app !== activeRepoPath()) switchRepoPath(event.app);
+    if (event.app !== opts.repoPath()) opts.switchTo(event.app);
     setPendingGraphJump({ sha: event.sha, view: event.source });
   };
   createEffect(() => {
@@ -118,7 +121,7 @@ export function useDashboardController(opts: {
     // another commit in the provider's view.
     if (index < 0) {
       setPendingGraphJump(null);
-      setGitNotice({
+      opts.setGitNotice({
         kind: "info",
         source: "Dashboard",
         title: `${jump.sha.slice(0, 7)} is not in the graph`,
@@ -134,7 +137,7 @@ export function useDashboardController(opts: {
     });
     // Its details, as the dashboard showed them and as Enter in the graph opens them: focused beside the graph, the
     // details dialog with the keyboard in the compact layout.
-    untrack(() => openGraphDetails({ state, actions, layoutMode, setDialog, detailNavRef }));
+    untrack(() => openGraphDetails({ state, actions, layoutMode, setDialog, detailNavRef: opts.graphNavRef }));
   });
 
   /** The selected event's tabs: its provider's own (Snyk's two), then Info, its commit as the graph shows it. */
@@ -152,17 +155,17 @@ export function useDashboardController(opts: {
   /** The tab shown: the one chosen for this event's provider, else its first. */
   const dashboardActiveTab = (): DetailTab | null => {
     const tabs = dashboardTabsFor(dashboard.selected());
-    const chosen = state.detailActiveTab();
+    const chosen = detail.detailActiveTab();
     return tabs.some(tab => tab.id === chosen) ? chosen : (tabs[0]?.id ?? null);
   };
   /** The provider tab takes the keyboard (→ beside the events, the compact dialog). */
   const focusDashboardTab = (tab: DetailTab | null = dashboardActiveTab()) => {
     if (!tab) return false;
     batch(() => {
-      actions.setDetailCursorAction(null);
-      actions.setDetailActiveTab(tab);
-      actions.setDetailCursorIndex(0);
-      actions.setDetailFocused(true);
+      setDetail.setDetailCursorAction(null);
+      setDetail.setDetailActiveTab(tab);
+      setDetail.setDetailCursorIndex(0);
+      setDetail.setDetailFocused(true);
     });
     return true;
   };
@@ -177,10 +180,10 @@ export function useDashboardController(opts: {
     if (key === null) return;
     untrack(() => {
       batch(() => {
-        actions.setDetailCursorAction(null);
-        actions.setDetailActiveTab(dashboardTabsFor(dashboard.selected())[0]?.id ?? "info");
-        actions.setDetailCursorIndex(0);
-        if (dialog() !== "dashboard-event") actions.setDetailFocused(false);
+        setDetail.setDetailCursorAction(null);
+        setDetail.setDetailActiveTab(dashboardTabsFor(dashboard.selected())[0]?.id ?? "info");
+        setDetail.setDetailCursorIndex(0);
+        if (dialog() !== "dashboard-event") setDetail.setDetailFocused(false);
       });
     });
   });
@@ -189,14 +192,14 @@ export function useDashboardController(opts: {
   const dashboardTabProps = () => ({
     tabs: () => dashboardTabsFor(dashboard.selected()),
     activeTab: dashboardActiveTab,
-    focused: () => state.detailFocused(),
+    focused: () => detail.detailFocused(),
     onSelectTab: (tab: DetailTab) => focusDashboardTab(tab),
     onMouseFocus: () => focusDashboardTab(),
     legend: () => {
       const event = dashboard.selected();
       const tab = dashboardActiveTab();
       if (!event || !tab) return event ? markLegend(event.source) : null;
-      return detailEntryFor(tab)?.legend(providerDetailProps.providers, event.sha) ?? null;
+      return detailEntryFor(tab)?.legend(providers.detailSources, event.sha) ?? null;
     },
     renderTab: (event: DashboardEvent, tab: DetailTab, info: Accessor<CommitInfo | null>) =>
       tab === "info" ? (
@@ -205,14 +208,14 @@ export function useDashboardController(opts: {
         <ProviderTab
           tab={tab}
           sha={event.sha}
-          providers={providerDetailProps.providers}
+          providers={providers.detailSources}
           navRef={detailNavRef}
           mouseEnabled={dialog() == null || dialog() === "dashboard-event"}
           onMouseFocus={() => focusDashboardTab(tab)}
-          memory={providerDetailProps.memory}
+          memory={opts.detailMemory}
           // The event's own run, build or resource: open, marked in the dashboard's color like its row.
           target={event.entry}
-          targetColor={providerColors(themeState.theme(), "dashboard").bg}
+          targetColor={providerColors(opts.theme(), "dashboard").bg}
         />
       ),
   });
@@ -230,7 +233,7 @@ export function useDashboardController(opts: {
             row={graphRow}
             detail={() => ({ ...graphRow().commit, body: infoProps.info()?.body ?? graphRow().commit.body, files: [] })}
             navRef={detailNavRef}
-            memory={providerDetailProps.memory}
+            memory={opts.detailMemory}
             mouseEnabled={dialog() == null || dialog() === "dashboard-event"}
             onMouseFocus={() => focusDashboardTab("info")}
             // A child or parent: that commit in the graph.
@@ -243,7 +246,7 @@ export function useDashboardController(opts: {
   /** The dashboard's `r` (and its footer hint): what is cached at once, then every provider fetched again. */
   const refreshDashboard = () => {
     void dashboard.reload();
-    void refreshActiveProvider();
+    void providers.refreshActive();
   };
   /** Keys while the provider tab has the keyboard, as in the graph's details. */
   const handleDashboardTabKey = (event: KeyEvent) =>
@@ -270,7 +273,7 @@ export function useDashboardController(opts: {
     const event = dashboard.selected();
     // The event list has the keyboard until the jump lands: then the provider's details take it (a commit outside
     // the graph only gets a notice).
-    actions.setDetailFocused(false);
+    setDetail.setDetailFocused(false);
     setDialog(null);
     if (event) showInGraph(event);
   };
@@ -280,7 +283,7 @@ export function useDashboardController(opts: {
   };
   /** Keys in the compact details: Enter shows the event in the graph, ↑/↓ scroll, Esc (the cascade) closes. */
   /** The tab's row has its own page (a job, a resource): `o` opens it there rather than the event's. */
-  const dashboardRowOpens = () => state.detailFocused() && state.detailCursorShortcut()?.key === "o";
+  const dashboardRowOpens = () => detail.detailFocused() && detail.detailCursorShortcut()?.key === "o";
   /** The compact dialog's `o open` hint, clicked: what `o` does there. */
   const openFromDashboardDialog = () => {
     if (!dashboardRowOpens()) return openSelectedEvent();
@@ -300,7 +303,7 @@ export function useDashboardController(opts: {
       showSelectedInGraph();
       return;
     }
-    if (state.detailFocused() && dashboardActiveTab()) {
+    if (detail.detailFocused() && dashboardActiveTab()) {
       handleDashboardTabKey(event);
       return;
     }
@@ -336,7 +339,7 @@ export function useDashboardController(opts: {
       handleDashboardDialogKey(event);
       return;
     }
-    if (state.detailFocused() && layoutMode() === "normal") {
+    if (detail.detailFocused() && layoutMode() === "normal") {
       handleDashboardTabKey(event);
       return;
     }

@@ -55,7 +55,30 @@ export interface FilterState {
   highlightMode: Accessor<HighlightMode>;
 }
 
+/** The views with details of their own: the graph's (Git and the provider views) and the Dashboard's. */
+export type DetailOwner = "graph" | "dashboard";
+
+/** One view's details: what the shown view's `state.detail…` read, for a view named. */
+export interface DetailSlotState {
+  detailFocused: Accessor<boolean>;
+  detailCursorIndex: Accessor<number>;
+  detailCursorAction: Accessor<string | null>;
+  detailActiveTab: Accessor<DetailTab>;
+  detailCursorShortcut: Accessor<{ key: string; desc: string } | null>;
+}
+
+export interface DetailSlotActions {
+  setDetailFocused: (focused: boolean) => void;
+  setDetailCursorIndex: (index: number) => void;
+  moveDetailCursor: (delta: number, itemCount: number) => void;
+  setDetailCursorAction: (action: string | null) => void;
+  setDetailActiveTab: (tab: DetailTab) => void;
+  setDetailCursorShortcut: (shortcut: { key: string; desc: string } | null) => void;
+}
+
 export interface DetailState {
+  /** One view's details by name; the others here are the shown view's. */
+  detailFor: (owner: DetailOwner) => DetailSlotState;
   detailFocused: Accessor<boolean>;
   detailCursorIndex: Accessor<number>;
   detailLoading: Accessor<boolean>;
@@ -129,6 +152,8 @@ export interface FilterActions {
 }
 
 export interface DetailActions {
+  /** One view's details by name, also while another view shows; the others here change the shown view's. */
+  detailFor: (owner: DetailOwner) => DetailSlotActions;
   setDetailFocused: (focused: boolean) => void;
   setDetailCursorIndex: (index: number) => void;
   moveDetailCursor: (delta: number, itemCount: number) => void;

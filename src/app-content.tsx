@@ -223,7 +223,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     providers,
     dialogs: { dialog, setDialog },
     layoutMode,
-    detailNavRef,
+    graphNavRef: detailNavRef,
     detailMemory,
     theme: () => themeState.theme(),
     switchTo: switchRepoPath,

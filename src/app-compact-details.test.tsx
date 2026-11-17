@@ -8,6 +8,7 @@ import * as config from "./config";
 import * as configWrite from "./config-write";
 import type { AppActions, AppState } from "./context/state";
 import { createThemeState } from "./context/theme";
+import * as dashboardLoad from "./dashboard/load";
 import { buildGraph } from "./git/graph";
 import * as dataLoader from "./hooks/use-data-loader";
 import * as detailLoader from "./hooks/use-detail-loader";
@@ -385,6 +386,81 @@ test("a folder collapsed in the side panel stays collapsed when the terminal nar
     const wide = setup.captureCharFrame();
     expect(wide).toContain("README.md");
     expect(wide).not.toContain("cart.ts");
+  } finally {
+    await setup?.dispose();
+    for (const spy of spies) spy.mockRestore();
+  }
+});
+
+test("compact Details of the graph hide while the Dashboard shows, and are there again, focused, back in the graph", async () => {
+  const repo = resolve("/repo/compact-dashboard");
+  let app: { state: AppState; actions: AppActions } | undefined;
+  const commits = ["c".repeat(40)].map(hash => ({
+    hash,
+    shortHash: hash.slice(0, 7),
+    parents: [],
+    subject: "only commit",
+    body: "",
+    author: "Author",
+    authorEmail: "author@example.com",
+    authorDate: "2026-10-13T10:00:00Z",
+    committer: "Author",
+    committerEmail: "author@example.com",
+    commitDate: "2026-10-13T10:00:00Z",
+    refs: [],
+  }));
+  const spies = [
+    spyOn(configWrite, "backfillRepoConfig").mockImplementation(() => {}),
+    spyOn(config, "loadConfig").mockReturnValue({ config: {}, warnings: [] }),
+    spyOn(config, "getRepoDisplayConfig").mockReturnValue({}),
+    spyOn(config, "getKnownRepoInfos").mockReturnValue([{ path: repo }]),
+    spyOn(detailLoader, "useDetailLoader").mockImplementation(() => {}),
+    spyOn(dashboardLoad, "loadAppEvents").mockResolvedValue([]),
+    spyOn(CliRenderer.prototype, "setTerminalTitle").mockImplementation(() => {}),
+    spyOn(dataLoader, "useDataLoader").mockImplementation(options => {
+      app = { state: options.state, actions: options.actions };
+      options.actions.setRepoPath(repo);
+      options.actions.setCommits(commits);
+      options.actions.setGraphRows(buildGraph(commits));
+      options.actions.setCurrentBranch("main");
+      options.actions.setLoading(false);
+      return { loadData: async () => {}, loadMoreData: async () => {}, handleFetch: async () => {} };
+    }),
+  ];
+  let setup: Awaited<ReturnType<typeof testRender>> | undefined;
+  const detailsShown = () =>
+    setup
+      ?.captureCharFrame()
+      .split("\n")
+      .some(line => line.includes("Details") && line.includes("esc close"));
+  try {
+    setup = await testRender(
+      () => (
+        <AppContent
+          repoPath={repo}
+          startupMode={{ kind: "graph" }}
+          themeState={createThemeState()}
+          autoRefreshInterval={0}
+          autoFetchInterval={0}
+        />
+      ),
+      { width: 110, height: 40, kittyKeyboard: true },
+    );
+    await setup.flush();
+    if (!app) throw new Error("App fixture did not initialize");
+    setup.mockInput.pressKey("RETURN");
+    await setup.flush();
+    expect(detailsShown()).toBe(true);
+
+    app.actions.setActiveProviderView("dashboard");
+    await setup.flush();
+    expect(detailsShown()).toBe(false);
+    expect(setup.captureCharFrame()).toContain("events");
+
+    app.actions.setActiveProviderView("git");
+    await setup.flush();
+    expect(detailsShown()).toBe(true);
+    expect(app.state.detailFocused()).toBe(true);
   } finally {
     await setup?.dispose();
     for (const spy of spies) spy.mockRestore();

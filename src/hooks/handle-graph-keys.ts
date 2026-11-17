@@ -37,8 +37,10 @@ export function openGraphDetails(
   const mode = opts.layoutMode();
   if (mode === "too-small" || !opts.state.selectedCommit()) return false;
   opts.detailNavRef.pendingJumpDirection = null;
-  opts.actions.setDetailCursorIndex(0);
-  opts.actions.setDetailFocused(true);
+  // The graph's details, also when a jump from the Dashboard calls this as the view changes.
+  const graph = opts.actions.detailFor("graph");
+  graph.setDetailCursorIndex(0);
+  graph.setDetailFocused(true);
   if (mode === "compact") opts.setDialog("detail");
   return true;
 }
