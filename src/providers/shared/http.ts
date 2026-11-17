@@ -1,4 +1,5 @@
 import { addDebugEvent, type DebugEventSource, redactDebugValue } from "../../debug/events";
+import { monotonicNow } from "../../utils/monotonic";
 
 export interface FetchWithRetryOptions {
   timeoutMs: number;
@@ -95,13 +96,13 @@ export async function fetchWithRetry(
   source: DebugEventSource = "error",
 ): Promise<Response> {
   let lastError: unknown = null;
-  const started = Date.now();
+  const started = monotonicNow();
   const message = requestMessage(url, init);
   for (let attempt = 1; attempt <= opts.attempts; attempt++) {
     try {
       const res = await fetchWithTimeout(url, init, opts);
       if (!isRetryableStatus(res.status) || attempt === opts.attempts) {
-        addDebugEvent({ source, message, status: String(res.status), durationMs: Date.now() - started });
+        addDebugEvent({ source, message, status: String(res.status), durationMs: monotonicNow() - started });
         return res;
       }
     } catch (err) {
@@ -111,7 +112,7 @@ export async function fetchWithRetry(
         addDebugEvent({
           source: "error",
           message: redactDebugValue(err instanceof Error ? err.message : String(err)),
-          durationMs: Date.now() - started,
+          durationMs: monotonicNow() - started,
         });
         throw err;
       }

@@ -1,10 +1,11 @@
 import { Database } from "bun:sqlite";
-import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
+import { afterEach, describe, expect, mock, setSystemTime, spyOn, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { clearDebugEvents, getDebugEvents } from "../../debug/events";
+import * as monotonic from "../../utils/monotonic";
 import type { ProviderCacheLimit } from "./auto-refresh";
 import {
   closeProviderCaches,
@@ -17,6 +18,7 @@ import {
 const roots: string[] = [];
 afterEach(async () => {
   setSystemTime();
+  mock.restore();
   for (const root of roots.splice(0)) {
     closeProviderCaches(root);
     await rm(root, { recursive: true, force: true });
@@ -473,7 +475,8 @@ describe("ShaSqliteCache", () => {
       for (let index = 0; index < 10; index++) expect((await disk.read("/repo", sha))?.value).toBe("second");
       expect(performance.now() - readStart).toBeLessThan(500);
       second.exec("ROLLBACK;");
-      setSystemTime(new Date(Date.now() + 1_050)); // past the 1 s write cooldown without waiting
+      // Past the 1 s write cooldown without waiting.
+      spyOn(monotonic, "monotonicNow").mockReturnValue(monotonic.monotonicNow() + 1_050);
       await disk.write("/repo", { sha, value: "recovered" });
       expect((await disk.read("/repo", sha))?.value).toBe("recovered");
     } finally {
@@ -518,7 +521,8 @@ describe("ShaSqliteCache", () => {
       const sha = "a".repeat(40);
       expect(await disk.read("/repo", sha)).toBeNull();
       writer.exec("ROLLBACK;");
-      setSystemTime(new Date(Date.now() + 1_050)); // past the 1 s write cooldown without waiting
+      // Past the 1 s write cooldown without waiting.
+      spyOn(monotonic, "monotonicNow").mockReturnValue(monotonic.monotonicNow() + 1_050);
       await disk.write("/repo", { sha, value: "recovered" });
       await disk.writeLog("/repo", sha, "job", "recovered log");
       expect((await disk.read("/repo", sha))?.value).toBe("recovered");

@@ -3,6 +3,7 @@ import { homedir, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, posix, relative, resolve } from "node:path";
 import { BANNER } from "../../debug/banner";
 import { addDebugEvent, redactDebugValue } from "../../debug/events";
+import { monotonicNow } from "../../utils/monotonic";
 import { repositoryIdentity } from "../shared/sha-sqlite-cache";
 import { SnykCache } from "./cache";
 import { normalizeSnykTargetFile, parseSnykDepGraphs } from "./dep-graph";
@@ -166,7 +167,7 @@ export const runSnykCommand: SnykCommandRunner = async (command, options) => {
     }
     options = { ...options, env: { ...env, PATH: path } };
   }
-  const started = Date.now();
+  const started = monotonicNow();
   const source = command[0] === "git" ? "Git" : "Snyk";
   const message = command.map(redactDebugValue).join(" ");
   const isolateGroup = command[0] !== "git";
@@ -225,7 +226,7 @@ export const runSnykCommand: SnykCommandRunner = async (command, options) => {
     }
     throwIfAborted(options.signal);
     const exitCode = child.exitCode ?? 1;
-    addDebugEvent({ source, message, status: String(exitCode), durationMs: Date.now() - started });
+    addDebugEvent({ source, message, status: String(exitCode), durationMs: monotonicNow() - started });
     if (exitCode > 1 && stderr.trim()) {
       addDebugEvent({ source, message: redactDebugValue(stderr.trim()), status: "error" });
     }

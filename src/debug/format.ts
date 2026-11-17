@@ -6,7 +6,7 @@ export function formatDebugTimestamp(timestamp: number): string {
 }
 
 export function formatDebugDuration(durationMs?: number): string {
-  return durationMs !== undefined ? `${durationMs}ms` : "";
+  return durationMs !== undefined ? `${Math.round(durationMs)}ms` : "";
 }
 
 /**

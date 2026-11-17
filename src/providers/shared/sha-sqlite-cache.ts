@@ -4,6 +4,7 @@ import { chmodSync, closeSync, mkdirSync, openSync } from "node:fs";
 import { realpath } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { addDebugEvent, redactDebugValue } from "../../debug/events";
+import { monotonicNow, NEVER } from "../../utils/monotonic";
 import { storageRoot } from "../../utils/storage-path";
 import { DEFAULT_PROVIDER_CACHE_LIMIT, type ProviderCacheLimit } from "./auto-refresh";
 
@@ -49,7 +50,7 @@ function isCacheBusy(error: unknown): boolean {
 }
 
 function reportCacheError(root: string, error: unknown): void {
-  if (isCacheBusy(error)) writesBlockedUntil.set(root, Date.now() + 1_000);
+  if (isCacheBusy(error)) writesBlockedUntil.set(root, monotonicNow() + 1_000);
   const message = redactDebugValue(error instanceof Error ? error.message : String(error));
   if (reportedErrors.get(root) === message) return;
   reportedErrors.set(root, message);
@@ -61,7 +62,8 @@ export function providerCacheDatabase(root = DEFAULT_PROVIDER_CACHE_ROOT): Datab
   const cached = databases.get(directory);
   if (cached) return cached;
   if (unavailableRoots.has(directory)) throw new Error("Provider cache unavailable for this session.");
-  if (Date.now() < (writesBlockedUntil.get(directory) ?? 0)) throw new Error("Provider cache temporarily busy.");
+  if (monotonicNow() < (writesBlockedUntil.get(directory) ?? NEVER))
+    throw new Error("Provider cache temporarily busy.");
   let db: Database | undefined;
   try {
     mkdirSync(directory, { recursive: true, mode: 0o700 });
@@ -344,7 +346,7 @@ export class ShaSqliteCache<T extends { sha: string }> {
     return (
       !suspendedRoots.has(this.root) &&
       epoch === (writeEpochs.get(this.root) ?? 0) &&
-      Date.now() >= (writesBlockedUntil.get(this.root) ?? 0)
+      monotonicNow() >= (writesBlockedUntil.get(this.root) ?? NEVER)
     );
   }
 

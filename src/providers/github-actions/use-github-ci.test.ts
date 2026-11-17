@@ -6,6 +6,7 @@ import { createRoot } from "solid-js";
 import { createAppState } from "../../context/state";
 import { BANNER } from "../../debug/banner";
 import { buildGraph } from "../../git/graph";
+import * as monotonic from "../../utils/monotonic";
 import { closeProviderCaches } from "../shared/sha-sqlite-cache";
 import * as api from "./api";
 import { GitHubCache } from "./cache";
@@ -119,7 +120,7 @@ test("a failed refresh of running runs shows its error, like Jenkins, instead of
   expect(state.providerStatusFor("github-actions").kind).toBe("idle");
   ci.mockResolvedValue({ data: [], jobs: new Map(), error: BANNER.github.fetchFailed });
   // Re-enter the view after the stale threshold: the running SHA is refreshed automatically.
-  const clock = spyOn(Date, "now").mockReturnValue(Date.now() + 120_000);
+  const clock = spyOn(monotonic, "monotonicNow").mockReturnValue(monotonic.monotonicNow() + 120_000);
   try {
     const calls = ci.mock.calls.length;
     actions.setActiveProviderView("git");
@@ -456,7 +457,7 @@ test("a window refresh queued after a Reload keeps the Reload's commit outside t
   const reload = github.fetchCommitDataForSHA(outside, true);
   await settle();
   // Coming back to the view after a while queues a refresh of the whole window behind it.
-  const clock = spyOn(Date, "now").mockReturnValue(Date.now() + 10 * 60_000);
+  const clock = spyOn(monotonic, "monotonicNow").mockReturnValue(monotonic.monotonicNow() + 10 * 60_000);
   try {
     actions.setActiveProviderView("git");
     actions.setActiveProviderView("github-actions");
@@ -494,7 +495,7 @@ test("on the dashboard, the refresh asks GitHub about running runs again, as on 
   await settle(() => state.graphBadgesFor("github-actions").size > 0);
   expect(github.getCommitData(SHA)?.runs[0]?.status).toBe("in_progress");
   ci.mockResolvedValue({ data: [run({ status: "completed", conclusion: "success" })], jobs: new Map(), error: null });
-  const clock = spyOn(Date, "now").mockReturnValue(Date.now() + 120_000);
+  const clock = spyOn(monotonic, "monotonicNow").mockReturnValue(monotonic.monotonicNow() + 120_000);
   try {
     const calls = ci.mock.calls.length;
     actions.setActiveProviderView("git");
@@ -516,7 +517,7 @@ test("automatic refresh finds a run that started after the first fetch, for a co
   // A workflow starts on that commit later (a deploy, a re-run).
   ci.mockResolvedValue({ data: [run()], jobs: new Map(), error: null });
   const calls = ci.mock.calls.length;
-  const clock = spyOn(Date, "now").mockReturnValue(Date.now() + 120_000);
+  const clock = spyOn(monotonic, "monotonicNow").mockReturnValue(monotonic.monotonicNow() + 120_000);
   try {
     actions.setActiveProviderView("git");
     actions.setActiveProviderView("dashboard");

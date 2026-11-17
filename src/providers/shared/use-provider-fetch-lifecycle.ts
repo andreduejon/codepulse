@@ -1,5 +1,6 @@
 import { type Accessor, createEffect, createSignal, onCleanup, untrack } from "solid-js";
 import type { AppState } from "../../context/state";
+import { monotonicNow, NEVER } from "../../utils/monotonic";
 import { collectTopSHAs } from "../github-actions/sha-selection";
 import { isAbortError } from "./http";
 
@@ -75,7 +76,7 @@ export function useProviderFetchLifecycle(opts: {
   let loadFetchStarted = false;
   /** The `fetchOnLoad` fetch while it runs: a view that opens meanwhile keeps it instead of fetching the same again. */
   let loadFetch: Promise<void> | null = null;
-  let lastFetchedAt = 0;
+  let lastFetchedAt = NEVER;
   let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
   let fetchAbortCtrl: AbortController | null = null;
   let backgroundFetchAbortCtrl: AbortController | null = null;
@@ -125,11 +126,11 @@ export function useProviderFetchLifecycle(opts: {
 
   function noteFetchStarted() {
     hasFetchedOnce = true;
-    lastFetchedAt = Date.now();
+    lastFetchedAt = monotonicNow();
   }
 
   function noteRefreshSettled() {
-    lastFetchedAt = Date.now();
+    lastFetchedAt = monotonicNow();
   }
 
   function noteFetchResult(ok: boolean) {
@@ -140,11 +141,11 @@ export function useProviderFetchLifecycle(opts: {
     }
     consecutiveErrors++;
     const delayMs = Math.min(30_000 * 2 ** (consecutiveErrors - 1), 300_000);
-    backoffUntil = Date.now() + delayMs;
+    backoffUntil = monotonicNow() + delayMs;
   }
 
   function inBackoff() {
-    return Date.now() < backoffUntil;
+    return monotonicNow() < backoffUntil;
   }
 
   /** Queue a request behind the running fetch; the promise settles once the queued request has run (or is dropped). */
@@ -283,7 +284,7 @@ export function useProviderFetchLifecycle(opts: {
 
   function cancelRequests() {
     cacheEpoch++;
-    if (fetchInFlight) lastFetchedAt = 0;
+    if (fetchInFlight) lastFetchedAt = NEVER;
     stopAutoRefresh();
     fetchAbortCtrl?.abort();
     fetchAbortCtrl = null;
@@ -302,7 +303,7 @@ export function useProviderFetchLifecycle(opts: {
     cancelRequests();
     hasFetchedOnce = false;
     loadFetchStarted = false;
-    lastFetchedAt = 0;
+    lastFetchedAt = NEVER;
     consecutiveErrors = 0;
     backoffUntil = 0;
     opts.onResetCaches();
@@ -345,7 +346,7 @@ export function useProviderFetchLifecycle(opts: {
     } else {
       const interval = currentInterval();
       const staleThreshold = interval > 0 ? interval : 30_000;
-      if (Date.now() - lastFetchedAt > staleThreshold && !fetchInFlight) {
+      if (monotonicNow() - lastFetchedAt > staleThreshold && !fetchInFlight) {
         const controller = new AbortController();
         fetchAbortCtrl = controller;
         untrack(() => void fetchRefresh(controller.signal, showStatus));

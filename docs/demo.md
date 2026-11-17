@@ -71,11 +71,12 @@ Steps are separated by spaces or new lines. Quote text with spaces: `wait:"full 
 | `click:TEXT` / `click:TEXT#2` / `click:X,Y` | Clicks the middle of the first (or second, up to the 1000th) place the text shows, or a cell (from `0,0`). A `#` inside quotes is part of the text: `click:"CI #812"`. |
 | `hover:TEXT` | Moves the mouse over the text. |
 | `scroll:down*5@TEXT` | Scrolls the wheel over the text, or over the middle of the screen without `@`. |
-| `sleep:MS` | Waits a fixed time, for things on a timer (up to 600000). |
+| `sleep:MS` | Waits a fixed time, for things on a timer (up to 600000), and moves the clock on by that time. |
 
 The same play prints the same screens every run: the commits and the app's clock start at a fixed moment
-(2 March 2026, 09:30 UTC), dates are shown in UTC, and long text in the selected row stays still instead of
-scrolling sideways. So comparing before and after a change shows only what the change did:
+(2 March 2026, 09:30 UTC), and the clock stands still however long the run takes, so a slow machine shows the
+same ages. Only `sleep:` moves it, by exactly its time. Dates are shown in UTC, and long text in the selected row
+stays still instead of scrolling sideways. So comparing before and after a change shows only what the change did:
 
 ```sh
 bun run demo --play "$(cat play.txt)" > before.txt

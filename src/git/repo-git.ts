@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { addDebugEvent, redactDebugValue } from "../debug/events";
+import { monotonicNow } from "../utils/monotonic";
 
 function spawnGit(repoPath: string, args: string[]) {
   return Bun.spawn(["git", "-c", "core.quotePath=false", ...args], {
@@ -40,7 +41,7 @@ export async function runGit(
   signal?: AbortSignal,
   maxStdoutBytes?: number,
 ): Promise<{ stdout: string; stderr: string; exitCode: number; truncated?: boolean }> {
-  const started = Date.now();
+  const started = monotonicNow();
   const command = redactDebugValue(`git ${args.join(" ")}`);
   // Bail out before spawning if already cancelled
   if (signal?.aborted) {
@@ -58,7 +59,7 @@ export async function runGit(
     const stderr = existsSync(repoPath)
       ? `git could not start: ${error instanceof Error ? error.message : String(error)}`
       : `cannot change to '${repoPath}': No such file or directory`;
-    addDebugEvent({ source: "Git", message: command, status: "error", durationMs: Date.now() - started });
+    addDebugEvent({ source: "Git", message: command, status: "error", durationMs: monotonicNow() - started });
     return { stdout: "", stderr, exitCode: existsSync(repoPath) ? 127 : 128 };
   }
 
@@ -91,12 +92,12 @@ export async function runGit(
       source: "Git",
       message: command,
       status: out.truncated ? "truncated" : exitCode === 0 ? "ok" : `exit ${exitCode}`,
-      durationMs: Date.now() - started,
+      durationMs: monotonicNow() - started,
     });
     return { stdout: out.text, stderr, exitCode, truncated: out.truncated };
   } catch {
     // Process was killed — pipes may throw
-    addDebugEvent({ source: "Git", message: command, status: "aborted", durationMs: Date.now() - started });
+    addDebugEvent({ source: "Git", message: command, status: "aborted", durationMs: monotonicNow() - started });
     return { stdout: "", stderr: "aborted", exitCode: 1 };
   } finally {
     await treeCleanup;

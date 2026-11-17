@@ -1,12 +1,15 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
+import { NAV_REPEAT_MIN_MS } from "../src/constants";
 import type { GraphRow } from "../src/git/types";
 import {
+  allowRepeatNav,
   type CascadeState,
   type CascadeTarget,
   computeCascadeTarget,
   computeDisplacedIndex,
   countHighlightedBelow,
   findHighlightedIndex,
+  resetRepeatNav,
 } from "../src/utils/keyboard-nav-utils";
 import { makeCommit } from "./test-helpers";
 
@@ -219,5 +222,22 @@ describe("computeCascadeTarget", () => {
 
     const withoutDetail = { ...withoutSearch, detailFocused: false };
     expect(computeCascadeTarget(withoutDetail)).toBe("search-highlight");
+  });
+});
+
+describe("allowRepeatNav", () => {
+  test("a held key moves again once a frame has passed, also while the wall clock stands still", async () => {
+    // The headless demo stands the wall clock still so ages print the same every run; a held key must still move.
+    const clock = spyOn(Date, "now").mockReturnValue(Date.now());
+    try {
+      resetRepeatNav();
+      expect(allowRepeatNav()).toBe(true);
+      expect(allowRepeatNav()).toBe(false);
+      await Bun.sleep(NAV_REPEAT_MIN_MS + 10);
+      expect(allowRepeatNav()).toBe(true);
+    } finally {
+      clock.mockRestore();
+      resetRepeatNav();
+    }
   });
 });

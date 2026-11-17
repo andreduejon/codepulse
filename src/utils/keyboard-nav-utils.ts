@@ -7,6 +7,7 @@ import { NAV_REPEAT_MIN_MS } from "../constants";
  * making them unit-testable without SolidJS or opentui dependencies.
  */
 import type { GraphRow } from "../git/types";
+import { monotonicNow, NEVER } from "./monotonic";
 
 /**
  * When any highlighting is active, find the nearest highlighted row in the
@@ -158,15 +159,15 @@ export function computeCascadeTarget(s: CascadeState): CascadeTarget {
   return null;
 }
 
-let lastRepeatNavAt = 0;
+let lastRepeatNavAt = NEVER;
 
 /** Accept at most one held j/k move per frame. Single taps always pass. */
-export function allowRepeatNav(now = Date.now()): boolean {
+export function allowRepeatNav(now = monotonicNow()): boolean {
   if (now - lastRepeatNavAt < NAV_REPEAT_MIN_MS) return false;
   lastRepeatNavAt = now;
   return true;
 }
 
 export function resetRepeatNav(): void {
-  lastRepeatNavAt = 0;
+  lastRepeatNavAt = NEVER;
 }

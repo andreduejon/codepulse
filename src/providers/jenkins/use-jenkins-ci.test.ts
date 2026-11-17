@@ -8,6 +8,7 @@ import { createAppState } from "../../context/state";
 import { BANNER } from "../../debug/banner";
 import { buildGraph } from "../../git/graph";
 import type { Commit } from "../../git/types";
+import * as monotonic from "../../utils/monotonic";
 import { closeProviderCaches } from "../shared/sha-sqlite-cache";
 import * as api from "./api";
 import { JenkinsCache } from "./cache";
@@ -219,7 +220,7 @@ test("after a 401, entering the view again stays frozen; only Reload retries", a
   expect(state.providerStatusFor("jenkins")).toEqual({ kind: "error", message: BANNER.jenkins.tokenExpired });
   const calls = graph.mock.calls.length;
   // Come back after the stale threshold: an automatic fetch, which must not lift the freeze.
-  const clock = spyOn(Date, "now").mockReturnValue(Date.now() + 120_000);
+  const clock = spyOn(monotonic, "monotonicNow").mockReturnValue(monotonic.monotonicNow() + 120_000);
   try {
     actions.setActiveProviderView("git");
     actions.setActiveProviderView("jenkins");
@@ -340,7 +341,7 @@ test("on the dashboard, the refresh asks Jenkins about running builds again, as 
   graph.mockResolvedValue(result([run()]));
 
   // The dashboard shows Jenkins' events: past the stale time, showing it refreshes the running build.
-  const clock = spyOn(Date, "now").mockReturnValue(Date.now() + 120_000);
+  const clock = spyOn(monotonic, "monotonicNow").mockReturnValue(monotonic.monotonicNow() + 120_000);
   try {
     actions.setActiveProviderView("git");
     actions.setActiveProviderView("dashboard");
@@ -361,7 +362,7 @@ test("automatic refresh finds a build that started after the first fetch, for a 
 
   graph.mockResolvedValue(result([run({ status: "running", conclusion: null })]));
   const calls = graph.mock.calls.length;
-  const clock = spyOn(Date, "now").mockReturnValue(Date.now() + 120_000);
+  const clock = spyOn(monotonic, "monotonicNow").mockReturnValue(monotonic.monotonicNow() + 120_000);
   try {
     actions.setActiveProviderView("git");
     actions.setActiveProviderView("dashboard");
@@ -403,7 +404,7 @@ test("reading only some branch jobs is a notice, not a failure: automatic refres
   await settle();
   const calls = graph.mock.calls.length;
   // 45 seconds on: past the 30-second staleness, within the minute two failures would have to wait.
-  const clock = spyOn(Date, "now").mockReturnValue(Date.now() + 45_000);
+  const clock = spyOn(monotonic, "monotonicNow").mockReturnValue(monotonic.monotonicNow() + 45_000);
   try {
     actions.setActiveProviderView("git");
     actions.setActiveProviderView("dashboard");
