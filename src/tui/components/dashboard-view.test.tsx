@@ -288,11 +288,12 @@ async function longDashboard(height: number) {
     branch: "main",
   }));
   const [active] = createSignal(true);
+  let clock = NOW;
   const dashboard = createRoot(() =>
     useDashboard({
       app: () => ({ path: "/shop", name: "shop" }),
       active,
-      now: () => NOW,
+      now: () => clock,
       load: async () => events.map(event => ({ ...event })),
     }),
   );
@@ -300,7 +301,7 @@ async function longDashboard(height: number) {
   const setup = await testRender(
     () => (
       <ThemeContext.Provider value={createThemeState()}>
-        <DashboardView dashboard={dashboard} now={() => NOW} />
+        <DashboardView dashboard={dashboard} now={() => clock} />
       </ThemeContext.Provider>
     ),
     { width: 100, height },
@@ -311,6 +312,9 @@ async function longDashboard(height: number) {
     dashboard,
     setup,
     drawn,
+    setClock: (time: number) => {
+      clock = time;
+    },
     change: (next: DashboardEvent[]) => {
       events = next;
     },
@@ -350,6 +354,20 @@ test("a reload with the same events keeps every row; a changed event redraws its
     await d.setup.renderOnce();
     expect(d.drawn.mock.calls.length).toBe(1);
     expect(d.setup.captureCharFrame()).toContain("commit 3, amended");
+  } finally {
+    d.finish();
+  }
+});
+
+test("a reload after midnight names the days again: yesterday's events are no longer under Today", async () => {
+  const d = await longDashboard(30);
+  try {
+    expect(d.setup.captureCharFrame()).toContain("Today");
+    d.setClock(new Date(2026, 2, 3, 0, 5).getTime());
+    await d.dashboard.reload();
+    await d.setup.renderOnce();
+    expect(d.setup.captureCharFrame()).toContain("Yesterday");
+    expect(d.setup.captureCharFrame()).not.toContain("Today");
   } finally {
     d.finish();
   }

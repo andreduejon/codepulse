@@ -288,7 +288,8 @@ describe("keepUnchangedRows", () => {
       rows([event("a", 50), event("b", 40, "commit b, amended"), event("c", -30)]),
     );
     expect(after.map(row => row.kind)).toEqual(["date", "event", "event", "gap", "event"]);
-    expect(after[0]).toBe(before[0]);
+    // A date row is drawn again: its label depends on the clock.
+    expect(after[0]).not.toBe(before[0]);
     expect(after[1]).toBe(before[1]);
     expect(after[2]).not.toBe(before[2]);
     expect(after[2]?.kind === "event" && after[2].event.text).toBe("commit b, amended");

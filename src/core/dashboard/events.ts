@@ -321,7 +321,8 @@ const contentOf = (row: DashboardRow): string => {
 
 /**
  * The rows read again, with each row that did not change replaced by the one before it: a list keyed by row (Solid's
- * `For`) keeps those rows as they are and draws only the new and the changed ones.
+ * `For`) keeps those rows as they are and draws only the new and the changed ones. A date row is always new: its label
+ * ("Today", "Yesterday") depends on the clock, not on the row.
  */
 export function keepUnchangedRows(previous: readonly DashboardRow[], next: DashboardRow[]): DashboardRow[] {
   if (previous.length === 0) return next;
@@ -330,6 +331,7 @@ export function keepUnchangedRows(previous: readonly DashboardRow[], next: Dashb
   for (const [index, row] of previous.entries()) before.set(previousKeys[index] as string, row);
   const nextKeys = rowKeys(next);
   return next.map((row, index) => {
+    if (row.kind === "date") return row;
     const kept = before.get(nextKeys[index] as string);
     return kept && contentOf(kept) === contentOf(row) ? kept : row;
   });
