@@ -61,6 +61,7 @@ src/
   cli/         arguments and help
   main.tsx     startupProps: the ports, the settings, which screen to open
   ports.ts     the terminal app's adapters, in one place
+  providers.ts the providers the app runs with: the one list of them
 ```
 
 ## Ports
@@ -78,6 +79,7 @@ so a test's `spyOn` on such a function sees the app's calls.
 | `CacheStorePort` | `core/cache-store.ts` | `adapters/cache/cache-store.ts` | hook parameters, `useCacheStore()` |
 | `SystemPort` | `core/system.ts` | `adapters/system/system-port.ts` | hook parameters, `useSystem()` |
 | `DashboardReader` | `core/dashboard/load.ts` | `src/ports.ts` over `adapters/dashboard/load.ts` | the Dashboard controller |
+| the providers: their definitions and adapters (`ProviderSet`) | `core/provider-set.ts` | `src/providers.ts` | `state.providers.set`, `useProviderSet()` |
 | a provider's adapters (API, cache, token) | `core/<provider>/service.ts` | `adapters/<provider>/adapters.ts` | the provider's module |
 | the app's state, for a provider | `core/provider-ports.ts` | `tui/providers/shared/app-port.ts` | the provider's hook |
 
@@ -98,11 +100,26 @@ Each service is a plain function or class in core with its ports as parameters, 
 
 ## Providers
 
-Each provider is a module (`tui/providers/<provider>/module.ts`) that meets one contract (`tui/providers/module.ts`):
-`start` gets the app's state, its settings, its adapters and where its rows open, and returns the provider with what
-every caller reads from it: its data for a commit, starting over, fetching again, the events it holds for the
-Dashboard, and its detail tab's source. The provider host (`tui/app/providers.ts`) starts the modules and is the rest
-of the app's one way to them.
+A provider is its own files, one per layer, joined by its id:
+
+| Layer | File | What it holds |
+|-------|------|---------------|
+| core | `core/<provider>/definition.ts` | its id, settings key, names and tabs; its settings (defaults, how the file's section is read and checked, what a backfill writes); the Dashboard events it stored |
+| adapters | `adapters/<provider>/adapters.ts` | its API, cache and token |
+| terminal | `tui/providers/<provider>/module.ts` | `start` (the provider itself, with its settings and adapters), its colors, Menu rows, detail tabs, graph columns, Dashboard legend, and what it does on its own (a background error, a tab notice, a dialog) |
+
+`src/providers.ts` lists them once: each provider's module (which carries its definition) and its adapters' factory.
+The ports build a provider set from the list (`AppPorts.providers`: the definitions, in order, and each one's adapters,
+typed by its definition), and startup registers the modules. Everything else reads them: the settings model reads,
+writes and backfills each section through its definition; the views, their order and names come from the set; the
+provider host (`tui/app/providers.ts`) starts the modules and is the rest of the app's one way to them (refresh, start
+over, the events they hold, their detail tabs, graph columns and messages); the Menu, the graph, the detail view, the
+Dashboard and `:hide`/`:show` ask the modules. No file outside a provider's own names it.
+
+A provider needs only what it uses: a graph column, a background error or a dialog of its own is optional, and a
+provider without columns shows a CI provider's counts and last run. `src/providers.test.tsx` adds one written only in
+the test and checks it shows in the view cycle, the command bar, the Menu, its detail tab, the Dashboard and the cache,
+and that its settings round-trip.
 
 ## State and commands
 
