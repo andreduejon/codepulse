@@ -190,9 +190,8 @@ own status.
   warnings, not how often each happened).
 - In **Resources**, a resource OpenShift warned about shows `!` before its status mark.
 - The **Events** tab lists the commit's warnings by namespace, newest first: reason,
-  resource and when. The selected warning shows its whole message and how many times it
-  happened. Enter opens its resource's dialog on the events view, `o` opens it in the
-  web console. A namespace whose events the token may not list is named in a notice
+  resource and when, one line each. Enter (or a click) opens its resource's dialog on the
+  events view, where the whole message is; `o` opens it in the web console. A namespace whose events the token may not list is named in a notice
   under the tab.
 
 ## Required read permissions

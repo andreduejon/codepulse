@@ -44,7 +44,6 @@ async function renderEventsTab(warnings: OpenShiftWarning[]) {
           <OpenShiftEventsTab
             sha={SHA}
             getCommitData={() => data}
-            contentWidth={60}
             navRef={navRef}
             detailCursorIndex={cursor}
             detailFocused={() => true}
@@ -95,30 +94,25 @@ test("the commit's warnings by namespace, newest first: reason, resource and whe
   }
 });
 
-test("the full message shows only under the selected warning", async () => {
+test("a selected warning adds no lines: its message is in the resource dialog", async () => {
   const t = await renderEventsTab([
     warning({ id: "event-1", lastSeen: minutesAgo(5) }),
-    warning({
-      id: "event-2",
-      reason: "Unhealthy",
-      message: "Readiness probe failed",
-      count: 1,
-      lastSeen: minutesAgo(1),
-    }),
+    warning({ id: "event-2", reason: "Unhealthy", message: "Readiness probe failed", lastSeen: minutesAgo(1) }),
   ]);
   try {
-    // The namespace row is selected: no message.
-    expect(t.frame()).not.toContain("Readiness probe failed");
-    t.setCursor(1);
-    await t.settle();
-    expect(t.frame()).toContain("Readiness probe failed");
-    // Once is not counted.
-    expect(t.frame()).not.toContain("1 times");
-    expect(t.frame()).not.toContain("Back-off restarting");
-    t.setCursor(2);
-    await t.settle();
-    expect(t.frame()).not.toContain("Readiness probe failed");
-    expect(t.frame()).toContain("61 times");
+    const before = t.frame();
+    for (const index of [1, 2]) {
+      t.setCursor(index);
+      await t.settle();
+      expect(t.frame()).not.toMatch(/Readiness probe failed|Back-off restarting|times/);
+      // The rows stay where they were.
+      expect(
+        t
+          .frame()
+          .split("\n")
+          .map(line => line.trim()),
+      ).toEqual(before.split("\n").map(line => line.trim()));
+    }
   } finally {
     t.renderer.destroy();
   }

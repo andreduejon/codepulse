@@ -1,18 +1,15 @@
 /**
  * OpenShift's Events tab: the warnings Kubernetes reported about a commit's resources, kept with the commit
- * (core/openshift/warnings.ts). By namespace, newest first; the selected one shows its whole message, and Enter opens
- * its resource's events in the resource dialog.
+ * (core/openshift/warnings.ts). By namespace, newest first, one line each; Enter opens its resource's events in the
+ * resource dialog, where the whole message is.
  */
-import { useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, Show, untrack } from "solid-js";
 import type { OpenShiftCommitData, OpenShiftResource } from "../../../core/openshift/types";
 import { type OpenShiftWarning, resourceOfWarning } from "../../../core/openshift/warnings";
 import type { DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
-import { DETAIL_PANEL_WIDTH_FRACTION } from "../../constants";
 import { useT } from "../../hooks/use-t";
 import { formatRelativeDate } from "../../utils/date";
-import { wrapWords } from "../../utils/wrap-words";
 import { ProviderSummaryRow, ScrollingLabel, useDetailRowMouse } from "../shared/detail-rows";
 import { useDetailTree } from "../shared/detail-tree";
 import { type RowShortcut, useOpenRowShortcut } from "../shared/open-row";
@@ -24,7 +21,6 @@ export interface OpenShiftEventsTabProps {
   getCommitData: (sha: string) => OpenShiftCommitData | null;
   mouseEnabled?: boolean;
   onMouseFocus?: () => void;
-  contentWidth?: number;
   /** Keeps closed namespaces while the tab is not shown (another tab, the other layout). */
   memory?: DetailMemory;
   navRef?: DetailNavRef;
@@ -43,11 +39,6 @@ export const OPENSHIFT_NO_WARNINGS = "No warnings about this commit's resources.
 
 type FlatItem = { kind: "namespace"; namespace: string } | { kind: "warning"; warning: OpenShiftWarning };
 
-const MIN_PANEL_WIDTH = 60;
-const PANEL_PADDING_X = 4;
-/** The tree's lead before a warning's message: namespace branch, warning branch, then an indent. */
-const MESSAGE_LEAD_WIDTH = 6;
-
 /** Whether the resource dialog can show the warning's resource: a ReplicaSet or ReplicationController it cannot. */
 
 const itemKey = (item: FlatItem) =>
@@ -63,7 +54,6 @@ const newEventsMemory = (): EventsMemory => ({ sha: null, collapsed: new Set() }
 
 export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
   const t = useT();
-  const dimensions = useTerminalDimensions();
   const kept = props.memory?.("events", newEventsMemory) ?? newEventsMemory();
   const [collapsed, setCollapsed] = createSignal<Set<string>>(
     kept.sha === untrack(() => props.sha) ? kept.collapsed : new Set(),
@@ -161,62 +151,34 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
     else props.setDetailCursorAction(openable(item.warning) ? "events" : null);
   });
 
-  const panelWidth = () =>
-    Math.max(
-      1,
-      props.contentWidth ??
-        Math.max(Math.floor(dimensions().width * DETAIL_PANEL_WIDTH_FRACTION), MIN_PANEL_WIDTH) - PANEL_PADDING_X,
-    );
-  const messageLines = (warning: OpenShiftWarning) => {
-    const text = warning.count > 1 ? `${warning.message} · ${warning.count} times` : warning.message;
-    return wrapWords(text, Math.max(10, panelWidth() - MESSAGE_LEAD_WIDTH));
-  };
-
   const renderWarning = (warning: OpenShiftWarning, lead: string, last: boolean) => {
     const key = `warning:${warning.id}`;
     const isCursored = () => cursored(key);
     return (
-      <box flexDirection="column" width="100%">
-        <box
-          {...mouseRow(key, () => indexOf(key))}
-          ref={tree.ref(key)}
-          flexDirection="row"
-          width="100%"
-          backgroundColor={isCursored() ? t().backgroundElementActive : hoverBg(key)}
-        >
-          <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().border}>
-            {lead}
-            {last ? "└─ " : "├─ "}
-          </text>
-          <ScrollingLabel
-            selectable={!props.mouseEnabled}
-            text={warning.reason}
-            tail={`  ${warning.kind} ${warning.name}`}
-            tailFg={t().foregroundMuted}
-            active={isCursored()}
-            fg={isCursored() ? t().accent : t().foreground}
-            grow={false}
-          />
-          <box flexGrow={1} />
-          <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {warning.lastSeen ? `  ${formatRelativeDate(warning.lastSeen)}` : ""}
-          </text>
-        </box>
-        <Show when={isCursored()}>
-          <For each={messageLines(warning)}>
-            {line => (
-              <box flexDirection="row" width="100%">
-                <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().border}>
-                  {lead}
-                  {last ? "   " : "│  "}
-                </text>
-                <text selectable={!props.mouseEnabled} wrapMode="none" fg={t().foregroundMuted}>
-                  {line}
-                </text>
-              </box>
-            )}
-          </For>
-        </Show>
+      <box
+        {...mouseRow(key, () => indexOf(key))}
+        ref={tree.ref(key)}
+        flexDirection="row"
+        width="100%"
+        backgroundColor={isCursored() ? t().backgroundElementActive : hoverBg(key)}
+      >
+        <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().border}>
+          {lead}
+          {last ? "└─ " : "├─ "}
+        </text>
+        <ScrollingLabel
+          selectable={!props.mouseEnabled}
+          text={warning.reason}
+          tail={`  ${warning.kind} ${warning.name}`}
+          tailFg={t().foregroundMuted}
+          active={isCursored()}
+          fg={isCursored() ? t().accent : t().foreground}
+          grow={false}
+        />
+        <box flexGrow={1} />
+        <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+          {warning.lastSeen ? `  ${formatRelativeDate(warning.lastSeen)}` : ""}
+        </text>
       </box>
     );
   };

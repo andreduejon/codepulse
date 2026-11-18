@@ -69,7 +69,6 @@ export const openshiftEventsDetail = detailEntry<OpenShiftDetailSource>({
     <OpenShiftEventsTab
       mouseEnabled={props.context.mouseEnabled}
       onMouseFocus={props.context.onMouseFocus}
-      contentWidth={props.context.contentWidth}
       sha={props.context.sha}
       getCommitData={props.source.getCommitData}
       consoleUrl={props.source.consoleUrl}

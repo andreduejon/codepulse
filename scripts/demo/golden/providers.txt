@@ -146,12 +146,12 @@
     █                           bf08113   dev   origin/dev   shop-dev  feat(api): export request metrics     2   1          1                 total warnings                                         5
     │                                                                                                                                         ├─ ▾ shop-dev                                          1
     █                           e6209dd  feat(api): add a health endpoint                                   ·······        ·······            │  └─ BuildFailed  Build shop-api-41              2h ago
-    │                                                                                                                                         │     Build shop-dev/shop-api-41 failed
-    █                           3447db9   v0.42.0   main   origin/…   shop-pr…   +2  docs: rewrite the RE…   4              1                 └─ ▾ shop-test                                         4
-    │                                                                                                                                            ├─ BackOff  Pod shop-api-7d9f8-x2k4q         just now
-    │ █                         6adc455   feature/payments-r…   origin/feature/pay…  wip(payments): retry…  ·······        ·······               ├─ Unhealthy  Pod shop-api-7d9f8-x2k4q         1m ago
-    │ │                                                                                                                                          ├─ OOMKilling  Pod shop-api-7d9f8-oom7k       18m ago
-    █─╯                         64ddc8a   shop-test  feat(payments): retry failed payments with exponentia   4   1   5      1   1                └─ ProgressDeadlineExceeded  Deployment sho…  40m ago
+    │                                                                                                                                         └─ ▾ shop-test                                         4
+    █                           3447db9   v0.42.0   main   origin/…   shop-pr…   +2  docs: rewrite the RE…   4              1                    ├─ BackOff  Pod shop-api-7d9f8-x2k4q         just now
+    │                                                                                                                                            ├─ Unhealthy  Pod shop-api-7d9f8-x2k4q         1m ago
+    │ █                         6adc455   feature/payments-r…   origin/feature/pay…  wip(payments): retry…  ·······        ·······               ├─ OOMKilling  Pod shop-api-7d9f8-oom7k       18m ago
+    │ │                                                                                                                                          └─ ProgressDeadlineExceeded  Deployment sho…  40m ago
+    █─╯                         64ddc8a   shop-test  feat(payments): retry failed payments with exponentia   4   1   5      1   1
     │
     █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······
     │
