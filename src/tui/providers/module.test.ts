@@ -13,7 +13,7 @@ const definition = (id: string): ProviderDefinition<null, SettingsSection> => ({
   settings: { defaults: { enabled: false }, read: () => ({}) },
 });
 const entry = detailEntry<unknown>({ Tab: () => null });
-const moduleOf = (of: ProviderDefinition<null, SettingsSection>, tabs = [of.id]) =>
+const moduleOf = (of: ProviderDefinition<null, SettingsSection>, tabs = [of.id, `${of.id}-more`]) =>
   ({
     definition: of,
     detailEntries: Object.fromEntries(tabs.map(tab => [tab, entry])),
@@ -24,7 +24,7 @@ test("each provider has exactly one module, for its own definition, rendering on
   const b = definition("b");
   const set = createProviderSet([providerEntry(a, null), providerEntry(b, null)]);
   // In the set's order, whatever order the modules come in.
-  const joined = modulesFor(set, [moduleOf(b), moduleOf(a, ["a", "a-more"])]);
+  const joined = modulesFor(set, [moduleOf(b), moduleOf(a)]);
   expect(joined.map(module => module.definition.id)).toEqual(["a", "b"]);
 
   expect(() => modulesFor(set, [moduleOf(a), moduleOf(a), moduleOf(b)])).toThrow('Provider "a" has two modules');
@@ -36,7 +36,14 @@ test("each provider has exactly one module, for its own definition, rendering on
   expect(() => modulesFor(set, [moduleOf(definition("a")), moduleOf(b)])).toThrow(
     'Provider "a" has a module for another definition',
   );
-  expect(() => modulesFor(set, [moduleOf(a, ["a", "b-more"]), moduleOf(b)])).toThrow(
+  expect(() => modulesFor(set, [moduleOf(a, ["a", "a-more", "b-more"]), moduleOf(b)])).toThrow(
     'Provider "a" renders a detail tab it doesn\'t have: "b-more"',
+  );
+  // A tab it has but doesn't render would show nothing: refused too, its own and one it adds.
+  expect(() => modulesFor(set, [moduleOf(a, ["a"]), moduleOf(b)])).toThrow(
+    'Provider "a" has no renderer for its detail tab "a-more"',
+  );
+  expect(() => modulesFor(set, [moduleOf(a, ["a-more"]), moduleOf(b)])).toThrow(
+    'Provider "a" has no renderer for its detail tab "a"',
   );
 });

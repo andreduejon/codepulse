@@ -126,8 +126,8 @@ export function providerModule<Adapters, Settings extends SettingsSection, Insta
 }
 
 /**
- * Each provider's module, in the set's order: exactly one per provider, carrying the definition the set has, with
- * detail entries only for that provider's own tabs. Anything else is refused before any module starts.
+ * Each provider's module, in the set's order: exactly one per provider, carrying the definition the set has, with a
+ * detail entry for each of its tabs and for no other. Anything else is refused before any module starts.
  */
 export function modulesFor(providers: ProviderSet, modules: readonly AnyProviderModule[]): AnyProviderModule[] {
   const byId = new Map<string, AnyProviderModule>();
@@ -140,6 +140,10 @@ export function modulesFor(providers: ProviderSet, modules: readonly AnyProvider
     const tabs = new Set(providers.tabsOf(id).map(tab => tab.id));
     for (const tab of Object.keys(module.detailEntries))
       if (!tabs.has(tab)) throw new Error(`Provider "${id}" renders a detail tab it doesn't have: "${tab}"`);
+    // A tab it has but doesn't render would show nothing.
+    for (const tab of tabs)
+      if (!Object.hasOwn(module.detailEntries, tab))
+        throw new Error(`Provider "${id}" has no renderer for its detail tab "${tab}"`);
     byId.set(id, module);
   }
   return providers.definitions.map(definition => {
