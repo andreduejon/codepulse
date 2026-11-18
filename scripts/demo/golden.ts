@@ -67,21 +67,21 @@ export const GOLDEN_PLAYS: readonly GoldenPlay[] = [
         'esc tab wait:"main #41" right shot:jenkins',
         "esc g tab wait:pull9 right shot:openshift",
         // The first commit has no warnings yet; the one shop-test runs has several.
-        'right wait:"No warnings" esc j j j j right right wait:"total warnings" j shot:openshift-events',
+        'right wait:"No warnings" esc j j j j right right wait:"total events" j shot:openshift-events',
         'esc tab wait:"Vulnerabilities" shot:snyk',
       ].join("\n"),
     ],
   },
   {
     name: "openshift-cached",
-    covers: "the next phase: (cached) and resources no longer present in the Events tab, the Cached section of the events",
+    covers: "the next phase: (cached) and (removed) in the Events tab, the Cached section of the events",
     args: [
       ...WIDE,
       "--play",
       [
         // The next phase has no BuildFailed event any more: only the cache keeps it.
         'click:OpenShift wait:"64ddc8a" advance type::reload enter',
-        'click:64ddc8a enter right wait:"shop-api-41 (cached)" shot:events',
+        'click:64ddc8a enter right wait:"BuildFailed (cached)" shot:events',
         'click:BuildFailed enter wait:"Cached (no longer" shot:dialog',
       ].join("\n"),
     ],

@@ -143,19 +143,19 @@
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
   Graph                         Commit   Description                                                        Live           Cache                    Resources            Events             Info
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-    █                           bf08113   dev   origin/dev   shop-dev  feat(api): export request metrics     2   1          1                 total warnings                                         5
-    │                                                                                                                                         ├─ ▾ shop-dev                                          1
-    █                           e6209dd  feat(api): add a health endpoint                                   ·······        ·······            │  └─ BuildFailed  Build shop-api-41              2h ago
+    █                           bf08113   dev   origin/dev   shop-dev  feat(api): export request metrics     2   1          1                 Reload commit                                       live
+    │                                                                                                                                         total events                                           5
+    █                           e6209dd  feat(api): add a health endpoint                                   ·······        ·······            ├─ ▾ shop-dev                                          1
+    │                                                                                                                                         │  └─ Build shop-api-41
+    █                           3447db9   v0.42.0   main   origin/…   shop-pr…   +2  docs: rewrite the RE…   4              1                 │     └─ BuildFailed                              2h ago
     │                                                                                                                                         └─ ▾ shop-test                                         4
-    █                           3447db9   v0.42.0   main   origin/…   shop-pr…   +2  docs: rewrite the RE…   4              1                    ├─ BackOff  Pod shop-api-7d9f8-x2k4q         just now
-    │                                                                                                                                            ├─ Unhealthy  Pod shop-api-7d9f8-x2k4q         1m ago
-    │ █                         6adc455   feature/payments-r…   origin/feature/pay…  wip(payments): retry…  ·······        ·······               ├─ OOMKilling  Pod shop-api-7d9f8-oom7k       18m ago
-    │ │                                                                                                                                          └─ ProgressDeadlineExceeded  Deployment sho…  40m ago
-    █─╯                         64ddc8a   shop-test  feat(payments): retry failed payments with exponentia   4   1   5      1   1
-    │
-    █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······
-    │
-    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······
+    │ █                         6adc455   feature/payments-r…   origin/feature/pay…  wip(payments): retry…  ·······        ·······               ├─ Deployment shop-api
+    │ │                                                                                                                                          │  └─ ProgressDeadlineExceeded                40m ago
+    █─╯                         64ddc8a   shop-test  feat(payments): retry failed payments with exponentia   4   1   5      1   1                ├─ Pod shop-api-7d9f8-oom7k
+    │                                                                                                                                            │  └─ OOMKilling                              18m ago
+    █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······               └─ Pod shop-api-7d9f8-x2k4q
+    │                                                                                                                                               ├─ BackOff                                just now
+    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······                  └─ Unhealthy                                1m ago
     │ │
     │ █                         0166f71  feat(i18n): add French                                             ·······        ·······
     │ │
@@ -183,7 +183,7 @@
   │   customer-notification-service   shop   shop-web                                                                 main   86 commits       │
   │                                                                                                                                           │     No permission to list events in shop-prod   ✕
                                                                                                                                               │     The token needs list on events.
-                                                               tab Snyk · enter events · o open · esc back · ←/→ switch tab · ↑/↓ navigate    │
+                                                             tab Snyk · enter collapse · o open · esc back · ←/→ switch tab · ↑/↓ navigate    │
 
 
 === shot 5: snyk (200x45) ===

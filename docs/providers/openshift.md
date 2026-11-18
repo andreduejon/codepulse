@@ -195,14 +195,17 @@ own status.
 - The graph counts a commit's warnings in a yellow chip after its **Live** counts: how many
   warnings about resources it still has, not how often each happened.
 - In **Resources**, a resource OpenShift warned about shows `!` before its status mark.
-- The **Events** tab lists the commit's warnings by namespace, newest first: reason,
-  resource and when, one line each. Enter (or a click) opens its resource's dialog on the
-  events view, where the whole message is; `o` opens it in the web console. A namespace
-  whose events the token may not list is named in a notice under the tab.
-- Warnings about resources the commit no longer has (a replaced pod) follow in a second
-  section, **resources no longer present**. That is known once the live list has loaded;
-  before, every warning is in the first. Enter opens the resource's dialog on its events
-  only: there is no log, object or console page for it any more.
+- The **Events** tab starts with **Reload commit** and the count (`total events`), then a
+  tree: namespace, resource (`Pod shop-api-7d9f8-x2k4q`), then its warnings newest first,
+  each with its reason and when. Enter (or a click) on a resource or a warning opens the
+  resource's dialog on the events view, where the whole message is; `o` opens it in the
+  web console. A namespace whose events the token may not list is named in a notice
+  under the tab.
+- A resource the commit no longer has (a replaced pod) stays in its place, muted, with
+  `(removed)`. That is known once the live list has loaded; before, nothing is removed.
+  Enter opens its dialog on its events only: there is no log, object or console page for
+  it any more. A resource recreated under its old name is two rows: the one the commit
+  has, then the removed one.
 - A warning OpenShift has deleted (it keeps events for about 3 hours after they last
   happen) says `(cached)` after its resource, like a Build only the cache has. It is
   cached when its event's uid is missing from its namespace's last list; a list that

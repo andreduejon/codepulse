@@ -75,6 +75,12 @@ export const openshiftEventsDetail = detailEntry<OpenShiftDetailSource>({
       onMouseFocus={props.context.onMouseFocus}
       sha={props.context.sha}
       getCommitData={props.source.getCommitData}
+      fetchCommitData={props.source.fetchCommitData}
+      isLoading={props.source.isLoading}
+      liveAge={props.source.liveAge}
+      unavailableReason={props.context.unavailable("openshift", props.source.status)}
+      liveUnavailable={liveListFrozen(props.source)}
+      loading={props.source.status?.kind === "loading"}
       consoleUrl={props.source.consoleUrl}
       memory={scopedMemory(props.context.memory, "openshift")}
       isCached={props.source.warningIsCached}

@@ -1,24 +1,38 @@
 /**
  * OpenShift's Events tab: the warnings Kubernetes reported about a commit's resources, kept with the commit
- * (core/openshift/warnings.ts). By namespace, newest first, one line each; Enter opens its resource's events in the
- * resource dialog, where the whole message is.
+ * (core/openshift/warnings.ts), as a tree (events-tree.ts): namespace, resource, then its warnings. A resource the
+ * commit no longer has stays in its place, muted and marked removed. Enter on a resource or a warning opens the
+ * resource's events in the resource dialog, where the whole message is.
  */
-import { createEffect, createMemo, createSignal, For, Show, untrack } from "solid-js";
+import { createEffect, createMemo, createSignal, For, on, Show, untrack } from "solid-js";
 import type { OpenShiftCommitData, OpenShiftResource } from "../../../core/openshift/types";
 import { type OpenShiftWarning, resourceOfWarning } from "../../../core/openshift/warnings";
 import type { DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
 import { useT } from "../../hooks/use-t";
+import { BUSY } from "../../utils/busy-text";
 import { formatRelativeDate } from "../../utils/date";
-import { ProviderSummaryRow, ScrollingLabel, useDetailRowMouse } from "../shared/detail-rows";
+import { ProviderActionRow, ProviderSummaryRow, ScrollingLabel, useDetailRowMouse } from "../shared/detail-rows";
 import { useDetailTree } from "../shared/detail-tree";
 import { type RowShortcut, useOpenRowShortcut } from "../shared/open-row";
 import { openShiftConsoleUrl } from "./console";
 import { OPENSHIFT_EVENT_KINDS } from "./events";
+import { type EventsRow, eventsTreeRows, namespaceKey } from "./events-tree";
 
 export interface OpenShiftEventsTabProps {
   sha: string;
   getCommitData: (sha: string) => OpenShiftCommitData | null;
+  /** Read the commit again (`Reload commit`): its resources and the warnings. */
+  fetchCommitData?: (sha: string, force?: boolean) => Promise<void>;
+  isLoading?: (sha: string) => boolean;
+  /** How old the live list is (`live`). */
+  liveAge?: () => string;
+  /** Why it cannot load; null when it can. */
+  unavailableReason?: string | null;
+  /** An expired token stopped the live list until a Reload. */
+  liveUnavailable?: boolean;
+  /** The provider is fetching. */
+  loading?: boolean;
   mouseEnabled?: boolean;
   onMouseFocus?: () => void;
   /** Keeps closed namespaces while the tab is not shown (another tab, the other layout). */
@@ -29,51 +43,19 @@ export interface OpenShiftEventsTabProps {
   setDetailCursorAction: (action: string | null) => void;
   setDetailCursorIndex: (idx: number) => void;
   setDetailCursorShortcut?: (shortcut: RowShortcut | null) => void;
-  /** Web console URL from the settings; `o` opens the warning's resource there when it is set. */
+  /** Web console URL from the settings; `o` opens the resource there when it is set. */
   consoleUrl?: () => string;
   /** Whether only the cache has the warning (OpenShift deleted it): its row says `(cached)`. */
   isCached?: (warning: OpenShiftWarning) => boolean;
-  /** Whether the commit still has what the warning is about; one it no longer has is in the second section. */
+  /** Whether the commit still has what the warning is about; a resource it no longer has says `(removed)`. */
   isPresent?: (warning: OpenShiftWarning) => boolean;
-  /** Enter on a warning: its resource, with its events shown (only them, for one that is gone). */
+  /** Enter on a resource or a warning: the resource, with its events shown (only them, for a removed one). */
   onOpenResource?: (resource: OpenShiftResource, options: { eventsOnly: boolean }) => void;
 }
 
 export const OPENSHIFT_NO_WARNINGS = "No warnings about this commit's resources.";
 
-/** The commit's resources the warnings are about, and the ones it no longer has. */
-type Section = "present" | "gone";
-
-export const OPENSHIFT_GONE_SECTION = "resources no longer present";
-
-type FlatItem =
-  | { kind: "namespace"; section: Section; namespace: string }
-  | { kind: "warning"; section: Section; warning: OpenShiftWarning };
-
-const namespaceKey = (section: Section, namespace: string) => `namespace:${section}:${namespace}`;
-const itemKey = (item: FlatItem) =>
-  item.kind === "namespace" ? namespaceKey(item.section, item.namespace) : `warning:${item.warning.id}`;
-
-interface NamespaceGroup {
-  namespace: string;
-  warnings: OpenShiftWarning[];
-}
-
-/** Namespaces by name, so a new warning never moves them; each one's warnings newest first. */
-function byNamespace(warnings: readonly OpenShiftWarning[]): NamespaceGroup[] {
-  const groups = new Map<string, OpenShiftWarning[]>();
-  for (const entry of warnings) {
-    const list = groups.get(entry.namespace) ?? [];
-    list.push(entry);
-    groups.set(entry.namespace, list);
-  }
-  return [...groups.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([namespace, list]) => ({
-      namespace,
-      warnings: list.sort((a, b) => (b.lastSeen ?? "").localeCompare(a.lastSeen ?? "")),
-    }));
-}
+const RELOAD = "reload";
 
 /** The namespaces closed in one commit. */
 interface EventsMemory {
@@ -105,52 +87,68 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
     setCollapsed(next);
   };
 
-  const warnings = () => props.getCommitData(props.sha)?.warnings ?? [];
-  const present = (warning: OpenShiftWarning) => props.isPresent?.(warning) ?? true;
-  const sections = createMemo(() => ({
-    present: byNamespace(warnings().filter(present)),
-    gone: byNamespace(warnings().filter(warning => !present(warning))),
-  }));
-  const goneCount = () => sections().gone.reduce((sum, ns) => sum + ns.warnings.length, 0);
-  const flatItems = createMemo<FlatItem[]>(() =>
-    (["present", "gone"] as const).flatMap(section =>
-      sections()[section].flatMap(ns => [
-        { kind: "namespace" as const, section, namespace: ns.namespace },
-        ...(collapsed().has(namespaceKey(section, ns.namespace))
-          ? []
-          : ns.warnings.map(warning => ({ kind: "warning" as const, section, warning }))),
-      ]),
-    ),
-  );
-  const indexes = createMemo(() => new Map(flatItems().map((item, index) => [itemKey(item), index])));
+  const data = () => props.getCommitData(props.sha);
+  const warnings = () => data()?.warnings ?? [];
+  const commitLoading = () => props.isLoading?.(props.sha) ?? false;
+  const reloadBusy = () => commitLoading() || !!props.loading;
+  // An expired token only stops automatic fetches; Reload commit stays the explicit retry, as in Resources.
+  const reloadEnabled = () => !props.unavailableReason;
+
+  const rows = createMemo(() => eventsTreeRows(warnings(), warning => props.isPresent?.(warning) ?? true, collapsed()));
+  const byKey = createMemo(() => new Map(rows().map(row => [row.key, row])));
+  /** The cursor's stops: Reload commit, then every row of the tree. */
+  const keys = createMemo(() => [...(reloadEnabled() ? [RELOAD] : []), ...rows().map(row => row.key)]);
+  const indexes = createMemo(() => new Map(keys().map((key, index) => [key, index])));
   const indexOf = (key: string) => indexes().get(key) ?? -1;
   const cursored = (key: string) => props.detailFocused() && props.detailCursorIndex() === indexOf(key);
-  const current = () => flatItems()[props.detailCursorIndex()];
-  /** The resource a warning is about, when the resource dialog can show its events. */
+  const current = (): EventsRow | typeof RELOAD | undefined => {
+    const key = keys()[props.detailCursorIndex()];
+    return key === RELOAD ? RELOAD : key ? byKey().get(key) : undefined;
+  };
+  /** The resource a row is about, when the resource dialog can show its events. */
   const openable = (warning: OpenShiftWarning) => {
-    const resource = resourceOfWarning(warning, props.getCommitData(props.sha));
+    const resource = resourceOfWarning(warning, data());
     return resource && OPENSHIFT_EVENT_KINDS.has(resource.kind) ? resource : null;
   };
 
+  createEffect(() => {
+    const sha = props.sha;
+    if (props.unavailableReason || props.liveUnavailable || commitLoading() || data()?.liveFetched) return;
+    void props.fetchCommitData?.(sha);
+  });
+
+  // A refresh that adds or removes rows keeps the cursor on the row it was on.
+  createEffect(
+    on(keys, (next, previous) => {
+      if (!previous) return;
+      const key = previous[untrack(props.detailCursorIndex)];
+      const index = key ? next.indexOf(key) : -1;
+      if (index >= 0 && index !== untrack(props.detailCursorIndex)) props.setDetailCursorIndex(index);
+    }),
+  );
+
   const activate = () => {
-    const item = current();
-    if (item?.kind === "namespace") toggle(namespaceKey(item.section, item.namespace));
-    else if (item) {
-      const resource = openable(item.warning);
-      if (resource) props.onOpenResource?.(resource, { eventsOnly: item.section === "gone" });
+    const row = current();
+    if (row === RELOAD) {
+      if (reloadEnabled() && !reloadBusy()) void props.fetchCommitData?.(props.sha, true);
+    } else if (row?.kind === "namespace") toggle(namespaceKey(row.namespace));
+    else if (row) {
+      const resource = openable(row.warning);
+      if (resource) props.onOpenResource?.(resource, { eventsOnly: row.removed });
     }
     return false;
   };
-  const rows = useDetailRowMouse({
+  const mouse = useDetailRowMouse({
     mouseEnabled: () => props.mouseEnabled,
     onMouseFocus: props.onMouseFocus,
     setDetailCursorIndex: props.setDetailCursorIndex,
     activate,
+    inert: key => key === RELOAD && (!reloadEnabled() || reloadBusy()),
   });
-  const { mouseRow, hoverBg } = rows;
+  const { mouseRow, hoverBg } = mouse;
   const tree = useDetailTree({
     navRef: props.navRef,
-    keys: () => flatItems().map(itemKey),
+    keys,
     activate,
     detailCursorIndex: props.detailCursorIndex,
     setDetailCursorIndex: props.setDetailCursorIndex,
@@ -160,122 +158,126 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
     navRef: props.navRef,
     detailFocused: props.detailFocused,
     url: () => {
-      const item = current();
+      const row = current();
       const consoleUrl = props.consoleUrl?.() ?? "";
-      if (item?.kind === "namespace") return openShiftConsoleUrl(consoleUrl, { namespace: item.namespace });
-      // A resource that is gone has no console page.
-      const resource = item?.kind === "warning" && item.section === "present" ? openable(item.warning) : null;
+      if (!row || row === RELOAD) return null;
+      if (row.kind === "namespace") return openShiftConsoleUrl(consoleUrl, { namespace: row.namespace });
+      // A removed resource has no console page.
+      const resource = row.removed ? null : openable(row.warning);
       return resource ? openShiftConsoleUrl(consoleUrl, { namespace: resource.namespace, resource }) : null;
     },
     setDetailCursorShortcut: props.setDetailCursorShortcut,
   });
 
-  createEffect(() => {
-    const item = current();
-    if (!props.detailFocused() || !item) props.setDetailCursorAction(null);
-    else if (item.kind === "namespace")
-      props.setDetailCursorAction(collapsed().has(namespaceKey(item.section, item.namespace)) ? "expand" : "collapse");
-    else props.setDetailCursorAction(openable(item.warning) ? "events" : null);
-  });
-
-  const renderWarning = (warning: OpenShiftWarning, section: Section, lead: string, last: boolean) => {
-    const key = `warning:${warning.id}`;
-    const isCursored = () => cursored(key);
-    return (
-      <box
-        {...mouseRow(key, () => indexOf(key))}
-        ref={tree.ref(key)}
-        flexDirection="row"
-        width="100%"
-        backgroundColor={isCursored() ? t().backgroundElementActive : hoverBg(key)}
-      >
-        <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().border}>
-          {lead}
-          {last ? "└─ " : "├─ "}
-        </text>
-        <ScrollingLabel
-          selectable={!props.mouseEnabled}
-          text={warning.reason}
-          tail={`  ${warning.kind} ${warning.name}${props.isCached?.(warning) ? " (cached)" : ""}`}
-          tailFg={t().foregroundMuted}
-          active={isCursored()}
-          fg={isCursored() ? t().accent : section === "gone" ? t().foregroundMuted : t().foreground}
-          grow={false}
-        />
-        <box flexGrow={1} />
-        <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-          {warning.lastSeen ? `  ${formatRelativeDate(warning.lastSeen)}` : ""}
-        </text>
-      </box>
-    );
+  // Same wording as Resources: the row (re)loads this commit.
+  const reloadLabel = () => (data() ? "Reload commit" : "Load commit");
+  const reloadHint = () => (data() ? "reload" : "load");
+  const reloadStatus = () => {
+    if (props.liveUnavailable) return "";
+    if (reloadBusy()) return BUSY.fetchingEvents;
+    return props.liveAge?.() ?? "";
   };
 
-  const renderTree = (section: Section, namespaces: readonly NamespaceGroup[]) => (
-    <For each={namespaces}>
-      {(ns, nsIndex) => {
-        const key = namespaceKey(section, ns.namespace);
-        const isCursored = () => cursored(key);
-        const last = () => nsIndex() === namespaces.length - 1;
-        const open = () => !collapsed().has(key);
-        return (
-          <box flexDirection="column" width="100%">
-            <box
-              {...mouseRow(key, () => indexOf(key))}
-              ref={tree.ref(key)}
-              flexDirection="row"
-              width="100%"
-              backgroundColor={isCursored() ? t().backgroundElementActive : hoverBg(key)}
-            >
-              <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().border}>
-                {last() ? "└─ " : "├─ "}
-              </text>
-              <text
-                selectable={!props.mouseEnabled}
-                flexShrink={0}
-                wrapMode="none"
-                fg={isCursored() ? t().accent : t().foregroundMuted}
-              >
-                {open() ? "▾ " : "▸ "}
-              </text>
-              <ScrollingLabel
-                selectable={!props.mouseEnabled}
-                text={ns.namespace}
-                active={isCursored()}
-                fg={isCursored() ? t().accent : t().foreground}
-              />
-              <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                {String(ns.warnings.length).padStart(3)}
-              </text>
-            </box>
-            <Show when={open()}>
-              <For each={ns.warnings}>
-                {(warning, index) =>
-                  renderWarning(warning, section, last() ? "   " : "│  ", index() === ns.warnings.length - 1)
-                }
-              </For>
-            </Show>
-          </box>
-        );
-      }}
-    </For>
+  createEffect(() => {
+    const row = current();
+    if (!props.detailFocused() || !row) props.setDetailCursorAction(null);
+    else if (row === RELOAD) props.setDetailCursorAction(reloadEnabled() && !reloadBusy() ? reloadHint() : null);
+    else if (row.kind === "namespace") props.setDetailCursorAction(row.open ? "collapse" : "expand");
+    else props.setDetailCursorAction(openable(row.warning) ? "events" : null);
+  });
+
+  const lead = (prefix: string) => (
+    <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().border}>
+      {prefix}
+    </text>
+  );
+  /** A row's text: the cursor's accent, muted for a removed resource and its warnings. */
+  const fg = (key: string, muted: boolean) =>
+    cursored(key) ? t().accent : muted ? t().foregroundMuted : t().foreground;
+
+  const renderRow = (row: EventsRow) => (
+    <box
+      {...mouseRow(row.key, () => indexOf(row.key))}
+      ref={tree.ref(row.key)}
+      flexDirection="row"
+      width="100%"
+      backgroundColor={cursored(row.key) ? t().backgroundElementActive : hoverBg(row.key)}
+    >
+      {lead(row.prefix)}
+      {row.kind === "namespace" ? (
+        <>
+          <text
+            selectable={!props.mouseEnabled}
+            flexShrink={0}
+            wrapMode="none"
+            fg={cursored(row.key) ? t().accent : t().foregroundMuted}
+          >
+            {row.open ? "▾ " : "▸ "}
+          </text>
+          <ScrollingLabel
+            selectable={!props.mouseEnabled}
+            text={row.namespace}
+            active={cursored(row.key)}
+            fg={fg(row.key, false)}
+          />
+          <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+            {String(row.count).padStart(3)}
+          </text>
+        </>
+      ) : row.kind === "resource" ? (
+        <ScrollingLabel
+          selectable={!props.mouseEnabled}
+          text={`${row.resourceKind} ${row.name}`}
+          tail={row.removed ? " (removed)" : ""}
+          tailFg={t().foregroundMuted}
+          active={cursored(row.key)}
+          fg={fg(row.key, row.removed)}
+        />
+      ) : (
+        <>
+          <ScrollingLabel
+            selectable={!props.mouseEnabled}
+            text={row.warning.reason}
+            tail={props.isCached?.(row.warning) ? " (cached)" : ""}
+            tailFg={t().foregroundMuted}
+            active={cursored(row.key)}
+            fg={fg(row.key, row.removed)}
+            grow={false}
+          />
+          <box flexGrow={1} />
+          <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+            {row.warning.lastSeen ? `  ${formatRelativeDate(row.warning.lastSeen)}` : ""}
+          </text>
+        </>
+      )}
+    </box>
   );
 
   return (
     <box flexDirection="column" width="100%">
+      <ProviderActionRow
+        label={reloadLabel()}
+        status={reloadStatus()}
+        disabled={!reloadEnabled()}
+        cursored={cursored(RELOAD)}
+        mouseEnabled={props.mouseEnabled}
+        rows={mouse}
+        rowKey={RELOAD}
+        index={() => indexOf(RELOAD)}
+        rowRef={tree.ref(RELOAD)}
+      />
       <Show
         when={warnings().length > 0}
         fallback={
-          <text fg={t().foregroundMuted} wrapMode="word">
-            {OPENSHIFT_NO_WARNINGS}
-          </text>
+          <Show when={!!data()}>
+            <text fg={t().foregroundMuted} wrapMode="word">
+              {OPENSHIFT_NO_WARNINGS}
+            </text>
+          </Show>
         }
       >
-        <ProviderSummaryRow label="total warnings" count={warnings().length} />
-        {renderTree("present", sections().present)}
-        <Show when={goneCount() > 0}>
-          <ProviderSummaryRow label={OPENSHIFT_GONE_SECTION} count={goneCount()} />
-          {renderTree("gone", sections().gone)}
-        </Show>
+        <ProviderSummaryRow label="total events" count={warnings().length} />
+        <For each={rows()}>{renderRow}</For>
       </Show>
     </box>
   );

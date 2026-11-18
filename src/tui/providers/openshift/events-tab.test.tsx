@@ -1,4 +1,5 @@
 import { expect, mock, test } from "bun:test";
+import { RGBA } from "@opentui/core";
 import { testRender } from "@opentui/solid";
 import { createSignal } from "solid-js";
 import type { OpenShiftCommitData, OpenShiftResource } from "../../../core/openshift/types";
@@ -25,13 +26,13 @@ const warning = (overrides: Partial<OpenShiftWarning>): OpenShiftWarning => ({
 
 async function renderEventsTab(
   warnings: OpenShiftWarning[],
-  cached: readonly string[] = [],
-  gone: readonly string[] = [],
+  options: { cached?: readonly string[]; removed?: readonly string[] } = {},
 ) {
   const data: OpenShiftCommitData = { sha: SHA, liveFetched: true, namespaces: [], warnings };
   const [cursor, setCursor] = createSignal(0);
   const action = mock((_action: string | null) => {});
   const opened = mock((_resource: OpenShiftResource, _options?: { eventsOnly: boolean }) => {});
+  const fetchCommitData = mock(async (_sha: string, _force?: boolean) => {});
   const navRef: DetailNavRef = {
     itemCount: 0,
     itemRefs: [],
@@ -48,14 +49,16 @@ async function renderEventsTab(
           <OpenShiftEventsTab
             sha={SHA}
             getCommitData={() => data}
+            fetchCommitData={fetchCommitData}
+            liveAge={() => "live"}
             navRef={navRef}
             detailCursorIndex={cursor}
             detailFocused={() => true}
             setDetailCursorAction={action}
             setDetailCursorIndex={setCursor}
             onOpenResource={opened}
-            isCached={warning => cached.includes(warning.id)}
-            isPresent={warning => !gone.includes(warning.id)}
+            isCached={entry => options.cached?.includes(entry.id) ?? false}
+            isPresent={entry => !options.removed?.includes(entry.id)}
           />
         </box>
       </ThemeContext.Provider>
@@ -70,77 +73,135 @@ async function renderEventsTab(
   };
   await settle();
   const frame = () => setup.captureCharFrame();
-  const enter = () => navRef.activateCurrentItem();
-  return { ...setup, navRef, setCursor, settle, frame, enter, action, opened };
+  const lines = () =>
+    frame()
+      .split("\n")
+      .map(line => line.replace(/\s+/g, " ").trim())
+      .filter(Boolean);
+  /** Puts the cursor on the row with this text and presses Enter. The count line (the second) is no stop. */
+  const enterOn = async (text: string) => {
+    const line = lines().findIndex(entry => entry.includes(text));
+    setCursor(line === 0 ? 0 : line - 1);
+    await settle();
+    navRef.activateCurrentItem();
+    await settle();
+  };
+  const fgOf = (text: string) => {
+    const y = frame()
+      .split("\n")
+      .findIndex(line => line.includes(text));
+    return setup.captureSpans().lines[y]?.spans.find(span => span.text.includes(text))?.fg;
+  };
+  return {
+    ...setup,
+    setCursor,
+    settle,
+    frame,
+    lines,
+    enterOn,
+    fgOf,
+    action,
+    opened,
+    fetchCommitData,
+    theme: theme.theme(),
+  };
 }
 
-test("the commit's warnings by namespace, newest first: reason, resource and when", async () => {
+test("Reload commit, the count, then namespace, resource and its warnings, newest first", async () => {
   const t = await renderEventsTab([
     warning({ id: "event-1" }),
     warning({ id: "event-2", reason: "Unhealthy", message: "Readiness probe failed", lastSeen: minutesAgo(1) }),
     warning({ id: "event-3", namespace: "shop-dev", kind: "Build", name: "shop-api-41", reason: "BuildFailed" }),
   ]);
   try {
-    const lines = t
-      .frame()
-      .split("\n")
-      .map(line => line.replace(/\s+/g, " ").trim())
-      .filter(Boolean);
-    // Namespaces by name, so a new warning never moves them; the cursor is on the first namespace.
-    expect(lines.slice(0, 6)).toEqual([
-      "total warnings 3",
+    expect(t.lines()).toEqual([
+      "Reload commit live",
+      "total events 3",
       "├─ ▾ shop-dev 1",
-      "│ └─ BuildFailed Build shop-api-41 2m ago",
+      "│ └─ Build shop-api-41",
+      "│ └─ BuildFailed 2m ago",
       "└─ ▾ shop-test 2",
-      "├─ Unhealthy Pod shop-api-7d9f8-x2k4q 1m ago",
-      "└─ BackOff Pod shop-api-7d9f8-x2k4q 2m ago",
+      "└─ Pod shop-api-7d9f8-x2k4q",
+      "├─ Unhealthy 1m ago",
+      "└─ BackOff 2m ago",
     ]);
+    await t.enterOn("Reload commit");
+    expect(t.fetchCommitData).toHaveBeenLastCalledWith(SHA, true);
   } finally {
     t.renderer.destroy();
   }
 });
 
-test("a selected warning adds no lines: its message is in the resource dialog", async () => {
-  const t = await renderEventsTab([
-    warning({ id: "event-1", lastSeen: minutesAgo(5) }),
-    warning({ id: "event-2", reason: "Unhealthy", message: "Readiness probe failed", lastSeen: minutesAgo(1) }),
-  ]);
+test("a selected row adds no lines: the message is in the resource dialog", async () => {
+  const t = await renderEventsTab([warning({ id: "event-1" })]);
   try {
-    const before = t.frame();
-    for (const index of [1, 2]) {
+    const before = t.lines();
+    for (const index of [2, 3]) {
       t.setCursor(index);
       await t.settle();
-      expect(t.frame()).not.toMatch(/Readiness probe failed|Back-off restarting|times/);
-      // The rows stay where they were.
-      expect(
-        t
-          .frame()
-          .split("\n")
-          .map(line => line.trim()),
-      ).toEqual(before.split("\n").map(line => line.trim()));
+      expect(t.lines()).toEqual(before);
     }
+    expect(t.frame()).not.toMatch(/Back-off restarting|times/);
   } finally {
     t.renderer.destroy();
   }
 });
 
-test("Enter on a warning opens its resource's events; on a namespace it closes the namespace", async () => {
+test("Enter on a resource or a warning opens the resource's events; on a namespace it closes it", async () => {
   const t = await renderEventsTab([warning({})]);
   try {
-    t.setCursor(1);
-    await t.settle();
+    await t.enterOn("Pod shop-api-7d9f8-x2k4q");
     expect(t.action).toHaveBeenLastCalledWith("events");
-    t.enter();
-    expect(t.opened).toHaveBeenCalledWith(
+    expect(t.opened).toHaveBeenLastCalledWith(
       expect.objectContaining({ kind: "Pod", namespace: "shop-test", name: "shop-api-7d9f8-x2k4q" }),
       { eventsOnly: false },
     );
-    t.setCursor(0);
-    await t.settle();
-    t.enter();
-    await t.settle();
+    await t.enterOn("BackOff");
+    expect(t.opened).toHaveBeenCalledTimes(2);
+    await t.enterOn("shop-test");
     expect(t.frame()).toContain("▸ shop-test");
     expect(t.frame()).not.toContain("BackOff");
+  } finally {
+    t.renderer.destroy();
+  }
+});
+
+test("a removed resource keeps its place, muted and marked; Enter shows only its events", async () => {
+  const t = await renderEventsTab(
+    [
+      warning({ id: "event-1" }),
+      warning({ id: "event-2", name: "shop-api-7d9f8-oom7k", reason: "OOMKilling", lastSeen: minutesAgo(18) }),
+    ],
+    { removed: ["event-2"] },
+  );
+  try {
+    expect(t.lines().slice(2)).toEqual([
+      "└─ ▾ shop-test 2",
+      "├─ Pod shop-api-7d9f8-oom7k (removed)",
+      "│ └─ OOMKilling 18m ago",
+      "└─ Pod shop-api-7d9f8-x2k4q",
+      "└─ BackOff 2m ago",
+    ]);
+    const muted = RGBA.fromHex(t.theme.foregroundMuted);
+    expect(t.fgOf("OOMKilling")).toEqual(muted);
+    expect(t.fgOf("BackOff")).toEqual(RGBA.fromHex(t.theme.foreground));
+    await t.enterOn("OOMKilling");
+    expect(t.opened).toHaveBeenLastCalledWith(expect.objectContaining({ name: "shop-api-7d9f8-oom7k" }), {
+      eventsOnly: true,
+    });
+  } finally {
+    t.renderer.destroy();
+  }
+});
+
+test("a warning only the cache has says (cached)", async () => {
+  const t = await renderEventsTab(
+    [warning({ id: "event-1" }), warning({ id: "event-2", reason: "OOMKilling", lastSeen: minutesAgo(300) })],
+    { cached: ["event-2"] },
+  );
+  try {
+    expect(t.lines().find(line => line.includes("OOMKilling"))).toContain("OOMKilling (cached)");
+    expect(t.lines().find(line => line.includes("BackOff"))).not.toContain("(cached)");
   } finally {
     t.renderer.destroy();
   }
@@ -149,10 +210,8 @@ test("Enter on a warning opens its resource's events; on a namespace it closes t
 test("a warning about a resource without events of its own (a ReplicaSet) has no Enter", async () => {
   const t = await renderEventsTab([warning({ kind: "ReplicaSet", name: "shop-api-7d9f8", reason: "FailedCreate" })]);
   try {
-    t.setCursor(1);
-    await t.settle();
+    await t.enterOn("FailedCreate");
     expect(t.action).toHaveBeenLastCalledWith(null);
-    t.enter();
     expect(t.opened).not.toHaveBeenCalled();
   } finally {
     t.renderer.destroy();
@@ -163,65 +222,6 @@ test("no warnings says so", async () => {
   const t = await renderEventsTab([]);
   try {
     expect(t.frame()).toContain("No warnings about this commit's resources.");
-  } finally {
-    t.renderer.destroy();
-  }
-});
-
-test("a warning only the cache has says (cached) after its resource, muted", async () => {
-  const t = await renderEventsTab(
-    [warning({ id: "event-1" }), warning({ id: "event-2", reason: "OOMKilling", lastSeen: minutesAgo(300) })],
-    ["event-2"],
-  );
-  try {
-    const row = (text: string) =>
-      t
-        .frame()
-        .split("\n")
-        .find(line => line.includes(text)) ?? "";
-    expect(row("OOMKilling")).toContain("Pod shop-api-7d9f8-x2k4q (cached)");
-    expect(row("BackOff")).not.toContain("(cached)");
-  } finally {
-    t.renderer.destroy();
-  }
-});
-
-test("warnings about resources the commit no longer has are in a section of their own; Enter shows only events", async () => {
-  const t = await renderEventsTab(
-    [
-      warning({ id: "event-1" }),
-      warning({ id: "event-2", name: "shop-api-7d9f8-oom7k", reason: "OOMKilling", lastSeen: minutesAgo(18) }),
-    ],
-    [],
-    ["event-2"],
-  );
-  try {
-    const lines = t
-      .frame()
-      .split("\n")
-      .map(line => line.replace(/\s+/g, " ").trim())
-      .filter(Boolean);
-    expect(lines.slice(0, 6)).toEqual([
-      "total warnings 2",
-      "└─ ▾ shop-test 1",
-      "└─ BackOff Pod shop-api-7d9f8-x2k4q 2m ago",
-      "resources no longer present 1",
-      "└─ ▾ shop-test 1",
-      "└─ OOMKilling Pod shop-api-7d9f8-oom7k 18m ago",
-    ]);
-    // Cursor order: present namespace, its warning, then the other section's namespace and warning.
-    t.setCursor(3);
-    await t.settle();
-    t.enter();
-    expect(t.opened).toHaveBeenLastCalledWith(expect.objectContaining({ name: "shop-api-7d9f8-oom7k" }), {
-      eventsOnly: true,
-    });
-    t.setCursor(1);
-    await t.settle();
-    t.enter();
-    expect(t.opened).toHaveBeenLastCalledWith(expect.objectContaining({ name: "shop-api-7d9f8-x2k4q" }), {
-      eventsOnly: false,
-    });
   } finally {
     t.renderer.destroy();
   }
