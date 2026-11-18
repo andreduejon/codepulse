@@ -510,3 +510,54 @@ test("Enter on Info for a commit outside the graph does nothing, also after Info
     await d.dispose();
   }
 });
+
+test("each view keeps its details across a trip to the other: tab, cursor and focus as they were left", async () => {
+  const sha = "e".repeat(40);
+  const d = await launchDashboard({ width: 200, shas: [sha], events: [{ ...outsideEvent, sha }] });
+  try {
+    // The Dashboard: the event's Info tab with the keyboard.
+    await d.press("ARROW_RIGHT");
+    await d.press("ARROW_RIGHT");
+    for (let tries = 0; tries < 5; tries++) await d.setup.flush();
+    expect(d.state.detailActiveTab()).toBe("info");
+    expect(d.state.detailFocused()).toBe(true);
+    // The graph in GitHub's view: its Info tab, the cursor on its third row, with the keyboard.
+    d.actions.setActiveProviderView("github-actions");
+    await d.setup.flush();
+    d.actions.setDetailActiveTab("info");
+    d.actions.setDetailCursorIndex(2);
+    d.actions.setDetailFocused(true);
+    await d.setup.flush();
+
+    d.actions.setActiveProviderView("dashboard");
+    for (let tries = 0; tries < 5; tries++) await d.setup.flush();
+    expect(d.state.detailActiveTab()).toBe("info");
+    expect(d.state.detailFocused()).toBe(true);
+
+    d.actions.setActiveProviderView("github-actions");
+    for (let tries = 0; tries < 5; tries++) await d.setup.flush();
+    expect(d.state.detailActiveTab()).toBe("info");
+    expect(d.state.detailCursorIndex()).toBe(2);
+    expect(d.state.detailFocused()).toBe(true);
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("in the compact layout, the Dashboard's details dialog opens again when it comes back with them focused", async () => {
+  const sha = "e".repeat(40);
+  const d = await launchDashboard({ width: 120, shas: [sha], events: [{ ...outsideEvent, sha }] });
+  try {
+    await d.press("RETURN");
+    expect(d.frame()).toContain("esc close");
+    d.actions.setActiveProviderView("git");
+    for (let tries = 0; tries < 5; tries++) await d.setup.flush();
+    expect(d.frame()).not.toContain("esc close");
+    d.actions.setActiveProviderView("dashboard");
+    for (let tries = 0; tries < 5; tries++) await d.setup.flush();
+    expect(d.frame()).toContain("esc close");
+    expect(d.state.detailFocused()).toBe(true);
+  } finally {
+    await d.dispose();
+  }
+});

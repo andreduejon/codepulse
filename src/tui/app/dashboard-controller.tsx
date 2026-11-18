@@ -105,12 +105,10 @@ export function useDashboardController(opts: {
     if (dashboardShown() && event) providers.dashboardSelected(event);
   });
   const dashboardAppName = () => dashboardApp().name;
-  // No commit details or graph search beside the dashboard; its own details leave with it.
+  // No graph search beside the dashboard; its compact details dialog leaves with it (its details keep their state).
   createEffect(() => {
-    if (dashboardShown()) {
-      setDetail.setDetailFocused(false);
-      untrack(opts.closeSearch);
-    } else if (untrack(dialog) === "dashboard-event") setDialog(null);
+    if (dashboardShown()) untrack(opts.closeSearch);
+    else if (untrack(dialog) === "dashboard-event") setDialog(null);
   });
   let dashboardDialogScrollbox: ScrollBoxRenderable | undefined;
 
@@ -172,15 +170,14 @@ export function useDashboardController(opts: {
     });
     return true;
   };
-  // Another event, or the dashboard shown again: its first tab, at the top, and the events keep the keyboard. A re-read
-  // gives the same event as a new object: only another id counts (a mutable ref, so it outlives the effect's runs).
+  // Another event: its first tab, at the top, and the events keep the keyboard. The same event shown again (a re-read
+  // gives a new object, or the dashboard comes back) keeps its details as they were left: only another id counts (a
+  // mutable ref, so it outlives the effect's runs and the dashboard's absence).
   const shownEvent = { key: null as string | null };
   createEffect(() => {
     const id = dashboard.selected()?.id ?? null;
-    const key = dashboardShown() && id !== null ? id : null;
-    if (key === shownEvent.key) return;
-    shownEvent.key = key;
-    if (key === null) return;
+    if (!dashboardShown() || id === null || id === shownEvent.key) return;
+    shownEvent.key = id;
     untrack(() => {
       batch(() => {
         setDetail.setDetailCursorAction(null);

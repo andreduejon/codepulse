@@ -70,17 +70,24 @@ export function useDetailLoader({
   const graphDetail = state.detailFor("graph");
   const setGraphDetail = actions.detailFor("graph");
 
-  // Another selected commit (or another view, which may load what the details show): its tab, then its details.
+  // Another selected commit (or another view, which may load what the details show): its tab, then its details. Back
+  // from the Dashboard on the same commit in the same view, the details are as they were left (a mutable ref: it
+  // outlives the effect's runs while the Dashboard shows).
+  const shownFor = { path: "", hash: null as string | null, view: null as string | null };
   createEffect(() => {
-    repoPath();
+    const path = repoPath();
     const commit = state.selectedCommit();
     const activeProvider = state.activeProviderView();
+    // The Dashboard has details of its own: the graph's wait for it to go.
+    if (activeProvider === "dashboard") return;
+    const hash = commit?.hash ?? null;
+    if (path === shownFor.path && hash === shownFor.hash && activeProvider === shownFor.view) return;
+    Object.assign(shownFor, { path, hash, view: activeProvider });
     /*
      * The tab starts over, except on a jump to a child or parent: walking the graph keeps the Details tab. The jump's
-     * flag is set around the cursor change, and this effect runs inside it. A provider's default tab needs a provider
-     * view: while the Dashboard shows, the graph's tab waits for one.
+     * flag is set around the cursor change, and this effect runs inside it.
      */
-    if (commit && !getIsJumpNavigation() && activeProvider !== "dashboard") {
+    if (commit && !getIsJumpNavigation()) {
       setGraphDetail.setDetailActiveTab(getDefaultDetailTab(commit, activeProvider, state.providers.set));
       setGraphDetail.setDetailCursorIndex(0);
       detailNavRef.pendingJumpDirection = null;
