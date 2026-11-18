@@ -1,5 +1,5 @@
 import { expect, spyOn, test } from "bun:test";
-import { runGit } from "../src/git/repo-git";
+import { runGit } from "../src/adapters/git/repo-git";
 
 test("Windows Git abort kills and awaits helper process tree without shell interpolation", async () => {
   const platform = Object.getOwnPropertyDescriptor(process, "platform");

@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import {
-  buildGitHubProviderItems,
-  buildJenkinsProviderItems,
-  buildOpenShiftProviderItems,
-  buildSnykProviderItems,
-} from "../src/hooks/menu-provider-items";
-import { KEYBINDS } from "../src/keybinds";
+import { helpRows, KEYBINDS } from "../src/tui/keybinds";
+import { buildGitHubProviderItems } from "../src/tui/providers/github-actions/menu-items";
+import { buildJenkinsProviderItems } from "../src/tui/providers/jenkins/menu-items";
+import { buildOpenShiftProviderItems } from "../src/tui/providers/openshift/menu-items";
+import { buildSnykProviderItems } from "../src/tui/providers/snyk/menu-items";
+import { BUILT_IN_MODULES } from "./test-helpers";
+
+/** Help → Providers: each provider's section from its module. */
+const PROVIDER_HELP = helpRows("providers", BUILT_IN_MODULES);
 
 function sectionKeys(label: string): string[] {
   const rows = KEYBINDS.general;
@@ -37,7 +39,7 @@ describe("help reference", () => {
   });
 
   test("help text stays short: no semicolons or long dashes", () => {
-    const texts = Object.values(KEYBINDS)
+    const texts = [KEYBINDS.general, KEYBINDS.commands, PROVIDER_HELP]
       .flat()
       .flatMap(row => (row.kind === "binding" ? [row.desc] : row.kind === "section" ? [row.label] : []));
     for (const text of texts) expect(text).not.toMatch(/[;—–]/);
@@ -49,13 +51,13 @@ describe("help reference", () => {
   });
 
   test("provider help uses the menu's section and row names", () => {
-    const headers = KEYBINDS.providers.flatMap(row => (row.kind === "section" ? [row.label] : []));
+    const headers = PROVIDER_HELP.flatMap(row => (row.kind === "section" ? [row.label] : []));
     const menus = [
       buildGitHubProviderItems(
         {
           enabled: true,
           tokenEnvVar: "GITHUB_TOKEN",
-          trustedEnterpriseHost: null,
+          trustedEnterpriseHost: undefined,
           fetchDepth: 20,
           cacheLimit: 20,
           autoRefreshSeconds: 120,
@@ -90,11 +92,11 @@ describe("help reference", () => {
     for (const items of menus) {
       const header = items.find(item => item.kind === "header")?.label ?? "";
       expect(headers).toContain(header);
-      const start = KEYBINDS.providers.findIndex(row => row.kind === "section" && row.label === header);
-      const end = KEYBINDS.providers.findIndex((row, index) => index > start && row.kind === "section");
-      const helpKeys = KEYBINDS.providers
-        .slice(start + 1, end < 0 ? undefined : end)
-        .flatMap(row => (row.kind === "binding" ? [row.key] : []));
+      const start = PROVIDER_HELP.findIndex(row => row.kind === "section" && row.label === header);
+      const end = PROVIDER_HELP.findIndex((row, index) => index > start && row.kind === "section");
+      const helpKeys = PROVIDER_HELP.slice(start + 1, end < 0 ? undefined : end).flatMap(row =>
+        row.kind === "binding" ? [row.key] : [],
+      );
       for (const item of items) {
         if (item.kind === "header" || item.kind === "copyable" || !("label" in item)) continue;
         expect(helpKeys).toContain(item.label);

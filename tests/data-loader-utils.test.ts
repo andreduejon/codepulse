@@ -1,6 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { UNCOMMITTED_HASH } from "../src/constants";
-import type { GraphRow } from "../src/git/types";
 import {
   buildStashByParent,
   computeSilentMaxCount,
@@ -8,7 +6,9 @@ import {
   findCurrentHeadHash,
   injectUncommittedNode,
   isStaleResult,
-} from "../src/utils/data-loader-utils";
+} from "../src/core/git/loading";
+import type { GraphRow } from "../src/core/git/types";
+import { UNCOMMITTED_HASH } from "../src/core/git/types";
 import { makeCommit } from "./test-helpers";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

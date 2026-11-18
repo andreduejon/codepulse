@@ -1,0 +1,141 @@
+=== shot 1: dialog (160x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                                            Author         Date
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+    █                           bf08113   dev   origin/dev  feat(api): export request metrics                                   Demo Dev       5m ago
+    │
+    █                           e6209dd  fea     Details                                              esc close                 Demo Dev       50m ago
+    │
+    █                           3447db9   v0     ──────────────────────────────────────────────────────────────     README fo…  Noah Park      1h ago
+    │                                                        Files (6)                         Info
+    │ █                         6adc455   fe     ──────────────────────────────────────────────────────────────     s): retry…  Mei Chen       6h ago
+    │ │                                          total lines changed                                    +267 -5
+    █─╯                         64ddc8a  fea     ├─ ▾ src/payments/                                                 ct long en  Demo Dev       7h ago
+    │                                            │  ├─ gateway-client-with-a-long-file-name.test.ts   A +170 -0
+    █                           917f7b3  per     │  ├─ gateway.ts                                     M   +2 -2                 Noah Park      20h ago
+    │                                            │  ├─ retry.test.ts                                  A  +47 -0
+    █─╮                         1bb16fb  Mer     │  └─ retry.ts                                       A  +34 -0                 Sam O'Brien    2d ago
+    │ │                                          ├─ package-lock.json                                 M   +9 -2
+    │ █                         0166f71  fea     └─ package.json                                      M   +5 -1                 Sam O'Brien    2d ago
+    │ │
+    │ █─╮                       5245790  Mer                                                                                    Sam O'Brien    2d ago
+    │ │ │
+    │ █ │                       484821c  fea                                                                                    Sam O'Brien    3d ago
+    │ │ │
+    │ █ │                       3ad11a2  fea                                                                                    Sam O'Brien    3d ago
+    │ │ │
+    █─┼─┼─╮                     fe7db4d  Mer                                                                                    Mei Chen       2d ago
+    │ │ │ │
+    │ │ │ █                     9d1b361  fix                                                                                    Mei Chen       2d ago
+    │ │ │ │
+    │ │ │ █                     cce93f9  fea                                                                                    Mei Chen       4d ago
+    │ │ │ │
+    │ │ │ █─╮                   ae57e03  Mer                                                                                    Mei Chen       6d ago
+    │ │ │ │ │
+    │ │ │ █ │                   a89a18f  fea                                                                                    Mei Chen       6d ago
+    │ │ │ │ │
+    │ │ │ █ │                   52defc5  fea                                                                                    Mei Chen       20. Feb 13:30
+
+  │
+  │   Dashboard   Git   GitHub   Jenkins   O                                                                              normal   search   path   ancestry
+  │                                                              enter collapse · ←/→ switch tab · ↑/↓ navigate
+  │   customer-notification-service   shop                                                                                                main   86 commits
+  │
+
+                                                                                        tab GitHub · enter collapse · esc back · ←/→ switch tab · ↑/↓ navigate
+
+
+=== shot 2: info (160x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                                            Author         Date
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+    █                           bf08113   dev   origin/dev  feat(api): export request metrics                                   Demo Dev       5m ago
+    │
+    █                           e6209dd  fea     Details                                              esc close                 Demo Dev       50m ago
+    │
+    █                           3447db9   v0     ──────────────────────────────────────────────────────────────     README fo…  Noah Park      1h ago
+    │                                                        Files (6)                         Info
+    │ █                         6adc455   fe     ──────────────────────────────────────────────────────────────     s): retry…  Mei Chen       6h ago
+    │ │                                          Branch
+    █─╯                         64ddc8a  fea      main                                                    ↑0 ↓0     ct long en  Demo Dev       7h ago
+    │
+    █                           917f7b3  per     Commit                                                                         Noah Park      20h ago
+    │                                            64ddc8a07e61b0859d0645dde49bb4051b24e341
+    █─╮                         1bb16fb  Mer                                                                                    Sam O'Brien    2d ago
+    │ │                                          Author
+    │ █                         0166f71  fea     Demo Dev <demo.dev@demo.invalid>                                               Sam O'Brien    2d ago
+    │ │
+    │ █─╮                       5245790  Mer     Date                                                                           Sam O'Brien    2d ago
+    │ │ │                                        Mon, Mar 2, 2026 at 02:30 AM
+    │ █ │                       484821c  fea                                                                                    Sam O'Brien    3d ago
+    │ │ │                                        Subject
+    │ █ │                       3ad11a2  fea     feat(payments): retry failed ...ct long enough to need cutting                 Sam O'Brien    3d ago
+    │ │ │
+    █─┼─┼─╮                     fe7db4d  Mer     Body                                                                           Mei Chen       2d ago
+    │ │ │ │                                      Timeouts and 5xx answers are retried after 1s and 2s with the
+    │ │ │ █                     9d1b361  fix     same idempotency key, so the gateway charges at                                Mei Chen       2d ago
+    │ │ │ │                                      most once. 4xx answers are final.
+    │ │ │ █                     cce93f9  fea                                                                                    Mei Chen       4d ago
+    │ │ │ │                                      Closes #52
+    │ │ │ █─╮                   ae57e03  Mer                                                                                    Mei Chen       6d ago
+    │ │ │ │ │                                    ▾ Children (2)
+    │ │ │ █ │                   a89a18f  fea       3447db9  main                                                                Mei Chen       6d ago
+    │ │ │ │ │                                      6adc455
+    │ │ │ █ │                   52defc5  fea                                                                                    Mei Chen       20. Feb 13:30
+                                                    feature/payments-retry-with-a-really-long-branch-name
+  │
+  │   Dashboard   Git   GitHub   Jenkins   O                                                                              normal   search   path   ancestry
+  │                                                                  enter copy · ←/→ switch tab · ↑/↓ navigate
+  │   customer-notification-service   shop                                                                                                main   86 commits
+  │
+
+                                                                                            tab GitHub · enter copy · esc back · ←/→ switch tab · ↑/↓ navigate
+
+
+=== shot 3: closed (160x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                                            Author         Date
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+    █                           bf08113   dev   origin/dev  feat(api): export request metrics                                   Demo Dev       5m ago
+    │
+    █                           e6209dd  feat(api): add a health endpoint                                                       Demo Dev       50m ago
+    │
+    █                           3447db9   v0.42.0   main   origin/main   origin/HEAD   stash (1)  docs: rewrite the README fo…  Noah Park      1h ago
+    │
+    │ █                         6adc455   feature/payments-retry-with-…   origin/feature/payments-retr…  wip(payments): retry…  Mei Chen       6h ago
+    │ │
+    █─╯                         64ddc8a  feat(payments): retry failed payments with exponential backoff, and a subject long en  Demo Dev       7h ago
+    │
+    █                           917f7b3  perf(cart): cache price lookups                                                        Noah Park      20h ago
+    │
+    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                                          Sam O'Brien    2d ago
+    │ │
+    │ █                         0166f71  feat(i18n): add French                                                                 Sam O'Brien    2d ago
+    │ │
+    │ █─╮                       5245790  Merge branch 'main' into feature/i18n                                                  Sam O'Brien    2d ago
+    │ │ │
+    │ █ │                       484821c  feat(i18n): add German                                                                 Sam O'Brien    3d ago
+    │ │ │
+    │ █ │                       3ad11a2  feat(i18n): extract the checkout strings                                               Sam O'Brien    3d ago
+    │ │ │
+    █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                                         Mei Chen       2d ago
+    │ │ │ │
+    │ │ │ █                     9d1b361  fix(search): ignore accents                                                            Mei Chen       2d ago
+    │ │ │ │
+    │ │ │ █                     cce93f9  feat(search): search as you type                                                       Mei Chen       4d ago
+    │ │ │ │
+    │ │ │ █─╮                   ae57e03  Merge branch 'main' into feature/search                                                Mei Chen       6d ago
+    │ │ │ │ │
+    │ │ │ █ │                   a89a18f  feat(search): highlight matching words                                                 Mei Chen       6d ago
+    │ │ │ │ │
+    │ │ │ █ │                   52defc5  feat(search): rank results by popularity                                               Mei Chen       20. Feb 13:30
+
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                                               normal   search   path   ancestry
+  │
+  │   customer-notification-service   shop   shop-web                                                                                     main   86 commits
+  │
+
+                                                                                          tab GitHub · enter details · shift ←/→ switch project · ↑/↓ navigate
+
+

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { addDebugEvent, clearDebugEvents, getDebugEvents, redactDebugValue } from "../src/debug/events";
+import { addDebugEvent, clearDebugEvents, getDebugEvents, redactDebugValue } from "../src/core/debug-events";
 
 afterEach(() => clearDebugEvents());
 

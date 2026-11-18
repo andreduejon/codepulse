@@ -54,6 +54,31 @@
   Only child components rendered *inside* the Provider's JSX subtree can safely
   call `useContext()`.
 
+## Layers
+
+`src` has four layers, one folder each ([docs/architecture.md](docs/architecture.md) has the details):
+
+| Folder | What | May import |
+|--------|------|------------|
+| `src/core` | the app's logic and its ports: plain TypeScript, no Solid, OpenTUI, Bun or Node runtime APIs | core |
+| `src/adapters` | what implements the ports: Git, HTTP, the SQLite cache, the settings file, the system | core, adapters |
+| `src/tui` | the terminal front end: Solid and OpenTUI | core, tui |
+| root: `src/*.ts`, `src/cli` | `main.tsx`, `ports.ts`: builds the adapters and hands them to the front end | everything |
+
+`src/layers.test.ts` checks every import against this table, and the linter refuses the same by folder name. What core
+needs from outside (Git, requests, the app's state, the time) comes in through its ports, so it runs in a plain test;
+a Solid hook in `src/tui` adapts a core service (`core/git/data-service.ts` and `tui/hooks/use-data-loader.ts`). New
+logic that doesn't draw goes in `src/core`; a new way to reach the outside is a port in core and an adapter in
+`src/adapters`, built in `src/ports.ts`. A new provider is its own files in each layer (a definition in core, its
+adapters, its terminal module), listed once in `src/providers.ts`; no other file needs to name it.
+
+## Keys
+
+Every key handler goes through `src/tui/keyboard/dispatcher.ts`, never OpenTUI's `useKeyboard` (the linter refuses it in
+`src`). The newest handler sees a key first. A dialog or a screen uses `useModalKeys`: nothing beneath it, the app's
+keys included, sees a key while it is open, so it handles Esc itself. Other handlers use `useKeys` and can keep one key
+from those below with `stopPropagation()`. A handler removed while a key is handled never sees that key.
+
 ## Checking UI changes
 
 Check a UI change in the demo before calling it done: `bun run demo` runs codepulse on made-up data, and `--play`
@@ -64,8 +89,17 @@ bun run demo --play 'j j enter tab wait:"CI #812" shot'      # the screen after 
 bun run demo --github error:401 --play 'tab sleep:500 shot'  # a provider failing
 bun run demo --colors --play 'click:Dashboard sleep:2000 shot' # each color named: «severityHigh:3 high»
 bun run demo --play "$(cat play.txt)" > after.txt            # the same play prints the same screens: diff it
+bun run demo:golden                                          # the kept screens: a refactoring changes none
 ```
 
 - A play that fails prints the step, why and the screen, and exits with 1.
+- `bun run demo:golden` must pass after a refactoring. After a UI change, `bun run demo:golden --update` writes the
+  new screens; check their diff shows only the intended change.
 - When a state you need is missing, add it to `scripts/demo/scenario.ts` (or `packages.ts`) instead of testing
   against a real server.
+
+## Checking performance
+
+`bun run bench --compare` measures speed and memory on large generated repositories and prints each number beside
+the baseline's (see [docs/bench.md](docs/bench.md)). Run it before and after a change that touches loading,
+rendering, caches or memory. Compare on the same machine only.

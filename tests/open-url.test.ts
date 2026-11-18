@@ -1,5 +1,5 @@
 import { expect, spyOn, test } from "bun:test";
-import { openUrl } from "../src/utils/open-url";
+import { openUrl } from "../src/adapters/system/open-url";
 
 test("Windows browser opener keeps URL metacharacters out of executable script", () => {
   const platform = Object.getOwnPropertyDescriptor(process, "platform");

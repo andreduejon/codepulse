@@ -6,7 +6,7 @@
  * The uncommitted node is the only synthetic commit in the commit list.
  */
 import { describe, expect, test } from "bun:test";
-import { buildGraph } from "../src/git/graph";
+import { buildGraph } from "../src/core/git/graph";
 import { assertDefined, findRow, makeCommit, printGraph } from "./test-helpers";
 
 describe("Uncommitted Changes Node", () => {

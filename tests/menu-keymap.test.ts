@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { routeMenuKey } from "../src/components/dialogs/menu-keymap";
+import { routeMenuKey } from "../src/tui/components/dialogs/menu-keymap";
 
 describe("menu keymap", () => {
   it("closes from normal mode on escape", () => {

@@ -3,12 +3,13 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createEffect, createRoot, createSignal, untrack } from "solid-js";
-import type { DetailNavRef } from "../src/components/detail-types";
-import { isUncommittedHash } from "../src/constants";
-import { createAppState } from "../src/context/state";
-import { runGit } from "../src/git/repo";
-import { useDataLoader } from "../src/hooks/use-data-loader";
-import { useDetailLoader } from "../src/hooks/use-detail-loader";
+import { gitCli } from "../src/adapters/git/git-cli";
+import { runGit } from "../src/adapters/git/repo";
+import { isUncommittedHash } from "../src/core/git/types";
+import type { DetailNavRef } from "../src/tui/components/detail-types";
+import { createAppState } from "../src/tui/context/state";
+import { useDataLoader } from "../src/tui/hooks/use-data-loader";
+import { useDetailLoader } from "../src/tui/hooks/use-detail-loader";
 
 const roots: string[] = [];
 const disposers: (() => void)[] = [];
@@ -41,10 +42,11 @@ function mount(repoPath: string, maxCount: number, withDetail = false, getCommit
     disposers.push(dispose);
     const { state, actions } = createAppState(maxCount, 0, 0);
     const [path, setPath] = createSignal(repoPath);
-    const loader = useDataLoader({ repoPath: path, state, actions });
+    const loader = useDataLoader({ repoPath: path, git: gitCli(), state, actions });
     if (withDetail) {
       useDetailLoader({
         repoPath: path,
+        git: gitCli(),
         state,
         actions,
         getIsJumpNavigation: () => false,
@@ -226,7 +228,7 @@ test("a failed page of older history says so, and the next page attempt clears i
   const { root } = await makeRepo(["c1", "c2", "c3"]);
   const { state, loader } = mount(root, 2);
   await until(() => !state.loading() && state.commits().length > 0, "first page");
-  const repoModule = await import("../src/git/repo");
+  const repoModule = await import("../src/adapters/git/repo");
   const fail = spyOn(repoModule, "getCommits").mockRejectedValueOnce(new Error("fatal: bad object"));
   try {
     await loader.loadMoreData();
@@ -257,7 +259,7 @@ test("a history page that finishes after a branch switch does not merge into the
   await git("switch", "main");
   const { state, actions, loader } = mount(root, 2);
   await until(() => !state.loading() && state.commits().length > 0, "first page");
-  const repoModule = await import("../src/git/repo");
+  const repoModule = await import("../src/adapters/git/repo");
   const real = repoModule.getCommits;
   let release!: () => void;
   const gate = new Promise<void>(resolve => (release = resolve));
@@ -303,7 +305,7 @@ test("cancelling a history page for a branch switch does not let the graph start
       untrack(() => void loader.loadMoreData());
     });
   });
-  const repoModule = await import("../src/git/repo");
+  const repoModule = await import("../src/adapters/git/repo");
   const real = repoModule.getCommits;
   let release!: () => void;
   const gate = new Promise<void>(resolve => (release = resolve));
@@ -328,4 +330,43 @@ test("cancelling a history page for a branch switch does not let the graph start
   } finally {
     spy.mockRestore();
   }
+});
+
+test("a refresh with the same commits still shows a changed remote URL, tag message and stash", async () => {
+  const { root, git } = await makeRepo(["one", "two"]);
+  await git("tag", "-a", "v1", "-m", "first message");
+  await writeFile(join(root, "file.txt"), "stashed\n");
+  await git("stash", "push", "-m", "first stash");
+  const { state, loader } = mount(root, 50);
+  await until(() => !state.loading() && state.commits().length > 0, "load");
+  const stashSubjects = () => [...state.stashByParent().values()].flat().map(stash => stash.subject);
+  expect(state.tagDetails().get("v1")?.message).toBe("first message");
+  expect(stashSubjects()).toEqual(["On main: first stash"]);
+
+  // The commits and refs stay the same: the tag moves to the same commit, one stash replaces the other.
+  await git("remote", "add", "origin", "https://github.com/o/r.git");
+  await git("tag", "-f", "-a", "v1", "-m", "second message");
+  await git("stash", "drop");
+  await writeFile(join(root, "file.txt"), "stashed again\n");
+  await git("stash", "push", "-m", "second stash");
+  await loader.loadData(undefined, undefined, true, true);
+
+  expect(state.remoteUrl()).toBe("https://github.com/o/r.git");
+  expect(state.tagDetails().get("v1")?.message).toBe("second message");
+  expect(stashSubjects()).toEqual(["On main: second stash"]);
+});
+
+test("a refresh shows the selected uncommitted row's new files, also while the working tree stays dirty", async () => {
+  const { root } = await makeRepo(["base"]);
+  await writeFile(join(root, "file.txt"), "dirty\n");
+  const { state, actions, loader } = mount(root, 50, true);
+  await until(() => !state.loading() && state.commits().length > 0, "load");
+  actions.setCursorIndex(state.graphRows().findIndex(row => isUncommittedHash(row.commit.hash)));
+  await until(() => state.uncommittedDetail() !== null, "uncommitted detail");
+  expect(state.uncommittedDetail()?.untracked.map(file => file.path)).toEqual([]);
+
+  await writeFile(join(root, "new.txt"), "new\n");
+  await loader.loadData(undefined, undefined, true, true);
+  await until(() => (state.uncommittedDetail()?.untracked.length ?? 0) > 0, "the new file");
+  expect(state.uncommittedDetail()?.untracked.map(file => file.path)).toEqual(["new.txt"]);
 });

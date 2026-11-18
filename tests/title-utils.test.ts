@@ -7,7 +7,7 @@ import {
   middleTruncate,
   splitPath,
   TITLE_SEP,
-} from "../src/components/dialogs/title-utils";
+} from "../src/tui/components/dialogs/title-utils";
 
 describe("getDialogTitleContentWidth", () => {
   test("reserves title padding and close hint", () => {

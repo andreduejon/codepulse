@@ -2,8 +2,8 @@ import { expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getFileBlame, getFileContent, getFileDiff } from "../src/git/repo-diff";
-import { runGit } from "../src/git/repo-git";
+import { getFileBlame, getFileContent, getFileDiff } from "../src/adapters/git/repo-diff";
+import { runGit } from "../src/adapters/git/repo-git";
 
 test("file, diff, and blame views stop reading at the byte cap", async () => {
   const root = await mkdtemp(join(tmpdir(), "codepulse-git-large-file-"));

@@ -5,7 +5,7 @@ import {
   finishAbortableRequest,
   isActiveAbortableRequest,
   startAbortableRequest,
-} from "../src/utils/abortable-request";
+} from "../src/tui/utils/abortable-request";
 
 describe("abortable-request", () => {
   test("starting new request aborts old request", () => {

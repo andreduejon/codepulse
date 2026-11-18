@@ -2,14 +2,9 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import {
-  applyMavenManaged,
-  mavenManagedVersions,
-  PomIndex,
-  parsePom,
-  parseXml,
-} from "../src/providers/snyk/maven-managed";
-import type { SnykDependencyGraph } from "../src/providers/snyk/types";
+import { PomIndex } from "../src/adapters/snyk/maven-managed";
+import { applyMavenManaged, mavenManagedVersions, parsePom, parseXml } from "../src/core/snyk/maven-managed";
+import type { SnykDependencyGraph } from "../src/core/snyk/types";
 
 const roots: string[] = [];
 afterEach(async () => {

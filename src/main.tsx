@@ -1,55 +1,55 @@
 import { existsSync, statSync } from "node:fs";
 import { render } from "@opentui/solid";
-import App from "./app";
-import type { AppProps } from "./app-types";
+import { closeProviderCaches } from "./adapters/cache/sha-sqlite-cache";
+import { readCustomThemesFile } from "./adapters/settings/theme-file";
 import { parseArgs } from "./cli/parse-args";
-import {
-  getKnownRepoInfos,
-  type KnownRepoInfo,
-  loadConfig,
-  mergeOptions,
-  reportConfigWarnings,
-  resolveConfigInfo,
-} from "./config";
-import { loadCustomThemes } from "./context/custom-themes";
-import { addDebugEvent, redactDebugValue } from "./debug/events";
-import { getRepoRoot, isGitAvailable, isGitRepo } from "./git/repo";
-import { cleanupInactiveProviderCaches } from "./providers/shared/cache-management";
-import { closeProviderCaches } from "./providers/shared/sha-sqlite-cache";
+import type { AppPorts } from "./core/app-ports";
+import { addDebugEvent, redactDebugValue } from "./core/debug-events";
+import { mergeOptions, reportConfigWarnings } from "./core/settings/config";
+import { portsFrom } from "./ports";
+import { builtInProviders, modulesOf, type ProviderPlugin } from "./providers";
+import App from "./tui/app/app";
+import type { AppProps, StartupMode } from "./tui/app/app-types";
+import { parseCustomThemes } from "./tui/context/custom-themes";
+import { setDefaultPorts } from "./tui/context/ports";
+import { setDefaultProviderModules } from "./tui/context/provider-modules";
 
 /** Startup mode determines which screen the app shows first. */
-export type StartupMode =
-  | { kind: "graph" }
-  | { kind: "setup" }
-  | { kind: "selector"; message?: string; messagePath?: string; knownRepos: KnownRepoInfo[] }
-  | { kind: "error"; message: string };
-
 /**
  * Everything before the first frame: arguments, config, themes and which screen to show. The demo's headless player
  * (`bun run demo --play`) starts the app through this too, so it boots the way the real app does.
  */
-export async function startupProps(argv: string[]): Promise<AppProps> {
+export async function startupProps(
+  argv: string[],
+  ports: Partial<AppPorts> = {},
+  plugins: readonly ProviderPlugin[] = builtInProviders,
+): Promise<AppProps> {
+  const all = portsFrom(ports, {}, plugins);
+  setDefaultPorts(all);
+  const providerModules = modulesOf(plugins);
+  setDefaultProviderModules(providerModules);
+  const { settings, git, cacheStore, providers, system, dashboard } = all;
   const cli = parseArgs(argv);
   try {
-    cleanupInactiveProviderCaches();
+    cacheStore.cleanupInactive();
   } catch (error) {
     const message = redactDebugValue(error instanceof Error ? error.message : String(error));
     addDebugEvent({ source: "error", status: "error", message: `Provider cache cleanup: ${message}` });
   }
   const normalizedCli = {
     ...cli,
-    repoPath: (await getRepoRoot(cli.repoPath)) ?? cli.repoPath,
+    repoPath: (await git.getRepoRoot(cli.repoPath)) ?? cli.repoPath,
   };
 
-  const configInfo = resolveConfigInfo(normalizedCli.repoPath);
-  const { config, warnings } = loadConfig(normalizedCli.repoPath);
+  const configInfo = settings.info(normalizedCli.repoPath);
+  const { config, warnings } = settings.load(normalizedCli.repoPath);
   reportConfigWarnings(warnings);
   const opts = mergeOptions(normalizedCli, config);
-  const customThemes = loadCustomThemes();
+  const customThemes = parseCustomThemes(readCustomThemesFile());
 
   let startupMode: StartupMode;
 
-  if (!(await isGitAvailable())) {
+  if (!(await git.isGitAvailable())) {
     // Fatal — can't do anything without git
     startupMode = { kind: "error", message: "Git is not installed or not on PATH." };
   } else if (!existsSync(opts.repoPath)) {
@@ -58,7 +58,7 @@ export async function startupProps(argv: string[]): Promise<AppProps> {
       kind: "selector",
       message: "Hmm, that directory doesn't exist",
       messagePath: opts.repoPath,
-      knownRepos: getKnownRepoInfos(),
+      knownRepos: settings.knownRepos(),
     };
   } else if (!statSync(opts.repoPath).isDirectory()) {
     // Path is a file, not a directory — show project selector with message
@@ -66,15 +66,15 @@ export async function startupProps(argv: string[]): Promise<AppProps> {
       kind: "selector",
       message: "That path is a file, not a directory",
       messagePath: opts.repoPath,
-      knownRepos: getKnownRepoInfos(),
+      knownRepos: settings.knownRepos(),
     };
-  } else if (!(await isGitRepo(opts.repoPath))) {
+  } else if (!(await git.isGitRepo(opts.repoPath))) {
     // Not a git repo — show project selector with message
     startupMode = {
       kind: "selector",
       message: "Doesn't look like a git repo",
       messagePath: opts.repoPath,
-      knownRepos: getKnownRepoInfos(),
+      knownRepos: settings.knownRepos(),
     };
   } else if (!configInfo.hasRepoOverrides) {
     // Git repo but not yet known — show welcome screen
@@ -94,11 +94,15 @@ export async function startupProps(argv: string[]): Promise<AppProps> {
     autoRefreshInterval: opts.autoRefreshInterval,
     autoFetchInterval: opts.autoFetchInterval,
     configInfo,
+    settings,
+    git,
+    cacheStore,
+    providers,
+    system,
+    dashboard,
+    providerModules,
     startupMode,
-    initialGithubConfig: config.providers?.github,
-    initialJenkinsConfig: config.providers?.jenkins,
-    initialOpenShiftConfig: config.providers?.openshift,
-    initialSnykConfig: config.providers?.snyk,
+    initialProviderSettings: config.providers,
   };
 }
 

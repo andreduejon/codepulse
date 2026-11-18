@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { parseSnykDepGraphs } from "../../src/providers/snyk/dep-graph";
-import { parseSnykOutput } from "../../src/providers/snyk/parser";
+import { parseSnykDepGraphs } from "../../src/core/snyk/dep-graph";
+import { parseSnykOutput } from "../../src/core/snyk/parser";
 import {
   ADMIN_MANIFEST,
   compareVersions,

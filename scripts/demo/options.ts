@@ -2,7 +2,7 @@
  * The options of `bun run demo`: interactive by default, headless with `--play`. Kept free of side effects so the
  * launcher, the app process and the tests read them the same way.
  */
-import { themeNames } from "../../src/context/theme";
+import { themeNames } from "../../src/tui/context/theme";
 
 export const PROVIDERS = ["github", "jenkins", "openshift", "snyk"] as const;
 export type ProviderName = (typeof PROVIDERS)[number];

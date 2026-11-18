@@ -3,7 +3,7 @@
  * column, or the two read as one branch (an orphan gh-pages root right above a feature branch's tip).
  */
 import { expect, test } from "bun:test";
-import { buildGraph } from "../src/git/graph";
+import { buildGraph } from "../src/core/git/graph";
 import { findRow, makeCommit } from "./test-helpers";
 
 test("a new branch tip right below a root takes another column", () => {

@@ -6,9 +6,10 @@
  */
 import { CliRenderer } from "@opentui/core";
 import { testRender } from "@opentui/solid";
-import App from "../../src/app";
-import { themes } from "../../src/context/theme";
 import { startupProps } from "../../src/main";
+import App from "../../src/tui/app/app";
+import { themes } from "../../src/tui/context/theme";
+import { advanceDemoClock } from "./clock";
 import { colorLines } from "./colors";
 import { advancePhase } from "./phase";
 import { loadDemoState, type PlayConfig } from "./scenario";
@@ -156,6 +157,8 @@ export async function play(config: PlayConfig): Promise<number> {
         return settle();
       }
       case "sleep": {
+        // The wall clock moves on by exactly the sleep, so ages after it are the same every run.
+        advanceDemoClock(step.ms);
         // In short naps, so a stopped app (a signal) ends the play at once rather than after the whole sleep.
         const end = performance.now() + step.ms;
         while (performance.now() < end && !setup.renderer.isDestroyed)

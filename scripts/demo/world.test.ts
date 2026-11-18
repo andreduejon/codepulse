@@ -4,9 +4,9 @@
 import { afterAll, expect, test } from "bun:test";
 import { readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { resolveConfigInfo } from "../../src/config";
-import { getRepoRoot } from "../../src/git/repo";
-import { storageRoot } from "../../src/utils/storage-path";
+import { getRepoRoot } from "../../src/adapters/git/repo";
+import { resolveConfigInfo } from "../../src/adapters/settings/config";
+import { storageRoot } from "../../src/adapters/system/storage-path";
 import { parseDemoOptions } from "./options";
 import { FIXED_NOW } from "./scenario";
 import { buildWorld, windowsGitFolder } from "./world";
@@ -93,7 +93,7 @@ test("on Windows the PATH gets Git's own cmd folder, not a package manager's fol
 });
 
 test("each repository's last fetch is 12 minutes before the demo's now, so the menu's age follows the demo clock", async () => {
-  const { getLastFetchTime } = await import("../../src/git/repo");
+  const { getLastFetchTime } = await import("../../src/adapters/git/repo");
   for (const name of ["shop", "shop-web", "customer-notification-service"]) {
     const time = await getLastFetchTime(join(dirname(world.repoPath), name));
     expect(time?.getTime()).toBe(FIXED_NOW - 12 * 60_000);

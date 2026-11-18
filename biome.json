@@ -6,7 +6,11 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["src/**", "tests/**", "scripts/**"],
+    "includes": [
+      "src/**",
+      "tests/**",
+      "scripts/**"
+    ],
     "ignoreUnknown": true
   },
   "formatter": {
@@ -27,5 +31,187 @@
     "rules": {
       "recommended": true
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": [
+        "src/**",
+        "!src/**/*.test.ts",
+        "!src/**/*.test.tsx",
+        "!src/tui/keyboard/dispatcher.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "@opentui/solid": {
+                    "importNames": [
+                      "useKeyboard"
+                    ],
+                    "message": "Keys go through src/keyboard/dispatcher.ts: useKeys, or useModalKeys for a dialog or screen."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/tui/**",
+        "!src/tui/keyboard/dispatcher.ts",
+        "!src/**/*.test.ts",
+        "!src/**/*.test.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "@opentui/solid": {
+                    "importNames": [
+                      "useKeyboard"
+                    ],
+                    "message": "Keys go through src/keyboard/dispatcher.ts: useKeys, or useModalKeys for a dialog or screen."
+                  }
+                },
+                "patterns": [
+                  {
+                    "group": [
+                      "**/adapters/**",
+                      "**/adapters"
+                    ],
+                    "message": "The UI reaches Git, the network, the caches, the settings file and the system through the app's ports (core's ports, src/tui/context). Only the root (src/main.tsx, src/ports.ts) builds the adapters."
+                  },
+                  {
+                    "group": [
+                      "node:fs",
+                      "node:fs/*",
+                      "node:child_process",
+                      "node:os"
+                    ],
+                    "message": "The terminal front end reaches files, processes and the machine through the app's ports (useSystem, useGit, useSettings): adapters do the I/O."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/core/**",
+        "!src/core/**/*.test.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "solid-js": {
+                    "message": "src/core is plain TypeScript: no UI framework, no Bun or Node runtime APIs. Those come in through ports."
+                  },
+                  "solid-js/store": {
+                    "message": "src/core is plain TypeScript: no UI framework, no Bun or Node runtime APIs. Those come in through ports."
+                  },
+                  "solid-js/web": {
+                    "message": "src/core is plain TypeScript: no UI framework, no Bun or Node runtime APIs. Those come in through ports."
+                  },
+                  "@opentui/core": {
+                    "message": "src/core is plain TypeScript: no UI framework, no Bun or Node runtime APIs. Those come in through ports."
+                  },
+                  "@opentui/solid": {
+                    "message": "src/core is plain TypeScript: no UI framework, no Bun or Node runtime APIs. Those come in through ports."
+                  },
+                  "bun:sqlite": {
+                    "message": "src/core is plain TypeScript: no UI framework, no Bun or Node runtime APIs. Those come in through ports."
+                  },
+                  "bun:jsc": {
+                    "message": "src/core is plain TypeScript: no UI framework, no Bun or Node runtime APIs. Those come in through ports."
+                  },
+                  "bun:ffi": {
+                    "message": "src/core is plain TypeScript: no UI framework, no Bun or Node runtime APIs. Those come in through ports."
+                  },
+                  "node:fs": {
+                    "message": "src/core is plain TypeScript: no UI framework, no Bun or Node runtime APIs. Those come in through ports."
+                  },
+                  "node:fs/promises": {
+                    "message": "src/core is plain TypeScript: no UI framework, no Bun or Node runtime APIs. Those come in through ports."
+                  },
+                  "node:child_process": {
+                    "message": "src/core is plain TypeScript: no UI framework, no Bun or Node runtime APIs. Those come in through ports."
+                  },
+                  "fs": {
+                    "message": "src/core is plain TypeScript: no UI framework, no Bun or Node runtime APIs. Those come in through ports."
+                  },
+                  "child_process": {
+                    "message": "src/core is plain TypeScript: no UI framework, no Bun or Node runtime APIs. Those come in through ports."
+                  }
+                },
+                "patterns": [
+                  {
+                    "group": [
+                      "**/tui/**",
+                      "**/adapters/**",
+                      "**/cli/**"
+                    ],
+                    "message": "src/core does not depend on the app around it: the UI, the adapters and the CLI depend on core, not the other way round. What core needs comes in through its ports."
+                  },
+                  {
+                    "group": [
+                      "node:*",
+                      "bun:*"
+                    ],
+                    "message": "src/core runs without a runtime: no node:* or bun:* modules. Pure helpers live in core (core/paths.ts); what needs the runtime is an adapter."
+                  }
+                ]
+              }
+            },
+            "noRestrictedGlobals": {
+              "level": "error",
+              "options": {
+                "deniedGlobals": {
+                  "Bun": "src/core uses no Bun APIs: they come in through ports."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/adapters/**",
+        "!src/**/*.test.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "**/tui/**"
+                    ],
+                    "message": "Adapters implement core's ports and use only core: the UI depends on them through the ports, never the other way round."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

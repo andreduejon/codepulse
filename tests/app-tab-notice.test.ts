@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { isTabNoticeStatus, tabNoticeFor } from "../src/app-tab-notice";
-import type { ProviderStatus } from "../src/context/state";
-import { BANNER } from "../src/debug/banner";
-import type { ProviderView } from "../src/providers/provider";
-import type { SnykScanResult } from "../src/providers/snyk/types";
+import { JENKINS_BANNER } from "../src/core/jenkins/banner";
+import { OPENSHIFT_BANNER } from "../src/core/openshift/banner";
+import type { ProviderView } from "../src/core/provider-model";
+import { SNYK_BANNER } from "../src/core/snyk/banner";
+import type { SnykScanResult } from "../src/core/snyk/types";
+import { isTabNoticeStatus, tabNoticeFor } from "../src/tui/app/app-tab-notice";
+import type { ProviderStatus } from "../src/tui/context/state";
+import { snykTabNotice } from "../src/tui/providers/snyk/module";
 
 const scan: SnykScanResult = {
   sha: "a".repeat(40),
@@ -33,20 +36,26 @@ const notice = (
   status: ProviderStatus,
   tab: string,
   snykScan = null as typeof scan | null,
-) => tabNoticeFor({ view: view as ProviderView, source, status, tab: tab as never, snykScan });
+) =>
+  tabNoticeFor({
+    view: view as ProviderView,
+    source,
+    status,
+    providerNotice: view === "snyk" ? snykTabNotice(snykScan, tab) : null,
+  });
 
 describe("tab notices", () => {
   test("only warnings leave the banner for the tab", () => {
-    expect(isTabNoticeStatus({ kind: "warning", message: BANNER.jenkins.branchLimit(25, 30) })).toBe(true);
-    expect(isTabNoticeStatus({ kind: "error", message: BANNER.jenkins.authFailed })).toBe(false);
-    expect(isTabNoticeStatus({ kind: "unavailable", message: BANNER.jenkins.noJobs })).toBe(false);
+    expect(isTabNoticeStatus({ kind: "warning", message: JENKINS_BANNER.branchLimit(25, 30) })).toBe(true);
+    expect(isTabNoticeStatus({ kind: "error", message: JENKINS_BANNER.authFailed })).toBe(false);
+    expect(isTabNoticeStatus({ kind: "unavailable", message: JENKINS_BANNER.noJobs })).toBe(false);
   });
 
   test("provider warnings become a headline without the provider name", () => {
     expect(
-      notice("openshift", "OpenShift", { kind: "warning", message: BANNER.openshift.watchDenied }, "info"),
+      notice("openshift", "OpenShift", { kind: "warning", message: OPENSHIFT_BANNER.watchDenied }, "info"),
     ).toEqual({
-      key: `status:openshift:${BANNER.openshift.watchDenied}`,
+      key: `status:openshift:${OPENSHIFT_BANNER.watchDenied}`,
       fromStatus: true,
       kind: "warning",
       title: "Watch denied",
@@ -54,7 +63,7 @@ describe("tab notices", () => {
       entries: [],
     });
     expect(
-      notice("jenkins", "Jenkins", { kind: "warning", message: BANNER.jenkins.branchLimit(25, 30) }, "jenkins"),
+      notice("jenkins", "Jenkins", { kind: "warning", message: JENKINS_BANNER.branchLimit(25, 30) }, "jenkins"),
     ).toMatchObject({
       title: "Branch jobs · 25 of 30 read",
       detail: ["Branches in the graph come first. Builds on the other 5 do not show."],
@@ -62,7 +71,7 @@ describe("tab notices", () => {
   });
 
   test("a partial Snyk rescan warns on every Snyk tab", () => {
-    const status: ProviderStatus = { kind: "warning", message: BANNER.snyk.partialRescan };
+    const status: ProviderStatus = { kind: "warning", message: SNYK_BANNER.partialRescan };
     expect(notice("snyk", "Snyk", status, "snyk-deps", scan)).toMatchObject({
       title: "Partial scan",
       detail: ["Kept last complete snapshot."],

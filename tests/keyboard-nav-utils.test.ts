@@ -1,13 +1,9 @@
-import { describe, expect, test } from "bun:test";
-import type { GraphRow } from "../src/git/types";
-import {
-  type CascadeState,
-  type CascadeTarget,
-  computeCascadeTarget,
-  computeDisplacedIndex,
-  countHighlightedBelow,
-  findHighlightedIndex,
-} from "../src/utils/keyboard-nav-utils";
+import { describe, expect, spyOn, test } from "bun:test";
+import type { GraphRow } from "../src/core/git/types";
+import { computeDisplacedIndex, countHighlightedBelow, findHighlightedIndex } from "../src/core/navigation";
+import { NAV_REPEAT_MIN_MS } from "../src/tui/constants";
+import { type CascadeState, type CascadeTarget, computeCascadeTarget } from "../src/tui/keyboard/cascade";
+import { allowRepeatNav, resetRepeatNav } from "../src/tui/keyboard/repeat";
 import { makeCommit } from "./test-helpers";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -156,7 +152,7 @@ describe("computeCascadeTarget", () => {
     expect(computeCascadeTarget({ ...base, dialog: "detail" })).toBe("detail-dialog");
   });
 
-  test.each(["diff-blame", "job-log", "openshift-resource"])(
+  test.each(["diff-blame", "job-log", "provider"])(
     "%s opened from compact details steps back to the detail dialog",
     dialog => {
       expect(computeCascadeTarget({ ...base, dialog, layoutMode: "compact", detailFocused: true })).toBe(
@@ -219,5 +215,22 @@ describe("computeCascadeTarget", () => {
 
     const withoutDetail = { ...withoutSearch, detailFocused: false };
     expect(computeCascadeTarget(withoutDetail)).toBe("search-highlight");
+  });
+});
+
+describe("allowRepeatNav", () => {
+  test("a held key moves again once a frame has passed, also while the wall clock stands still", async () => {
+    // The headless demo stands the wall clock still so ages print the same every run; a held key must still move.
+    const clock = spyOn(Date, "now").mockReturnValue(Date.now());
+    try {
+      resetRepeatNav();
+      expect(allowRepeatNav()).toBe(true);
+      expect(allowRepeatNav()).toBe(false);
+      await Bun.sleep(NAV_REPEAT_MIN_MS + 10);
+      expect(allowRepeatNav()).toBe(true);
+    } finally {
+      clock.mockRestore();
+      resetRepeatNav();
+    }
   });
 });

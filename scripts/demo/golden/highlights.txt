@@ -1,0 +1,235 @@
+=== shot 1: search (200x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                        Author         Date                         Files (1)                      Info
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+    █                           bf08113   dev   origin/dev  feat(api): export request metrics               Demo Dev       5m ago             total lines changed                               +11 -0
+    │                                                                                                                                         └─ ▾ src/payments/
+    █                           e6209dd  feat(api): add a health endpoint                                   Demo Dev       50m ago               └─ retry-policy-with-exponential-backoff.ts  A +11 -0
+    │
+    █                           3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…  Noah Park      1h ago
+    │
+    │ █                         6adc455   feature/payments-r…   origin/feature/pay…  wip(payments): retry   Mei Chen       6h ago
+    │ │
+    █─╯                         64ddc8a  feat(payments): retry failed payments with exponential backoff, …  Demo Dev       7h ago
+    │
+    █                           917f7b3  perf(cart): cache price lookups                                    Noah Park      20h ago
+    │
+    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      Sam O'Brien    2d ago
+    │ │
+    │ █                         0166f71  feat(i18n): add French                                             Sam O'Brien    2d ago
+    │ │
+    │ █─╮                       5245790  Merge branch 'main' into feature/i18n                              Sam O'Brien    2d ago
+    │ │ │
+    │ █ │                       484821c  feat(i18n): add German                                             Sam O'Brien    3d ago
+    │ │ │
+    │ █ │                       3ad11a2  feat(i18n): extract the checkout strings                           Sam O'Brien    3d ago
+    │ │ │
+    █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                     Mei Chen       2d ago
+    │ │ │ │
+    │ │ │ █                     9d1b361  fix(search): ignore accents                                        Mei Chen       2d ago
+    │ │ │ │
+    │ │ │ █                     cce93f9  feat(search): search as you type                                   Mei Chen       4d ago
+    │ │ │ │
+    │ │ │ █─╮                   ae57e03  Merge branch 'main' into feature/search                            Mei Chen       6d ago
+    │ │ │ │ │
+    │ │ │ █ │                   a89a18f  feat(search): highlight matching words                             Mei Chen       6d ago
+    │ │ │ │ │
+    │ │ │ █ │                   52defc5  feat(search): rank results by popularity                           Mei Chen       20. Feb 13:30
+
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                   normal   search · retry   path   ancestry
+  │
+  │   customer-notification-service   shop   shop-web                                                             main   2 / 86 commits
+  │
+
+                                                   esc clear · tab GitHub · enter/→ show details · shift ←/→ switch project · ↑/↓ navigate
+
+
+=== shot 2: search-cleared (200x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                        Author         Date                         Files (1)                      Info
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+    █                           bf08113   dev   origin/dev  feat(api): export request metrics               Demo Dev       5m ago             total lines changed                               +11 -0
+    │                                                                                                                                         └─ ▾ src/payments/
+    █                           e6209dd  feat(api): add a health endpoint                                   Demo Dev       50m ago               └─ retry-policy-with-exponential-backoff.ts  A +11 -0
+    │
+    █                           3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…  Noah Park      1h ago
+    │
+    │ █                         6adc455   feature/payments-r…   origin/feature/pay…  wip(payments): retry   Mei Chen       6h ago
+    │ │
+    █─╯                         64ddc8a  feat(payments): retry failed payments with exponential backoff, …  Demo Dev       7h ago
+    │
+    █                           917f7b3  perf(cart): cache price lookups                                    Noah Park      20h ago
+    │
+    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      Sam O'Brien    2d ago
+    │ │
+    │ █                         0166f71  feat(i18n): add French                                             Sam O'Brien    2d ago
+    │ │
+    │ █─╮                       5245790  Merge branch 'main' into feature/i18n                              Sam O'Brien    2d ago
+    │ │ │
+    │ █ │                       484821c  feat(i18n): add German                                             Sam O'Brien    3d ago
+    │ │ │
+    │ █ │                       3ad11a2  feat(i18n): extract the checkout strings                           Sam O'Brien    3d ago
+    │ │ │
+    █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                     Mei Chen       2d ago
+    │ │ │ │
+    │ │ │ █                     9d1b361  fix(search): ignore accents                                        Mei Chen       2d ago
+    │ │ │ │
+    │ │ │ █                     cce93f9  feat(search): search as you type                                   Mei Chen       4d ago
+    │ │ │ │
+    │ │ │ █─╮                   ae57e03  Merge branch 'main' into feature/search                            Mei Chen       6d ago
+    │ │ │ │ │
+    │ │ │ █ │                   a89a18f  feat(search): highlight matching words                             Mei Chen       6d ago
+    │ │ │ │ │
+    │ │ │ █ │                   52defc5  feat(search): rank results by popularity                           Mei Chen       20. Feb 13:30
+
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                           normal   search   path   ancestry
+  │
+  │   customer-notification-service   shop   shop-web                                                                 main   86 commits
+  │
+
+                                                               tab GitHub · enter/→ show details · shift ←/→ switch project · ↑/↓ navigate
+
+
+=== shot 3: ancestry (200x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                        Author         Date                         Files (6)                      Info
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+    █                           bf08113   dev   origin/dev  feat(api): export request metrics               Demo Dev       5m ago             total lines changed                              +267 -5
+    │                                                                                                                                         ├─ ▾ src/payments/
+    █                           e6209dd  feat(api): add a health endpoint                                   Demo Dev       50m ago            │  ├─ gateway-client-wit...g-file-name.test.ts A +170 -0
+    │                                                                                                                                         │  ├─ gateway.ts                               M   +2 -2
+    █                           3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…  Noah Park      1h ago             │  ├─ retry.test.ts                            A  +47 -0
+    │                                                                                                                                         │  └─ retry.ts                                 A  +34 -0
+    │ █                         6adc455   feature/payments-r…   origin/feature/pay…  wip(payments): retry…  Mei Chen       6h ago             ├─ package-lock.json                           M   +9 -2
+    │ │                                                                                                                                       └─ package.json                                M   +5 -1
+    █─╯                         64ddc8a  feat(payments): retry failed payments with exponential backoff, a  Demo Dev       7h ago
+    │
+    █                           917f7b3  perf(cart): cache price lookups                                    Noah Park      20h ago
+    │
+    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      Sam O'Brien    2d ago
+    │ │
+    │ █                         0166f71  feat(i18n): add French                                             Sam O'Brien    2d ago
+    │ │
+    │ █─╮                       5245790  Merge branch 'main' into feature/i18n                              Sam O'Brien    2d ago
+    │ │ │
+    │ █ │                       484821c  feat(i18n): add German                                             Sam O'Brien    3d ago
+    │ │ │
+    │ █ │                       3ad11a2  feat(i18n): extract the checkout strings                           Sam O'Brien    3d ago
+    │ │ │
+    █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                     Mei Chen       2d ago
+    │ │ │ │
+    │ │ │ █                     9d1b361  fix(search): ignore accents                                        Mei Chen       2d ago
+    │ │ │ │
+    │ │ │ █                     cce93f9  feat(search): search as you type                                   Mei Chen       4d ago
+    │ │ │ │
+    │ │ │ █─╮                   ae57e03  Merge branch 'main' into feature/search                            Mei Chen       6d ago
+    │ │ │ │ │
+    │ │ │ █ │                   a89a18f  feat(search): highlight matching words                             Mei Chen       6d ago
+    │ │ │ │ │
+    │ │ │ █ │                   52defc5  feat(search): rank results by popularity                           Mei Chen       20. Feb 13:30
+
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                           normal   search   path   ancestry
+  │
+  │   customer-notification-service   shop   shop-web                                                            main   23 / 86 commits
+  │
+
+                                                   esc clear · tab GitHub · enter/→ show details · shift ←/→ switch project · ↑/↓ navigate
+
+
+=== shot 4: path (200x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                        Author         Date                         Files (6)                      Info
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+    █                           bf08113   dev   origin/dev  feat(api): export request metrics               Demo Dev       5m ago             total lines changed                              +267 -5
+    │                                                                                                                                         ├─ ▾ src/payments/
+    █                           e6209dd  feat(api): add a health endpoint                                   Demo Dev       50m ago            │  ├─ gateway-client-wit...g-file-name.test.ts A +170 -0
+    │                                                                                                                                         │  ├─ gateway.ts                               M   +2 -2
+    █                           3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…  Noah Park      1h ago             │  ├─ retry.test.ts                            A  +47 -0
+    │                                                                                                                                         │  └─ retry.ts                                 A  +34 -0
+    │ █                         6adc455   feature/payments-r…   origin/feature/pay…  wip(payments): retry…  Mei Chen       6h ago             ├─ package-lock.json                           M   +9 -2
+    │ │                                                                                                                                       └─ package.json                                M   +5 -1
+    █─╯                         64ddc8a  feat(payments): retry failed payments with exponential backoff, a  Demo Dev       7h ago
+    │
+    █                           917f7b3  perf(cart): cache price lookups                                    Noah Park      20h ago
+    │
+    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      Sam O'Brien    2d ago
+    │ │
+    │ █                         0166f71  feat(i18n): add French                                             Sam O'Brien    2d ago
+    │ │
+    │ █─╮                       5245790  Merge branch 'main' into feature/i18n                              Sam O'Brien    2d ago
+    │ │ │
+    │ █ │                       484821c  feat(i18n): add German                                             Sam O'Brien    3d ago
+    │ │ │
+    │ █ │                       3ad11a2  feat(i18n): extract the checkout strings                           Sam O'Brien    3d ago
+    │ │ │
+    █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                     Mei Chen       2d ago
+    │ │ │ │
+    │ │ │ █                     9d1b361  fix(search): ignore accents                                        Mei Chen       2d ago
+    │ │ │ │
+    │ │ │ █                     cce93f9  feat(search): search as you type                                   Mei Chen       4d ago
+    │ │ │ │
+    │ │ │ █─╮                   ae57e03  Merge branch 'main' into feature/search                            Mei Chen       6d ago
+    │ │ │ │ │
+    │ │ │ █ │                   a89a18f  feat(search): highlight matching words                             Mei Chen       6d ago
+    │ │ │ │ │
+    │ │ │ █ │                   52defc5  feat(search): rank results by popularity                           Mei Chen       20. Feb 13:30
+
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                              normal   search   path · src/payme…   ancestry
+  │
+  │   customer-notification-service   shop   shop-web                                                             main   4 / 86 commits
+  │
+
+                                                   esc clear · tab GitHub · enter/→ show details · shift ←/→ switch project · ↑/↓ navigate
+
+
+=== shot 5: normal (200x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                        Author         Date                         Files (6)                      Info
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+    █                           bf08113   dev   origin/dev  feat(api): export request metrics               Demo Dev       5m ago             total lines changed                              +267 -5
+    │                                                                                                                                         ├─ ▾ src/payments/
+    █                           e6209dd  feat(api): add a health endpoint                                   Demo Dev       50m ago            │  ├─ gateway-client-wit...g-file-name.test.ts A +170 -0
+    │                                                                                                                                         │  ├─ gateway.ts                               M   +2 -2
+    █                           3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…  Noah Park      1h ago             │  ├─ retry.test.ts                            A  +47 -0
+    │                                                                                                                                         │  └─ retry.ts                                 A  +34 -0
+    │ █                         6adc455   feature/payments-r…   origin/feature/pay…  wip(payments): retry…  Mei Chen       6h ago             ├─ package-lock.json                           M   +9 -2
+    │ │                                                                                                                                       └─ package.json                                M   +5 -1
+    █─╯                         64ddc8a  feat(payments): retry failed payments with exponential backoff, a  Demo Dev       7h ago
+    │
+    █                           917f7b3  perf(cart): cache price lookups                                    Noah Park      20h ago
+    │
+    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      Sam O'Brien    2d ago
+    │ │
+    │ █                         0166f71  feat(i18n): add French                                             Sam O'Brien    2d ago
+    │ │
+    │ █─╮                       5245790  Merge branch 'main' into feature/i18n                              Sam O'Brien    2d ago
+    │ │ │
+    │ █ │                       484821c  feat(i18n): add German                                             Sam O'Brien    3d ago
+    │ │ │
+    │ █ │                       3ad11a2  feat(i18n): extract the checkout strings                           Sam O'Brien    3d ago
+    │ │ │
+    █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                     Mei Chen       2d ago
+    │ │ │ │
+    │ │ │ █                     9d1b361  fix(search): ignore accents                                        Mei Chen       2d ago
+    │ │ │ │
+    │ │ │ █                     cce93f9  feat(search): search as you type                                   Mei Chen       4d ago
+    │ │ │ │
+    │ │ │ █─╮                   ae57e03  Merge branch 'main' into feature/search                            Mei Chen       6d ago
+    │ │ │ │ │
+    │ │ │ █ │                   a89a18f  feat(search): highlight matching words                             Mei Chen       6d ago
+    │ │ │ │ │
+    │ │ │ █ │                   52defc5  feat(search): rank results by popularity                           Mei Chen       20. Feb 13:30
+
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                           normal   search   path   ancestry
+  │
+  │   customer-notification-service   shop   shop-web                                                                 main   86 commits
+  │
+
+                                                               tab GitHub · enter/→ show details · shift ←/→ switch project · ↑/↓ navigate
+
+
