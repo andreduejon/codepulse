@@ -1,23 +1,3 @@
 export { buildGraph } from "./graph-build";
-export {
-  type BrightColumns,
-  computeBrightColumns,
-  type DimOptions,
-  dimGraphChars,
-} from "./graph-highlight";
-export {
-  type GraphChar,
-  getColorForColumn,
-  type RenderOptions,
-  renderConnectorRow,
-  renderFanOutRow,
-  renderGapRow,
-  renderGraphRow,
-} from "./graph-render";
-export {
-  computeSingleViewportOffset,
-  edgeMarks,
-  getMaxGraphColumns,
-  MAX_GRAPH_COLUMNS,
-  sliceGraphToViewport,
-} from "./graph-viewport";
+export { type BrightColumns, computeBrightColumns } from "./graph-highlight";
+export { computeSingleViewportOffset, getMaxGraphColumns, MAX_GRAPH_COLUMNS } from "./graph-viewport";

@@ -28,9 +28,6 @@ export type DetailTab =
 
 export type HighlightMode = "ancestry" | "path" | "search" | null;
 
-/** The Menu's tabs. */
-export type MenuTab = "repository" | "branch" | "providers";
-
 export interface RepoState {
   commits: Accessor<Commit[]>;
   graphRows: Accessor<GraphRow[]>;
@@ -51,8 +48,6 @@ export interface NavState {
   scrollTargetIndex: Accessor<number>;
   pendingScrollHash: Accessor<string | null>;
   viewingBranch: Accessor<string | null>;
-  /** The tab the Menu opens on: the one it was left on, or the one a command (`:providers`) asked for. */
-  menuTab: Accessor<MenuTab>;
 }
 
 export interface FilterState {
@@ -72,7 +67,6 @@ export interface DetailSlotState {
   detailCursorIndex: Accessor<number>;
   detailCursorAction: Accessor<string | null>;
   detailActiveTab: Accessor<DetailTab>;
-  detailCursorShortcut: Accessor<{ key: string; desc: string } | null>;
 }
 
 export interface DetailSlotActions {
@@ -81,7 +75,6 @@ export interface DetailSlotActions {
   moveDetailCursor: (delta: number, itemCount: number) => void;
   setDetailCursorAction: (action: string | null) => void;
   setDetailActiveTab: (tab: DetailTab) => void;
-  setDetailCursorShortcut: (shortcut: { key: string; desc: string } | null) => void;
 }
 
 export interface DetailState {
@@ -92,8 +85,6 @@ export interface DetailState {
   detailLoading: Accessor<boolean>;
   detailCursorAction: Accessor<string | null>;
   detailActiveTab: Accessor<DetailTab>;
-  /** Extra key the cursored detail row offers (footer hint), e.g. `v` → Vulnerabilities on a vulnerable dependency. */
-  detailCursorShortcut: Accessor<{ key: string; desc: string } | null>;
   /** Filter Vulnerabilities applies when it opens next (set by the Dependencies jump). */
   snykPendingFilter: Accessor<string | null>;
   uncommittedDetail: Accessor<UncommittedDetail | null>;
@@ -150,7 +141,6 @@ export interface NavActions {
   setCommitDetail: (detail: CommitDetail | null) => void;
   setSearchQuery: (query: string) => void;
   setViewingBranch: (branch: string | null) => void;
-  setMenuTab: (tab: MenuTab) => void;
 }
 
 export interface FilterActions {
@@ -168,7 +158,6 @@ export interface DetailActions {
   setDetailLoading: (loading: boolean) => void;
   setDetailCursorAction: (action: string | null) => void;
   setDetailActiveTab: (tab: DetailTab) => void;
-  setDetailCursorShortcut: (shortcut: { key: string; desc: string } | null) => void;
   setSnykPendingFilter: (query: string | null) => void;
   setUncommittedDetail: (detail: UncommittedDetail | null) => void;
   noteWorkingTreeRead: () => void;

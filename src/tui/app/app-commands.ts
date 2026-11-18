@@ -1,7 +1,7 @@
-import type { AppActions, AppState } from "../../core/app-state";
 import { clearDebugEvents } from "../../core/debug-events";
 import { toggleAncestry } from "../../core/highlights";
 import type { EventSource } from "../../core/provider-model";
+import type { AppActions, AppState } from "../context/state";
 import type { CommandBarMode, DialogId } from "./ui-state";
 
 /** What `:` commands can reach in the app. */

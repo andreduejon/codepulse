@@ -1,13 +1,13 @@
 import { MouseButton, type MouseEvent, type Renderable, type ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { batch, createEffect, createSignal, For } from "solid-js";
-import type { MenuTab } from "../../../core/app-state";
 import type { DashboardSettings } from "../../../core/dashboard-settings";
 import type { ProviderView } from "../../../core/provider-model";
 import type { ConfigInfo } from "../../../core/settings/config";
 import { SHIFT_JUMP } from "../../constants";
 import { useAppState } from "../../context/state";
 import { useTheme } from "../../context/theme";
+import type { MenuTab } from "../../hooks/menu-items-types";
 import {
   COPYABLE_VISIBLE_WIDTH,
   type GitHubMenuConfig,

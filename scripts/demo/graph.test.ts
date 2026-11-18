@@ -9,9 +9,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getCommits } from "../../src/adapters/git/repo";
 import { buildGraph } from "../../src/core/git/graph-build";
-import { type GraphChar, renderConnectorRow, renderFanOutRow, renderGraphRow } from "../../src/core/git/graph-render";
 import { getMaxGraphColumns, MAX_GRAPH_COLUMNS } from "../../src/core/git/graph-viewport";
 import type { Commit, GraphRow } from "../../src/core/git/types";
+import { type GraphChar, renderConnectorRow, renderFanOutRow, renderGraphRow } from "../../src/tui/graph/render";
 import { type GitRunner, importHistory } from "./history";
 import { shopHistory } from "./repositories";
 

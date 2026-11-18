@@ -1,4 +1,4 @@
-import { getColorForColumn } from "../../core/git/graph";
+import { getColorForColumn } from "../graph/render";
 import { useT } from "../hooks/use-t";
 import { truncateName } from "../utils/truncate";
 

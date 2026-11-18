@@ -1,4 +1,4 @@
-import type { Connector, ConnectorType, GraphRow } from "./types";
+import type { Connector, ConnectorType, GraphRow } from "../../core/git/types";
 
 // Fallback colors if no theme colors provided
 const DEFAULT_COLORS = [

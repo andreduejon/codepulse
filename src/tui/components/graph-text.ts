@@ -1,7 +1,7 @@
 /** The graph's characters as the terminal draws them: colored, the commit's block bold. */
 import type { TextChunk } from "@opentui/core";
 import { RGBA, StyledText, TextAttributes } from "@opentui/core";
-import type { GraphChar } from "../../core/git/graph-render";
+import type { GraphChar } from "../graph/render";
 
 /**
  * Cache of RGBA objects keyed by hex color string. Graph colors come from

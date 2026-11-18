@@ -1,5 +1,13 @@
+import type { Accessor } from "solid-js";
 import { batch, createContext, createMemo, createSignal, untrack, useContext } from "solid-js";
-import type { AppActions, AppState, DetailOwner, DetailTab, MenuTab } from "../../core/app-state";
+import type {
+  AppActions as CoreAppActions,
+  AppState as CoreAppState,
+  DetailSlotActions as CoreDetailSlotActions,
+  DetailSlotState as CoreDetailSlotState,
+  DetailOwner,
+  DetailTab,
+} from "../../core/app-state";
 import { clampCursor, highlightModeOf, sameSet, searchMatches } from "../../core/app-state";
 import type { Branch, Commit, CommitDetail, GraphRow, TagInfo, UncommittedDetail } from "../../core/git/types";
 import type { GraphBadge, ProviderView } from "../../core/provider-model";
@@ -11,15 +19,12 @@ import {
   DEFAULT_AUTO_REFRESH_INTERVAL,
   DEFAULT_MAX_COUNT,
 } from "../../core/settings/config";
+import type { MenuTab } from "../hooks/menu-items-types";
 import { createProviderRegistry } from "../providers/provider";
 
 export type {
-  AppActions,
-  AppState,
   DetailActions,
   DetailOwner,
-  DetailSlotActions,
-  DetailSlotState,
   DetailState,
   DetailTab,
   FilterActions,
@@ -43,6 +48,33 @@ export {
   providerUnavailable,
   providerWarning,
 } from "../../core/provider-status";
+
+/** An extra key the cursored detail row offers (footer hint), e.g. `v` → Vulnerabilities on a vulnerable dependency. */
+export type CursorShortcut = { key: string; desc: string } | null;
+
+/** One view's details, with what the terminal adds: the cursored row's extra key. */
+export interface DetailSlotState extends CoreDetailSlotState {
+  detailCursorShortcut: Accessor<CursorShortcut>;
+}
+
+export interface DetailSlotActions extends CoreDetailSlotActions {
+  setDetailCursorShortcut: (shortcut: CursorShortcut) => void;
+}
+
+/** The app's state (core/app-state.ts) with the terminal's own: the Menu's tab and the detail rows' extra keys. */
+export interface AppState extends Omit<CoreAppState, "detailFor"> {
+  detailFor: (owner: DetailOwner) => DetailSlotState;
+  /** The shown view's cursored detail row's extra key. */
+  detailCursorShortcut: Accessor<CursorShortcut>;
+  /** The tab the Menu opens on: the one it was left on, or the one a command (`:providers`) asked for. */
+  menuTab: Accessor<MenuTab>;
+}
+
+export interface AppActions extends Omit<CoreAppActions, "detailFor"> {
+  detailFor: (owner: DetailOwner) => DetailSlotActions;
+  setDetailCursorShortcut: (shortcut: CursorShortcut) => void;
+  setMenuTab: (tab: MenuTab) => void;
+}
 
 const AppStateContext = createContext<{ state: AppState; actions: AppActions }>();
 

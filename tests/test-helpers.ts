@@ -2,15 +2,15 @@
  * Shared test helpers for graph engine tests.
  */
 import { expect } from "bun:test";
+import { getMaxGraphColumns } from "../src/core/git/graph";
+import type { Commit, Connector, GraphRow, RefInfo } from "../src/core/git/types";
 import {
   type GraphChar,
-  getMaxGraphColumns,
   type RenderOptions,
   renderConnectorRow,
   renderFanOutRow,
   renderGraphRow,
-} from "../src/core/git/graph";
-import type { Commit, Connector, GraphRow, RefInfo } from "../src/core/git/types";
+} from "../src/tui/graph/render";
 
 /**
  * Assert that a value is defined (not `undefined` and not `null`), narrowing

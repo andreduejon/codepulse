@@ -6,11 +6,11 @@
 
 import type { Accessor } from "solid-js";
 import type { ProviderAdapters } from "../../core/app-ports";
-import type { AppActions, AppState } from "../../core/app-state";
 import type { DashboardEvent } from "../../core/dashboard/events";
 import type { OpenShiftResource } from "../../core/openshift/types";
 import type { ProviderDetailView } from "../../core/provider-model";
 import type { RepoSettings } from "../app/repo-settings";
+import type { AppActions, AppState } from "../context/state";
 import type { JobLogTarget } from "./shared/job-log-dialog";
 
 /** What a provider gets when it starts. Called during the root's setup: state and actions come as values. */

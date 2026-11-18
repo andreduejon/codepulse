@@ -1,5 +1,5 @@
 import { batch } from "solid-js";
-import type { AppActions, AppState } from "../../core/app-state";
+import type { AppActions, AppState } from "../context/state";
 import type { RepoSessionSnapshot } from "./app-types";
 
 /** The graph state of the current repository, kept while another repository is shown. */

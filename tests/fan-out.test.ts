@@ -7,8 +7,9 @@
  * extra lane, with branch-off corners (╯/╰) closing each lane.
  */
 import { describe, expect, test } from "bun:test";
-import { buildGraph, type GraphChar, renderFanOutRow } from "../src/core/git/graph";
+import { buildGraph } from "../src/core/git/graph";
 import type { Connector } from "../src/core/git/types";
+import { type GraphChar, renderFanOutRow } from "../src/tui/graph/render";
 import {
   assertDefined,
   findRow,

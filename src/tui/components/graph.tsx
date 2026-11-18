@@ -7,19 +7,7 @@ import {
 } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSelector, createSignal, For, onCleanup, Show, untrack } from "solid-js";
-import {
-  computeBrightColumns,
-  computeSingleViewportOffset,
-  dimGraphChars,
-  edgeMarks,
-  type GraphChar,
-  getColorForColumn,
-  MAX_GRAPH_COLUMNS,
-  renderConnectorRow,
-  renderFanOutRow,
-  renderGraphRow,
-  sliceGraphToViewport,
-} from "../../core/git/graph";
+import { computeBrightColumns, computeSingleViewportOffset, MAX_GRAPH_COLUMNS } from "../../core/git/graph";
 import type { GraphRow, RefInfo } from "../../core/git/types";
 import type { GraphBadge, ProviderView } from "../../core/provider-model";
 import type { SnykScanResult } from "../../core/snyk/types";
@@ -32,6 +20,15 @@ import {
   UNCOMMITTED_PLACEHOLDER,
 } from "../constants";
 import { useAppState } from "../context/state";
+import { dimGraphChars } from "../graph/dim";
+import {
+  type GraphChar,
+  getColorForColumn,
+  renderConnectorRow,
+  renderFanOutRow,
+  renderGraphRow,
+} from "../graph/render";
+import { edgeMarks, sliceGraphToViewport } from "../graph/viewport";
 import { useScrollWindow } from "../hooks/use-scroll-window";
 import { useT } from "../hooks/use-t";
 import {
