@@ -1,6 +1,6 @@
 /**
  * The layers, by folder: every relative import of a module (tests aside) resolves into a layer it may use.
- * - src/core: core only. The app's logic and its ports.
+ * - src/core: core only, and no runtime module (node:*, bun:*). The app's logic and its ports.
  * - src/adapters: core and adapters. They implement core's ports (Git, HTTP, caches, settings, the system).
  * - src/tui: core and tui. The terminal front end; it reaches the adapters only through the ports.
  * - the root (src/*.ts, src/cli): anything. It builds the adapters and hands them to the front end.
@@ -46,4 +46,14 @@ test("each layer imports only the layers it may use", () => {
     }
   }
   expect(crossings).toEqual([]);
+});
+
+test("core uses no runtime module", () => {
+  const runtime: string[] = [];
+  for (const file of modules(join(src, "core"))) {
+    for (const match of readFileSync(file, "utf-8").matchAll(/(?:from|import)\s*\(?\s*"((?:node|bun):[^"]+)"/g)) {
+      runtime.push(`${relative(src, file)} → ${match[1]}`);
+    }
+  }
+  expect(runtime).toEqual([]);
 });

@@ -1,4 +1,4 @@
-import { posix, win32 } from "node:path";
+import { posixDirname, windowsRoot } from "../paths";
 import { isSnykDependencyGraph, normalizeSnykTargetFile } from "./dep-graph";
 import type { SnykFinding, SnykScanResult, SnykSeverity, SnykSeverityCounts } from "./types";
 
@@ -332,7 +332,7 @@ export function parseSnykOutput(raw: string | unknown, options: SnykParseOptions
     validProjects++;
     const projectName = stringValue(value.projectName);
     const project = projectName
-      ? win32.parse(projectName).root
+      ? windowsRoot(projectName)
         ? null
         : projectName
       : normalizeSnykTargetFile(value.displayTargetFile);
@@ -374,7 +374,7 @@ export function isSnykScanResult(value: unknown): value is SnykScanResult {
     ) {
       return false;
     }
-    const directory = posix.dirname(project.targetFile);
+    const directory = posixDirname(project.targetFile);
     const graphManager = project.packageManager === "bun" ? "yarn" : project.packageManager;
     if (
       project.graphs.some(
@@ -461,7 +461,7 @@ export function isSnykScanResult(value: unknown): value is SnykScanResult {
         finding.upgradeVersion === null) &&
       (finding.cves === undefined ||
         (Array.isArray(finding.cves) && finding.cves.every(entry => typeof entry === "string"))) &&
-      ((typeof finding.project === "string" && !win32.parse(finding.project).root) || finding.project === null) &&
+      ((typeof finding.project === "string" && !windowsRoot(finding.project)) || finding.project === null) &&
       (finding.targetFile === null ||
         (typeof finding.targetFile === "string" && normalizeSnykTargetFile(finding.targetFile) === finding.targetFile))
     );

@@ -156,6 +156,13 @@
                       "**/cli/**"
                     ],
                     "message": "src/core does not depend on the app around it: the UI, the adapters and the CLI depend on core, not the other way round. What core needs comes in through its ports."
+                  },
+                  {
+                    "group": [
+                      "node:*",
+                      "bun:*"
+                    ],
+                    "message": "src/core runs without a runtime: no node:* or bun:* modules. Pure helpers live in core (core/paths.ts); what needs the runtime is an adapter."
                   }
                 ]
               }

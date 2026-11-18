@@ -1,4 +1,4 @@
-import { posix, win32 } from "node:path";
+import { posixNormalize, windowsRoot } from "../paths";
 import type { SnykDependencyGraph, SnykDependencyNode, SnykDependencyPackage, SnykDependencyScope } from "./types";
 
 function unsupportedOutput(): never {
@@ -16,9 +16,9 @@ function isString(value: unknown): value is string {
 export function normalizeSnykTargetFile(value: unknown): string | null {
   if (!isString(value)) return null;
   const path = value.replaceAll("\\", "/");
-  if (win32.parse(path).root || path.split("/").includes("..") || path.includes("\0")) return null;
-  const normalized = posix.normalize(path);
-  if (normalized === "." || normalized.endsWith("/") || win32.parse(normalized).root) return null;
+  if (windowsRoot(path) || path.split("/").includes("..") || path.includes("\0")) return null;
+  const normalized = posixNormalize(path);
+  if (normalized === "." || normalized.endsWith("/") || windowsRoot(normalized)) return null;
   return normalized;
 }
 
