@@ -11,13 +11,7 @@ import { testRender } from "@opentui/solid";
 import { createComponent, createSignal, Show } from "solid-js";
 import { persistMergedSnapshots, ShaSqliteCache } from "../../src/adapters/cache/sha-sqlite-cache";
 import { loadAppEvents } from "../../src/adapters/dashboard/load";
-import {
-  getBranches,
-  getCommits,
-  getRemoteUrl,
-  getStashList,
-  getTagDetails,
-} from "../../src/adapters/git/repo";
+import { getBranches, getCommits, getRemoteUrl, getStashList, getTagDetails } from "../../src/adapters/git/repo";
 import { getWorkingTreeStatus } from "../../src/adapters/git/repo-status";
 import { buildGraph, getMaxGraphColumns } from "../../src/core/git/graph";
 import type { Commit } from "../../src/core/git/types";

@@ -1,14 +1,16 @@
-import { MouseButton, type Renderable, type ScrollBoxRenderable } from "@opentui/core";
+import { MouseButton } from "@opentui/core";
+import { useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSelector, createSignal, For, Match, onCleanup, Show, Switch } from "solid-js";
 import type { DashboardRow } from "../../core/dashboard/events";
 import { branchColumnWidth, cutBranch } from "../../core/dashboard/layout";
 import { HASH_COL_WIDTH } from "../constants";
 import { KNOT } from "../dashboard/legend";
 import type { DashboardState } from "../dashboard/use-dashboard";
+import { useScrollWindow } from "../hooks/use-scroll-window";
 import { useT } from "../hooks/use-t";
 import { providerColors } from "../providers/colors";
 import { formatClock, formatDayLabel } from "../utils/date";
-import { type ScrollSchedule, scheduleScrollIntoView, scrollElementIntoView } from "../utils/scroll";
+import { type ScrollSchedule, scheduleScrollIntoView } from "../utils/scroll";
 import { DashboardEventText } from "./dashboard-event-text";
 
 /** Width of the Time column: `09:05` and its padding. */
@@ -53,19 +55,21 @@ export function DashboardView(
     );
   };
 
-  let scrollbox: ScrollBoxRenderable | undefined;
-  const rowRefs: Renderable[] = [];
+  // Only the rows near the screen are mounted, each one line: the others take their height as empty space.
+  const dimensions = useTerminalDimensions();
+  const rowWindow = useScrollWindow({
+    heights: createMemo(() => d.rows().map(() => 1)),
+    screenHeight: () => dimensions().height,
+  });
+  const shownRows = createMemo(() => {
+    const { start, end } = rowWindow.range();
+    return d.rows().slice(start, end);
+  });
   const schedule: ScrollSchedule = {};
-  let lastCursor = -1;
   createEffect(() => {
     const index = d.cursor();
     if (index < 0) return;
-    const direction: -1 | 0 | 1 = index > lastCursor ? 1 : index < lastCursor ? -1 : 0;
-    lastCursor = index;
-    scheduleScrollIntoView(schedule, () => {
-      const element = rowRefs[index];
-      return !!scrollbox && !!element && scrollElementIntoView(scrollbox, element, 1, direction);
-    });
+    scheduleScrollIntoView(schedule, () => rowWindow.scrollIntoView(index));
   });
   onCleanup(() => {
     if (schedule.scrollTimer) clearTimeout(schedule.scrollTimer);
@@ -105,9 +109,7 @@ export function DashboardView(
       </box>
       <box border={["top"]} borderStyle="single" borderColor={t().accent} height={1} flexShrink={0} />
       <scrollbox
-        ref={element => {
-          scrollbox = element;
-        }}
+        ref={element => rowWindow.attach(element)}
         flexGrow={1}
         scrollY
         scrollX={false}
@@ -129,8 +131,10 @@ export function DashboardView(
             </box>
           }
         >
-          <For each={d.rows()}>
-            {(row, index) => {
+          <box height={rowWindow.before()} flexShrink={0} />
+          <For each={shownRows()}>
+            {(row, shownIndex) => {
+              const index = () => rowWindow.range().start + shownIndex();
               const selectable = () => row.kind === "event";
               const active = () => isSelected(index());
               const lit = () => active() || (isHovered(index()) && props.mouseEnabled?.() !== false);
@@ -142,9 +146,6 @@ export function DashboardView(
                 // biome-ignore lint/a11y/noStaticElementInteractions: TUI rows use the dashboard's keyboard navigation.
                 // biome-ignore lint/a11y/useKeyWithMouseEvents: Keyboard selection already highlights the row.
                 <box
-                  ref={element => {
-                    rowRefs[index()] = element;
-                  }}
                   flexDirection="row"
                   width="100%"
                   height={1}
@@ -207,6 +208,7 @@ export function DashboardView(
               );
             }}
           </For>
+          <box height={rowWindow.after()} flexShrink={0} />
         </Show>
       </scrollbox>
     </box>

@@ -7,6 +7,7 @@ import {
   gitEvents,
   githubEvents,
   jenkinsEvents,
+  keepUnchangedRows,
   openShiftEvents,
   snykEvents,
 } from "./events";
@@ -264,5 +265,43 @@ describe("dashboardRows", () => {
     const yesterday = { ...event("shop", 0), id: "old", time: at("2026-03-01T15:00:00Z") };
     const rows = dashboardRows([...busy, yesterday], { knotMs: HOUR, utcOffset: () => 0 });
     expect(rows.map(row => row.kind)).toEqual(["date", ...Array(7).fill("event"), "gap", "date", "event"]);
+  });
+});
+
+describe("keepUnchangedRows", () => {
+  const event = (id: string, minute: number, text = `commit ${id}`): DashboardEvent => ({
+    id,
+    app: "shop",
+    source: "git",
+    time: at("2026-03-02T10:00:00Z") + minute * 60_000,
+    status: null,
+    text,
+    sha: SHA,
+  });
+  const rows = (events: DashboardEvent[]) => dashboardRows(events, { knotMs: HOUR, utcOffset: () => 0 });
+
+  test("a row read again unchanged is the same row, so a list keyed by row keeps it mounted", () => {
+    const before = rows([event("a", 50), event("b", 40), event("c", -30)]);
+    // Read again: new objects, the same content, and one event changed.
+    const after = keepUnchangedRows(
+      before,
+      rows([event("a", 50), event("b", 40, "commit b, amended"), event("c", -30)]),
+    );
+    expect(after.map(row => row.kind)).toEqual(["date", "event", "event", "gap", "event"]);
+    expect(after[0]).toBe(before[0]);
+    expect(after[1]).toBe(before[1]);
+    expect(after[2]).not.toBe(before[2]);
+    expect(after[2]?.kind === "event" && after[2].event.text).toBe("commit b, amended");
+    expect(after[3]).toBe(before[3]);
+    expect(after[4]).toBe(before[4]);
+  });
+
+  test("a new event is a new row, and a row that moved to another knot is too", () => {
+    const before = rows([event("a", 50), event("b", -30)]);
+    const after = keepUnchangedRows(before, rows([event("new", 55), event("a", 50), event("b", 30)]));
+    expect(after.map(row => (row.kind === "event" ? row.event.id : row.kind))).toEqual(["date", "new", "a", "b"]);
+    expect(after[2]).toBe(before[1]);
+    // b is in the first knot now, not after a gap.
+    expect(after[3]).not.toBe(before[3]);
   });
 });

@@ -1,5 +1,5 @@
 import { type Accessor, createEffect, createMemo, createSignal, onCleanup, untrack } from "solid-js";
-import { type DashboardEvent, type DashboardRow, dashboardRows } from "../../core/dashboard/events";
+import { type DashboardEvent, type DashboardRow, dashboardRows, keepUnchangedRows } from "../../core/dashboard/events";
 import type { ReadOptions } from "../../core/dashboard/load";
 import { type DashboardSettings, DEFAULT_DASHBOARD_SETTINGS } from "../../core/dashboard-settings";
 import type { EventSource } from "../../core/provider-model";
@@ -175,10 +175,10 @@ export function useDashboard(
     const left = hidden();
     return left.size === 0 ? all() : all().filter(event => !left.has(event.source));
   });
-  const rows = createMemo(() =>
-    dashboardRows(shown(), {
-      knotMs: settings().knotMinutes * 60_000,
-    }),
+  // A row read again unchanged stays the same row, so the view keeps it mounted.
+  const rows = createMemo<DashboardRow[]>(
+    previous => keepUnchangedRows(previous, dashboardRows(shown(), { knotMs: settings().knotMinutes * 60_000 })),
+    [],
   );
   const toggleSource = (source: EventSource) =>
     setHidden(current => {

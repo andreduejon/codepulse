@@ -292,3 +292,45 @@ export function dashboardRows(events: readonly DashboardEvent[], options: Dashbo
   }
   return rows;
 }
+
+/** Each row's identity: an event by its id, a date by its time, a rope by the row after it. */
+function rowKeys(rows: readonly DashboardRow[]): string[] {
+  const keys: string[] = new Array(rows.length);
+  for (let index = rows.length - 1; index >= 0; index--) {
+    const row = rows[index] as DashboardRow;
+    keys[index] =
+      row.kind === "event"
+        ? `event:${row.event.id}:${row.knot}`
+        : row.kind === "date"
+          ? `date:${row.time}`
+          : `gap:${keys[index + 1] ?? ""}`;
+  }
+  return keys;
+}
+
+/** Each row's content, once per row: a row kept stays kept, so it is serialized only when it is new. */
+const contents = new WeakMap<DashboardRow, string>();
+const contentOf = (row: DashboardRow): string => {
+  let content = contents.get(row);
+  if (content === undefined) {
+    content = JSON.stringify(row);
+    contents.set(row, content);
+  }
+  return content;
+};
+
+/**
+ * The rows read again, with each row that did not change replaced by the one before it: a list keyed by row (Solid's
+ * `For`) keeps those rows as they are and draws only the new and the changed ones.
+ */
+export function keepUnchangedRows(previous: readonly DashboardRow[], next: DashboardRow[]): DashboardRow[] {
+  if (previous.length === 0) return next;
+  const before = new Map<string, DashboardRow>();
+  const previousKeys = rowKeys(previous);
+  for (const [index, row] of previous.entries()) before.set(previousKeys[index] as string, row);
+  const nextKeys = rowKeys(next);
+  return next.map((row, index) => {
+    const kept = before.get(nextKeys[index] as string);
+    return kept && contentOf(kept) === contentOf(row) ? kept : row;
+  });
+}

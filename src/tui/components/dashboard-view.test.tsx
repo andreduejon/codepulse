@@ -273,3 +273,84 @@ test("moving the cursor redraws the two rows it leaves and reaches, not every ro
     setup.renderer.destroy();
   }
 });
+
+/** A thousand commits, a second apart: a long Dashboard. */
+async function longDashboard(height: number) {
+  const time = new Date(2026, 2, 2, 10, 0).getTime();
+  let events: DashboardEvent[] = Array.from({ length: 1000 }, (_, index) => ({
+    id: `e${index}`,
+    app: "/shop",
+    source: "git",
+    time: time - index * 1_000,
+    status: null,
+    text: `commit ${index}`,
+    sha: SHA,
+    branch: "main",
+  }));
+  const [active] = createSignal(true);
+  const dashboard = createRoot(() =>
+    useDashboard({
+      app: () => ({ path: "/shop", name: "shop" }),
+      active,
+      now: () => NOW,
+      load: async () => events.map(event => ({ ...event })),
+    }),
+  );
+  const drawn = spyOn(dates, "formatClock");
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={createThemeState()}>
+        <DashboardView dashboard={dashboard} now={() => NOW} />
+      </ThemeContext.Provider>
+    ),
+    { width: 100, height },
+  );
+  await new Promise(resolve => setTimeout(resolve, 0));
+  await setup.renderOnce();
+  return {
+    dashboard,
+    setup,
+    drawn,
+    change: (next: DashboardEvent[]) => {
+      events = next;
+    },
+    events: () => events,
+    finish: () => {
+      drawn.mockRestore();
+      setup.renderer.destroy();
+    },
+  };
+}
+
+test("a long list mounts only the rows near the screen; the cursor scrolls the others in", async () => {
+  const d = await longDashboard(30);
+  try {
+    // Each event row drawn writes its time once.
+    expect(d.drawn.mock.calls.length).toBeGreaterThan(0);
+    expect(d.drawn.mock.calls.length).toBeLessThan(200);
+    const target = d.dashboard.rows().findIndex(row => row.kind === "event" && row.event.text === "commit 900");
+    d.dashboard.select(target);
+    for (let frame = 0; frame < 5; frame++) await d.setup.renderOnce();
+    expect(d.setup.captureCharFrame()).toContain("commit 900");
+    expect(d.setup.captureCharFrame()).not.toContain("commit 10 ");
+  } finally {
+    d.finish();
+  }
+});
+
+test("a reload with the same events keeps every row; a changed event redraws its own row only", async () => {
+  const d = await longDashboard(30);
+  try {
+    d.drawn.mockClear();
+    await d.dashboard.reload();
+    await d.setup.renderOnce();
+    expect(d.drawn.mock.calls.length).toBe(0);
+    d.change(d.events().map(event => (event.id === "e3" ? { ...event, text: "commit 3, amended" } : event)));
+    await d.dashboard.reload();
+    await d.setup.renderOnce();
+    expect(d.drawn.mock.calls.length).toBe(1);
+    expect(d.setup.captureCharFrame()).toContain("commit 3, amended");
+  } finally {
+    d.finish();
+  }
+});
