@@ -3,6 +3,7 @@
  * The cache (cache.ts) and the provider service (core/openshift/service.ts) both use them.
  */
 import type { OpenShiftCacheLimit, OpenShiftResource, OpenShiftStatus } from "./types";
+import type { OpenShiftWarning } from "./warnings";
 
 export interface OpenShiftCachedBuild {
   id: string;
@@ -19,6 +20,23 @@ export interface OpenShiftCachedBuild {
 export interface OpenShiftCacheEntry {
   sha: string;
   builds: OpenShiftCachedBuild[];
+  /** The Kubernetes warnings about the commit's resources: kept with its builds, evicted with them. */
+  warnings?: OpenShiftWarning[];
+}
+
+function isOpenShiftWarning(value: unknown): value is OpenShiftWarning {
+  if (typeof value !== "object" || value === null) return false;
+  const entry = value as OpenShiftWarning;
+  return (
+    typeof entry.id === "string" &&
+    typeof entry.namespace === "string" &&
+    typeof entry.kind === "string" &&
+    typeof entry.name === "string" &&
+    typeof entry.reason === "string" &&
+    typeof entry.message === "string" &&
+    typeof entry.count === "number" &&
+    (entry.lastSeen === null || typeof entry.lastSeen === "string")
+  );
 }
 
 export interface OpenShiftCacheOptions {
@@ -32,6 +50,8 @@ export function isOpenShiftCacheEntry(value: unknown): value is OpenShiftCacheEn
   if (typeof value !== "object" || value === null) return false;
   const entry = value as OpenShiftCacheEntry;
   if (typeof entry.sha !== "string" || !Array.isArray(entry.builds)) return false;
+  if (entry.warnings !== undefined && !(Array.isArray(entry.warnings) && entry.warnings.every(isOpenShiftWarning)))
+    return false;
   return entry.builds.every(
     build =>
       typeof build === "object" &&

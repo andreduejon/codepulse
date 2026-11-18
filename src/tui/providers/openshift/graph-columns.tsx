@@ -1,12 +1,16 @@
+import { Show } from "solid-js";
 import type { OpenShiftStatus } from "../../../core/openshift/types";
 import type { GraphBadge, GraphStatusCounts } from "../../../core/provider-model";
 import { useAppState } from "../../context/state";
 import type { Theme } from "../../context/theme";
 import { useT } from "../../hooks/use-t";
-import { cachedWidths, chipColumnWidths } from "../graph-column-widths";
+import { cachedWidths, chipColumnWidths, FIRST_COLUMN_PADDING } from "../graph-column-widths";
 import type { ProviderGraphColumns } from "../module";
 import { statusColor } from "../shared/status";
-import { StatusChips, statusCountChips } from "../shared/status-chips";
+import { StatusChips, statusCountChips, statusCountChipsWidth } from "../shared/status-chips";
+
+/** ` !` after a commit's Live counts: OpenShift warned about it. What it said is in the Events tab. */
+const WARNING_MARK_WIDTH = 2;
 
 /** Status colors are semantic tokens, not provider accent (OpenShift brand is red). */
 export function openShiftStatusColor(t: Theme, status: OpenShiftStatus): string {
@@ -32,14 +36,34 @@ export function OpenShiftCountsColumn(
   }>,
 ) {
   const t = useT();
+  const warned = () => props.lane === "live" && !!props.badge?.warnings;
+  const markWidth = () => (warned() ? WARNING_MARK_WIDTH : 0);
+  // The mark sits at the column's end, so the marks of every row line up.
   return (
-    <StatusChips
-      chips={statusCountChips(t(), countsForLane(props.badge, props.lane))}
+    <box
+      flexShrink={0}
       width={props.width}
-      paddingRight={props.lane === "live" ? 2 : 0}
-      active={props.active}
-      dimmed={props.dimmed}
-    />
+      paddingRight={props.lane === "live" ? FIRST_COLUMN_PADDING : 0}
+      flexDirection="row"
+    >
+      <StatusChips
+        chips={statusCountChips(t(), countsForLane(props.badge, props.lane))}
+        width={props.width - (props.lane === "live" ? FIRST_COLUMN_PADDING : 0) - markWidth()}
+        active={props.active}
+        dimmed={props.dimmed}
+      />
+      <Show when={warned()}>
+        <box flexGrow={1} />
+        <text
+          flexShrink={0}
+          width={WARNING_MARK_WIDTH}
+          wrapMode="none"
+          fg={props.dimmed ? t().foregroundMuted : t().warning}
+        >
+          {props.active ? <strong> !</strong> : " !"}
+        </text>
+      </Show>
+    </box>
   );
 }
 
@@ -66,13 +90,19 @@ export function OpenShiftColumnHeaders(props: Readonly<{ first: number; second: 
 
 /** OpenShift's columns: what runs each commit now (Live) and what its cache saw (Cache), and its namespaces' names. */
 export const OPENSHIFT_GRAPH_COLUMNS: ProviderGraphColumns = {
-  widths: cachedWidths(badges =>
-    chipColumnWidths(
+  widths: cachedWidths(badges => {
+    const widths = chipColumnWidths(
       badges,
       badge => badge.lanes?.live,
       badge => badge.lanes?.cache,
-    ),
-  ),
+    );
+    // Room for the warning mark after the Live counts of a commit OpenShift warned about.
+    let live = 0;
+    for (const badge of badges.values())
+      if (badge.warnings)
+        live = Math.max(live, statusCountChipsWidth(badge.lanes?.live) + WARNING_MARK_WIDTH + FIRST_COLUMN_PADDING);
+    return { ...widths, first: Math.max(widths.first, live) };
+  }),
   Headers: OpenShiftColumnHeaders,
   Cells: props => (
     <>

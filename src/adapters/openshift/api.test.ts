@@ -14,6 +14,7 @@ import {
   fetchOpenShiftEvents,
   fetchOpenShiftInventory,
   fetchOpenShiftResources,
+  fetchOpenShiftWarnings,
   MAX_LIST_ITEMS,
   MAX_LIST_PAGES,
 } from "./api";
@@ -812,6 +813,29 @@ describe("buildOpenShiftGraphBadges", () => {
     expect(badge?.lanes?.live).toEqual({ passCount: 1, failCount: 0, runningCount: 1, unknownCount: 0 });
     expect(badge?.lanes?.cache).toEqual({ passCount: 0, failCount: 1, runningCount: 0, unknownCount: 0 });
   });
+
+  test("says whether OpenShift warned about the commit, also when only its warnings are left", () => {
+    const warning = {
+      id: "event-1",
+      namespace: "ns",
+      kind: "Pod",
+      name: "gone-pod",
+      reason: "BackOff",
+      message: "Back-off restarting failed container",
+      count: 3,
+      firstSeen: null,
+      lastSeen: null,
+    };
+    const withResources = buildOpenShiftCommitMap([{ ...resource("pod-1", "pass"), commitSha: SHA }]);
+    const quiet = buildOpenShiftGraphBadges(withResources).get(SHA);
+    expect(quiet?.warnings).toBeUndefined();
+    const commit = withResources.get(SHA) as OpenShiftCommitData;
+    const warned = buildOpenShiftGraphBadges(new Map([[SHA, { ...commit, warnings: [warning] }]])).get(SHA);
+    expect(warned?.warnings).toBe(true);
+    // The pod is gone; its warnings stay with the commit, and so does the mark.
+    const onlyWarnings = new Map([[SHA, { sha: SHA, namespaces: [], liveFetched: true, warnings: [warning] }]]);
+    expect(buildOpenShiftGraphBadges(onlyWarnings).get(SHA)).toMatchObject({ warnings: true, resourceCount: 0 });
+  });
 });
 
 describe("commit identity", () => {
@@ -1137,6 +1161,108 @@ describe("fetchOpenShiftEvents", () => {
         "No permission to list events",
       );
     });
+  });
+});
+
+describe("fetchOpenShiftWarnings", () => {
+  const config = { serverUrl: "https://api.example.com:6443", namespaces: ["dev", "prod"], commitShaAnnotation: "x" };
+  const withFetch = async (answer: (url: URL) => Response, run: (urls: string[]) => Promise<void>) => {
+    const originalFetch = globalThis.fetch;
+    const urls: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      urls.push(String(input));
+      return answer(new URL(String(input)));
+    }) as typeof fetch;
+    try {
+      await run(urls);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  };
+
+  test("lists each namespace's warnings: what they are about, how often and when", async () => {
+    const items = [
+      {
+        metadata: { uid: "event-1", creationTimestamp: "2026-01-01T00:00:00Z" },
+        type: "Warning",
+        reason: "BackOff",
+        message: "Back-off restarting\n failed container",
+        count: 31,
+        firstTimestamp: "2026-01-01T00:01:00Z",
+        lastTimestamp: "2026-01-01T00:10:00Z",
+        involvedObject: { kind: "Pod", name: "api-7f9c", uid: "pod-uid", namespace: "dev" },
+      },
+      {
+        metadata: { uid: "event-2" },
+        type: "Warning",
+        reason: "FailedCreate",
+        note: "Error creating: pods is forbidden",
+        series: { count: 6, lastObservedTime: "2026-01-01T00:05:00Z" },
+        eventTime: "2026-01-01T00:02:00Z",
+        regarding: { kind: "ReplicaSet", name: "api-7f9c", uid: "rs-uid" },
+      },
+    ];
+    await withFetch(
+      url => new Response(JSON.stringify({ items: url.pathname.includes("/dev/") ? items : [] }), { status: 200 }),
+      async urls => {
+        const result = await fetchOpenShiftWarnings(config, "token");
+        expect(urls.map(url => decodeURIComponent(url))).toEqual([
+          "https://api.example.com:6443/api/v1/namespaces/dev/events?fieldSelector=type=Warning",
+          "https://api.example.com:6443/api/v1/namespaces/prod/events?fieldSelector=type=Warning",
+        ]);
+        expect(result.denied).toEqual([]);
+        expect(result.warnings).toEqual([
+          {
+            id: "event-1",
+            namespace: "dev",
+            kind: "Pod",
+            name: "api-7f9c",
+            uid: "pod-uid",
+            reason: "BackOff",
+            message: "Back-off restarting failed container",
+            count: 31,
+            firstSeen: "2026-01-01T00:01:00Z",
+            lastSeen: "2026-01-01T00:10:00Z",
+          },
+          {
+            id: "event-2",
+            namespace: "dev",
+            kind: "ReplicaSet",
+            name: "api-7f9c",
+            uid: "rs-uid",
+            reason: "FailedCreate",
+            message: "Error creating: pods is forbidden",
+            count: 6,
+            firstSeen: "2026-01-01T00:02:00Z",
+            lastSeen: "2026-01-01T00:05:00Z",
+          },
+        ]);
+      },
+    );
+  });
+
+  test("a namespace whose events the token may not list is named, the others still answer", async () => {
+    await withFetch(
+      url =>
+        url.pathname.includes("/prod/")
+          ? new Response("forbidden", { status: 403 })
+          : new Response(JSON.stringify({ items: [] }), { status: 200 }),
+      async () => {
+        const result = await fetchOpenShiftWarnings(config, "token");
+        expect(result).toEqual({ warnings: [], denied: ["prod"], failed: [] });
+      },
+    );
+  });
+
+  test("an expired token stops at the first namespace", async () => {
+    await withFetch(
+      () => new Response("unauthorized", { status: 401 }),
+      async urls => {
+        const result = await fetchOpenShiftWarnings(config, "token");
+        expect(result.failure).toBe("auth");
+        expect(urls).toHaveLength(1);
+      },
+    );
   });
 });
 

@@ -31,6 +31,7 @@ import type {
   OpenShiftWatchResult,
 } from "../../core/openshift/types";
 import { isValidOpenShiftNamespace } from "../../core/openshift/validation";
+import type { OpenShiftWarning, OpenShiftWarningList } from "../../core/openshift/warnings";
 import { isOpenShiftWatchGone, type OpenShiftWatchEvent, parseOpenShiftWatchBuffer } from "../../core/openshift/watch";
 import { failureOf, ProviderAuthError, type ProviderFailure } from "../../core/provider-failure";
 import { fetchWithRetry } from "../http";
@@ -43,12 +44,15 @@ class OpenShiftListError extends Error {
   readonly items: unknown[];
   /** The kind of the failure it wraps (an expired token), for failureOf. */
   readonly failure?: ProviderFailure;
+  /** The HTTP status that ended the list, when the server answered with one. */
+  readonly status?: number;
 
-  constructor(message: string, items: unknown[], failure?: ProviderFailure) {
+  constructor(message: string, items: unknown[], failure?: ProviderFailure, status?: number) {
     super(message);
     this.name = "OpenShiftListError";
     this.items = items;
     this.failure = failure;
+    this.status = status;
   }
 }
 
@@ -95,7 +99,8 @@ async function fetchList(
         "OpenShift",
       );
       if (isOpenShiftAuthStatus(res.status)) throw new ProviderAuthError(OPENSHIFT_BANNER.tokenExpired);
-      if (!res.ok) throw new Error(`OpenShift ${path} failed: ${res.status}`);
+      if (!res.ok)
+        throw new OpenShiftListError(`OpenShift ${path} failed: ${res.status}`, items, undefined, res.status);
       const body = obj(await res.json());
       const pageItems = arr(body?.items);
       const remaining = MAX_LIST_ITEMS - items.length;
@@ -537,6 +542,66 @@ function parseOpenShiftEvent(item: unknown): OpenShiftEvent {
   };
 }
 
+/** A warning event as kept: what it is about (the core API's involvedObject, events.k8s.io's regarding). */
+function parseOpenShiftWarning(item: unknown, namespace: string): OpenShiftWarning | null {
+  const event = obj(item) ?? {};
+  const about = obj(event.involvedObject) ?? obj(event.regarding);
+  const kind = str(about?.kind);
+  const name = str(about?.name);
+  if (!kind || !name) return null;
+  const parsed = parseOpenShiftEvent(item);
+  const meta = metadata(item);
+  const uid = str(about?.uid);
+  return {
+    id: str(meta.uid) ?? `${namespace}/${str(meta.name) ?? `${kind}/${name}/${parsed.reason}`}`,
+    namespace,
+    kind,
+    name,
+    ...(uid ? { uid } : {}),
+    reason: parsed.reason,
+    message: parsed.message,
+    count: parsed.count,
+    firstSeen: str(event.firstTimestamp) ?? str(event.eventTime) ?? str(meta.creationTimestamp) ?? parsed.lastSeen,
+    lastSeen: parsed.lastSeen,
+  };
+}
+
+/**
+ * Every configured namespace's warnings (events of type Warning: OpenShift says what went wrong, codepulse adds
+ * nothing). A namespace whose events the token may not list is named, not a failure of the others.
+ */
+export async function fetchOpenShiftWarnings(
+  config: OpenShiftClusterConfig,
+  token: string,
+  signal?: AbortSignal,
+): Promise<OpenShiftWarningList> {
+  const result: OpenShiftWarningList = { warnings: [], denied: [], failed: [] };
+  for (const ns of config.namespaces) {
+    signal?.throwIfAborted();
+    if (!isValidOpenShiftNamespace(ns)) continue;
+    try {
+      const { items } = await fetchList(
+        config.serverUrl,
+        token,
+        `/api/v1/namespaces/${encodeURIComponent(ns)}/events`,
+        signal,
+        "fieldSelector=type%3DWarning",
+      );
+      for (const item of items) {
+        const warning = parseOpenShiftWarning(item, ns);
+        if (warning) result.warnings.push(warning);
+      }
+    } catch (err) {
+      if (isAbortError(err, signal)) throw err;
+      if (failureOf(err) === "auth") return { ...result, failure: "auth" };
+      debugError("OpenShift", err);
+      if (err instanceof OpenShiftListError && err.status === 403) result.denied.push(ns);
+      else result.failed.push(ns);
+    }
+  }
+  return result;
+}
+
 /** The events about one resource (by kind and name in its namespace), newest first. */
 export async function fetchOpenShiftEvents(
   serverUrl: string,
@@ -553,8 +618,7 @@ export async function fetchOpenShiftEvents(
     "OpenShift",
   );
   if (isOpenShiftAuthStatus(res.status)) throw new ProviderAuthError(OPENSHIFT_BANNER.tokenExpired);
-  if (res.status === 403)
-    throw new Error(`No permission to list events in ${resource.namespace}. The token needs list on events.`);
+  if (res.status === 403) throw new Error(OPENSHIFT_BANNER.eventsDenied([resource.namespace]));
   if (!res.ok) throw new Error(`OpenShift events failed: ${res.status}`);
   const events = arr(obj(await res.json())?.items).map(parseOpenShiftEvent);
   return events.sort((a, b) => (b.lastSeen ?? "").localeCompare(a.lastSeen ?? ""));

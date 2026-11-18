@@ -46,6 +46,13 @@ import type {
   OpenShiftWatchResult,
 } from "./types";
 import { OPENSHIFT_WATCH_KINDS, type OpenShiftListedInventory } from "./types";
+import {
+  linkWarningsToCommits,
+  mergeWarnings,
+  type OpenShiftWarning,
+  type OpenShiftWarningList,
+  sameWarnings,
+} from "./warnings";
 import type { OpenShiftWatchEvent } from "./watch";
 import { appendOpenShiftLogFollow } from "./watch";
 
@@ -108,6 +115,12 @@ export interface OpenShiftApiPort {
     resource: OpenShiftResource,
     signal?: AbortSignal,
   ) => Promise<OpenShiftEvent[]>;
+  /** Every configured namespace's warnings. */
+  fetchOpenShiftWarnings: (
+    config: OpenShiftClusterConfig,
+    token: string,
+    signal?: AbortSignal,
+  ) => Promise<OpenShiftWarningList>;
 }
 
 /** The cache: finished builds per commit, and build logs. */
@@ -192,8 +205,60 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
   const live = {
     listed: null as OpenShiftListedInventory | null,
   };
+  /**
+   * Each commit's warnings: the cached ones and every one read since. The cluster keeps an event for a few hours;
+   * a commit keeps its warnings until the cache limit evicts it.
+   */
+  const warningsBySha = new Map<string, OpenShiftWarning[]>();
+  /** The warnings the cluster listed last, linked again whenever the commits' resources change. */
+  let listedWarnings: OpenShiftWarning[] = [];
+  /** Namespaces whose events the token may not list, for the Events tab's notice. */
+  let warningsDenied: string[] = [];
+
+  /** Links the listed warnings to the commits now held, attaches each commit's, and saves what is new. */
+  function attachWarnings(): void {
+    const linked = linkWarningsToCommits(listedWarnings, commits, live.listed?.controllers ?? []);
+    const changed: string[] = [];
+    for (const [sha, incoming] of linked) {
+      const kept = warningsBySha.get(sha) ?? [];
+      const merged = mergeWarnings(kept, incoming);
+      if (sameWarnings(kept, merged)) continue;
+      warningsBySha.set(sha, merged);
+      changed.push(sha);
+    }
+    for (const [sha, commit] of commits) {
+      const warnings = warningsBySha.get(sha);
+      if (commit.warnings !== warnings)
+        commits.set(sha, warnings ? { ...commit, warnings } : { ...commit, warnings: undefined });
+    }
+    // An older commit only shown from the cache is not saved again: that would count as a use for eviction.
+    const toSave = changed.filter(sha => !shownFromCache.has(sha));
+    if (toSave.length > 0) void persistWarnings(toSave);
+  }
+
+  async function persistWarnings(shas: string[]): Promise<void> {
+    const epoch = lifecycle().getEpoch();
+    const repoPath = app.repoPath();
+    try {
+      await persistMerged(
+        ports.cache(),
+        repoPath,
+        shas,
+        () => lifecycle().isCurrent(epoch, repoPath) && !app.suspended(),
+        sha => warningsBySha.get(sha) ?? [],
+        (sha, existing, incoming: OpenShiftWarning[]) => ({
+          sha,
+          builds: existing?.builds ?? [],
+          warnings: mergeWarnings(existing?.warnings ?? [], incoming),
+        }),
+      );
+    } catch (err) {
+      debugError("OpenShift", err);
+    }
+  }
 
   function publish(): void {
+    attachWarnings();
     ports.onDataChange();
     const badges = buildOpenShiftGraphBadges(commits);
     // What each namespace runs comes from the whole live list, so a deployed commit below the window is marked too.
@@ -265,6 +330,7 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
       if (!lifecycle().isCurrent(epoch, repoPath)) return;
       if (!entry) continue;
       commits.set(sha, commitDataFromCacheEntry(entry));
+      if (entry.warnings?.length) warningsBySha.set(sha, mergeWarnings(warningsBySha.get(sha) ?? [], entry.warnings));
       if (!window.has(sha)) shownFromCache.add(sha);
       changed = true;
     }
@@ -286,7 +352,11 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
           .flatMap(ns => ns.builds)
           .map(toCachedBuild)
           .filter((build): build is NonNullable<typeof build> => build !== null && isTerminalBuildStatus(build.status)),
-      (sha, existing, incoming) => ({ sha, builds: mergeById(existing?.builds ?? [], incoming) }),
+      (sha, existing, incoming) => ({
+        sha,
+        builds: mergeById(existing?.builds ?? [], incoming),
+        ...(existing?.warnings ? { warnings: existing.warnings } : {}),
+      }),
     );
   }
 
@@ -334,6 +404,8 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
         app.setStatus(providerError(result.error));
         return;
       }
+      await refreshWarnings(requestConfig, token, args.signal);
+      if (args.signal?.aborted || !lifecycle().isCurrent(args.epoch, repoPath)) return;
       seeds.clear();
       for (const [sha, commit] of result.data) seeds.set(sha.toLowerCase(), commit);
       // Window commits and cached older ones take the builds the cluster still lists for them.
@@ -378,6 +450,20 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
       lifecycle().noteFetchResult(false);
       publish();
       app.setStatus(providerError(message));
+    }
+  }
+
+  /** Reads the warnings again; they are linked to commits when the commits are published. */
+  async function refreshWarnings(config: OpenShiftClusterConfig, token: string, signal?: AbortSignal): Promise<void> {
+    try {
+      const list = await ports.api.fetchOpenShiftWarnings(config, token, signal);
+      // An expired token shows on the next request that needs it: the warnings keep what they had.
+      if (list.failure === "auth") return;
+      listedWarnings = list.warnings;
+      warningsDenied = list.denied;
+    } catch (err) {
+      if (signal?.aborted) throw err;
+      debugError("OpenShift", err);
     }
   }
 
@@ -535,6 +621,9 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
     cachedSHAs.clear();
     shownFromCache.clear();
     live.listed = null;
+    warningsBySha.clear();
+    listedWarnings = [];
+    warningsDenied = [];
     ports.onLiveState("idle");
     ports.restartLive();
     queriedSHAs.clear();
@@ -556,6 +645,8 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
           .filter(build => build !== null),
       })),
     queriedSHAs,
+    /** The namespaces whose warnings the token may not read: the Events tab says so. */
+    warningsDenied: (): readonly string[] => warningsDenied,
     /** Frozen after a 401: no live session starts until a Reload. */
     isFrozen: () => authFrozen,
     isAvailable,

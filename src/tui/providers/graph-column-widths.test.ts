@@ -51,6 +51,15 @@ describe("provider column widths", () => {
     expect(widths.first).toBe(15 + 2);
     expect(widths.second).toBe(DATE_COL_WIDTH);
   });
+
+  test("OpenShift Live makes room for ` !` after the counts only when a commit has warnings", () => {
+    const lanes = {
+      live: { failCount: 1, runningCount: 1, unknownCount: 1, passCount: 1 },
+      cache: { failCount: 0, runningCount: 0, unknownCount: 0, passCount: 0 },
+    };
+    const widths = OPENSHIFT_GRAPH_COLUMNS.widths(new Map([["a", badge({ lanes, warnings: true })]]));
+    expect(widths.first).toBe(15 + 2 + 2);
+  });
 });
 
 describe("GitHub badges", () => {

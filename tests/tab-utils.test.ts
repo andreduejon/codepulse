@@ -54,9 +54,14 @@ describe("getAvailableTabs", () => {
   test("includes stashes only in Git view, including the default view", () => {
     expect(getAvailableTabs(input)).toEqual(["files", "stashes", "info"]);
     expect(getAvailableTabs({ ...input, activeProviderView: "git" })).toEqual(["files", "stashes", "info"]);
-    for (const activeProviderView of ["github-actions", "jenkins", "openshift"] as const) {
+    for (const activeProviderView of ["github-actions", "jenkins"] as const) {
       expect(getAvailableTabs({ ...input, activeProviderView })).toEqual([activeProviderView, "info"]);
     }
+    expect(getAvailableTabs({ ...input, activeProviderView: "openshift" })).toEqual([
+      "openshift",
+      "openshift-events",
+      "info",
+    ]);
   });
 
   test("omits stashes when the selected commit has none", () => {

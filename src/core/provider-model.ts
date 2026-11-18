@@ -50,6 +50,8 @@ export interface GraphBadge {
   resourceCount?: number;
   /** Named status-count lanes (e.g. OpenShift `live` / `cache`). */
   lanes?: Record<string, GraphStatusCounts>;
+  /** OpenShift: Kubernetes warned about its resources (`!` after the Live counts). */
+  warnings?: boolean;
   /** OpenShift: the namespaces whose workloads run this commit now, shown with the refs in the graph. */
   namespaces?: NamespaceMarker[];
   /** Severity counts used by scan/quality providers. */

@@ -1,5 +1,6 @@
 import { createEffect, createMemo, createSignal, For, on, Show, untrack } from "solid-js";
 import type { OpenShiftCommitData, OpenShiftResource, OpenShiftStatus } from "../../../core/openshift/types";
+import { warningsAbout } from "../../../core/openshift/warnings";
 import type { StatusCategory } from "../../../core/status";
 import type { DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
@@ -149,6 +150,16 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
   // Namespaces without matched resources are left out of both the tree and the cursor order (no invisible stops).
   const namespaces = createMemo(() => (data()?.namespaces ?? []).filter(ns => namespaceResources(ns).length > 0));
   const resources = createMemo(() => namespaces().flatMap(namespaceResources));
+  /** The resources OpenShift warned about, by id: they get `!`. What it said is in the Events tab. */
+  const warned = createMemo(() => {
+    const warnings = data()?.warnings ?? [];
+    if (warnings.length === 0) return null;
+    return new Set(
+      resources()
+        .filter(resource => warningsAbout(resource, warnings).length > 0)
+        .map(r => r.id),
+    );
+  });
   // Same wording as the CI tabs: the row (re)loads this commit's resources.
   const reloadLabel = () => (data() ? "Reload commit" : "Load commit");
   const reloadHint = () => (data() ? "reload" : "load");
@@ -312,6 +323,13 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
           grow={false}
         />
         <box flexGrow={1} />
+        <Show when={warned()}>
+          {set => (
+            <text selectable={!props.mouseEnabled} flexShrink={0} width={2} wrapMode="none" fg={t().warning}>
+              {set().has(resource.id) ? " !" : "  "}
+            </text>
+          )}
+        </Show>
         <text selectable={!props.mouseEnabled} flexShrink={0} width={2} wrapMode="none" fg={color()}>
           {statusMark(resource.status).padStart(2)}
         </text>

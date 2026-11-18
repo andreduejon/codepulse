@@ -25,6 +25,8 @@ interface OpenShiftResourceDialogProps {
   consoleUrl?: string;
   /** The events about the resource, for the events view (`c`). */
   loadEvents?: (resource: OpenShiftResource) => Promise<OpenShiftEvent[]>;
+  /** The view it opens on (the Events tab opens the events); the log, or the object without one, by default. */
+  initialView?: "events";
 }
 
 type ViewMode = "log" | "json" | "events";
@@ -36,7 +38,15 @@ function resourceHasLog(resource: OpenShiftResource): boolean {
 export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourceDialogProps>) {
   /** The browser and the environment, through the app's system port. */
   const system = useSystem();
-  const [viewMode, setViewMode] = createSignal<ViewMode>(resourceHasLog(props.resource) ? "log" : "json");
+  const [viewMode, setViewMode] = createSignal<ViewMode>(
+    untrack(() =>
+      props.initialView === "events" && props.loadEvents && OPENSHIFT_EVENT_KINDS.has(props.resource.kind)
+        ? "events"
+        : resourceHasLog(props.resource)
+          ? "log"
+          : "json",
+    ),
+  );
   const [logText, setLogText] = createSignal<string | null>(null);
   const [logError, setLogError] = createSignal<string | null>(null);
   const [logLoading, setLogLoading] = createSignal(false);

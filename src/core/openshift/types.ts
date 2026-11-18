@@ -5,6 +5,7 @@ import {
   type ProviderCacheLimit,
   type ProviderLimit,
 } from "../provider-settings";
+import type { OpenShiftWarning } from "./warnings";
 
 export type OpenShiftCacheLimit = ProviderCacheLimit;
 
@@ -100,6 +101,8 @@ export interface OpenShiftNamespaceData {
 export interface OpenShiftCommitData {
   sha: string;
   namespaces: OpenShiftNamespaceData[];
+  /** The Kubernetes warnings about its resources (warnings.ts), newest first. */
+  warnings?: OpenShiftWarning[];
   /** Live inventory was applied or skipped (no digest seed). Not a cache/UI flag. */
   liveFetched: boolean;
 }

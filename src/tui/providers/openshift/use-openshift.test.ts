@@ -106,6 +106,7 @@ function mountOpenShift(
     };
   });
   const live = spyOn(api, "fetchOpenShiftResources").mockResolvedValue(listed);
+  const warnings = spyOn(api, "fetchOpenShiftWarnings").mockResolvedValue({ warnings: [], denied: [], failed: [] });
   const watches: Array<{
     signal: AbortSignal;
     onEvent: Parameters<typeof api.watchOpenShiftStream>[5];
@@ -124,6 +125,7 @@ function mountOpenShift(
     logWrite,
     inventory,
     live,
+    warnings,
     watch,
   ]) {
     cleanup.push(() => mock.mockRestore());

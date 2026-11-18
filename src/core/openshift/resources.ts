@@ -637,7 +637,8 @@ export function buildOpenShiftGraphBadges(data: Map<string, OpenShiftCommitData>
       ...ns.builds,
       ...ns.imageStreamTags,
     ]);
-    if (resources.length === 0) continue;
+    const warned = (entry.warnings?.length ?? 0) > 0;
+    if (resources.length === 0 && !warned) continue;
     const live = resources.filter(r => !isCachedOpenShiftResource(r));
     const cached = resources.filter(isCachedOpenShiftResource);
     const totals = statusCounts(resources);
@@ -653,6 +654,7 @@ export function buildOpenShiftGraphBadges(data: Map<string, OpenShiftCommitData>
       },
       latestRunAt: "",
       latestStatus: badge,
+      ...(warned ? { warnings: true } : {}),
     });
   }
   return badges;

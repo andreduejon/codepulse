@@ -57,7 +57,7 @@ export const GOLDEN_PLAYS: readonly GoldenPlay[] = [
   },
   {
     name: "providers",
-    covers: "each provider tab with its details, a CI log, an OpenShift resource log, Snyk",
+    covers: "each provider tab with its details, OpenShift's Events tab, a CI log, an OpenShift resource log, Snyk",
     args: [
       ...WIDE,
       "--play",
@@ -66,6 +66,8 @@ export const GOLDEN_PLAYS: readonly GoldenPlay[] = [
         'tab wait:"CI #812" right shot:github',
         'esc tab wait:"main #41" right shot:jenkins',
         "esc g tab wait:pull9 right shot:openshift",
+        // The first commit has no warnings yet; the one shop-test runs has several.
+        'right wait:"No warnings" esc j j j j right right wait:"total warnings" j shot:openshift-events',
         'esc tab wait:"Vulnerabilities" shot:snyk',
       ].join("\n"),
     ],

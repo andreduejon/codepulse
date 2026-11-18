@@ -52,6 +52,8 @@ export interface UseOpenShiftResult {
   loadResourceObject: (resource: OpenShiftResource, force?: boolean) => Promise<unknown>;
   /** The events about the resource, always from the API (they change by the minute and are not cached). */
   loadResourceEvents: (resource: OpenShiftResource) => Promise<OpenShiftEvent[]>;
+  /** The namespaces whose warnings the token may not read. Reactive. */
+  warningsDenied: () => readonly string[];
 }
 
 export function useOpenShift(opts: {
@@ -188,5 +190,9 @@ export function useOpenShift(opts: {
     followLog: service.followLog,
     loadResourceObject: service.loadResourceObject,
     loadResourceEvents: service.loadResourceEvents,
+    warningsDenied: () => {
+      dataVersion();
+      return service.warningsDenied();
+    },
   };
 }

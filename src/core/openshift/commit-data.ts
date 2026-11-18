@@ -6,6 +6,7 @@
 import type { GraphBadge } from "../provider-model";
 import { cachedBuildToResource, mergeById, type OpenShiftCacheEntry } from "./merge";
 import type { OpenShiftCommitData, OpenShiftListedInventory, OpenShiftNamespaceData, OpenShiftResource } from "./types";
+import { mergeWarnings } from "./warnings";
 
 /** A graph badge with no resources, for a commit that only carries namespace markers. */
 export function emptyGraphBadge(sha: string): GraphBadge {
@@ -57,7 +58,12 @@ export function commitDataFromCacheEntry(entry: OpenShiftCacheEntry): OpenShiftC
     ns.builds.push(cachedBuildToResource(build));
     namespaces.set(build.namespace, ns);
   }
-  return { sha: entry.sha, namespaces: [...namespaces.values()], liveFetched: false };
+  return {
+    sha: entry.sha,
+    namespaces: [...namespaces.values()],
+    liveFetched: false,
+    ...(entry.warnings?.length ? { warnings: entry.warnings } : {}),
+  };
 }
 
 export function resourceHasImageDigest(resource: OpenShiftResource): boolean {
@@ -96,10 +102,13 @@ export function mergeLiveIntoCommit(
   sha: string,
   liveFetched = false,
 ): OpenShiftCommitData {
+  // Warnings come from their own list (warnings.ts), not from a resource listing: the commit keeps both sides'.
+  const kept = mergeWarnings(base?.warnings ?? [], live?.warnings ?? []);
+  const warnings = kept.length > 0 ? { warnings: kept } : {};
   if (!live) {
     if (!base) return { sha, namespaces: [], liveFetched };
     if (!liveFetched) return base;
-    return { sha, liveFetched: true, namespaces: base.namespaces.map(clearLiveLane) };
+    return { sha, liveFetched: true, namespaces: base.namespaces.map(clearLiveLane), ...warnings };
   }
   if (!base) return { ...live, sha, liveFetched: liveFetched || live.liveFetched };
   const fetched = liveFetched || base.liveFetched || live.liveFetched;
@@ -129,5 +138,6 @@ export function mergeLiveIntoCommit(
     sha,
     namespaces: [...namespaces.values()],
     liveFetched: fetched,
+    ...warnings,
   };
 }

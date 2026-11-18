@@ -457,6 +457,22 @@ function openshift(url: URL, signal: AbortSignal | null | undefined): Response {
   if (plural === "events") {
     if (ns === "shop-prod") return forbidden("events is forbidden");
     const selector = url.searchParams.get("fieldSelector") ?? "";
+    // The namespace's warnings (fieldSelector=type=Warning): each event says what it is about, like the cluster's.
+    if (selector === "type=Warning") {
+      const items = [...world.events.entries()]
+        .filter(([key]) => key.startsWith(`${ns}/`))
+        .flatMap(([key, list]) => {
+          const [, kind, name] = key.split("/");
+          return list
+            .filter(event => event.type === "Warning")
+            .map(event => ({
+              ...event,
+              metadata: { ...(event.metadata as object), uid: `${key}/${event.reason}` },
+              involvedObject: { kind, name, namespace: ns },
+            }));
+        });
+      return json({ kind: "EventList", items });
+    }
     const kind = selector.match(/involvedObject\.kind=([^,]+)/)?.[1];
     const object = selector.match(/involvedObject\.name=([^,]+)/)?.[1];
     return json({ kind: "EventList", items: world.events.get(`${ns}/${kind}/${object}`) ?? [] });

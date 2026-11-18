@@ -8,3 +8,6 @@ export const OPENSHIFT_LEGEND: LegendItem[] = (["pass", "running", "fail"] as co
   [[statusIcon(category), theme => statusColor(theme, category)]],
   category === "pass" ? "ok" : category === "running" ? "in progress" : "failing",
 ]);
+
+/** `!`: OpenShift warned about the resource. Its warnings are in the Events tab. */
+export const OPENSHIFT_WARNING_LEGEND: LegendItem = [[["!", theme => theme.warning]], "warning"];

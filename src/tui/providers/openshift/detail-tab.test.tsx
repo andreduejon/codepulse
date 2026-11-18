@@ -6,6 +6,7 @@ import { createSignal, Show } from "solid-js";
 import * as browser from "../../../adapters/system/open-url";
 import { resourceFromWatchObject } from "../../../core/openshift/resources";
 import type { OpenShiftCommitData, OpenShiftResource } from "../../../core/openshift/types";
+import type { OpenShiftWarning } from "../../../core/openshift/warnings";
 import { createDetailMemory, type DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
 import { createThemeState, ThemeContext } from "../../context/theme";
@@ -39,6 +40,7 @@ export async function renderOpenShiftTab(
     /** The dashboard's event: a build to mark, and its color. */
     targetResourceId?: string;
     targetColor?: string;
+    warnings?: OpenShiftWarning[];
   }> = {},
 ) {
   const data: OpenShiftCommitData = {
@@ -54,6 +56,7 @@ export async function renderOpenShiftTab(
         pods: opts.pods ?? [resource("Pod", "payments-api-7f9c-x2k4")],
       },
     ],
+    ...(opts.warnings ? { warnings: opts.warnings } : {}),
   };
   const [cursor, setCursor] = createSignal(0);
   /** Off and on again: what a tab switch or a switch between the two layouts does to the tab. */
@@ -345,5 +348,36 @@ test("the dashboard's build gets the cursor once: mounted again (a resize), the 
     expect(tab.cursor()).toBe(0);
   } finally {
     tab.renderer.destroy();
+  }
+});
+
+test("a resource OpenShift warned about has ! in the warning color before its status, and nothing more", async () => {
+  const warning: OpenShiftWarning = {
+    id: "event-1",
+    namespace: "payments-dev",
+    kind: "Pod",
+    name: "payments-api-6d2b-m9w3",
+    reason: "Unhealthy",
+    message: "Readiness probe failed",
+    count: 4,
+    firstSeen: "2026-03-02T09:16:00Z",
+    lastSeen: "2026-03-02T09:20:00Z",
+  };
+  const t = await renderOpenShiftTab({
+    pods: [resource("Pod", "payments-api-6d2b-m9w3"), resource("Pod", "payments-api-6d2b-q1z8")],
+    warnings: [warning],
+  });
+  try {
+    expect(t.row("m9w3").replace(/\s+/g, " ").trim()).toMatch(/payments-api-6d2b-m9w3 ! ✓$/);
+    expect(t.row("q1z8").replace(/\s+/g, " ").trim()).toMatch(/payments-api-6d2b-q1z8 ✓$/);
+    expect(t.captureCharFrame()).not.toMatch(/Unhealthy|Readiness/);
+    const y = t
+      .captureCharFrame()
+      .split("\n")
+      .findIndex(line => line.includes("m9w3"));
+    const mark = t.captureSpans().lines[y]?.spans.find(span => span.text.includes("!"));
+    expect(mark?.fg).toEqual(RGBA.fromHex(t.theme.warning));
+  } finally {
+    t.renderer.destroy();
   }
 });

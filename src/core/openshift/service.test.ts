@@ -10,6 +10,7 @@ import type { OpenShiftCacheEntry } from "./merge";
 import { createOpenShiftService, type OpenShiftApiPort, type OpenShiftCachePort } from "./service";
 import type { OpenShiftResource } from "./types";
 import { DEFAULT_OPENSHIFT_CONFIG } from "./types";
+import type { OpenShiftWarning, OpenShiftWarningList } from "./warnings";
 
 const SHA = "c".repeat(40);
 const build: OpenShiftResource = {
@@ -50,6 +51,8 @@ function harness() {
       successfulRequests: error ? 0 : 1,
     })),
   };
+  const cluster = { warnings: { warnings: [], denied: [], failed: [] } as OpenShiftWarningList };
+  Object.assign(api, { fetchOpenShiftWarnings: mock(async () => cluster.warnings) });
   const restarts = { count: 0 };
   let lifecycle!: FetchLifecycle;
   const service = createOpenShiftService({
@@ -99,6 +102,7 @@ function harness() {
     service,
     lifecycle,
     restarts,
+    cluster,
     fail: (next: string | null) => {
       error = next;
     },
@@ -126,4 +130,56 @@ test("an expired token freezes the live list until a Reload, which starts it aga
   expect(h.service.isFrozen()).toBe(false);
   expect(h.restarts.count).toBeGreaterThan(before);
   expect(h.service.getCommitData(SHA)?.namespaces[0]?.builds).toHaveLength(1);
+});
+
+const buildWarning = (overrides: Partial<OpenShiftWarning> = {}): OpenShiftWarning => ({
+  id: "event-1",
+  namespace: "ns",
+  kind: "Build",
+  name: "app-1",
+  reason: "BuildFailed",
+  message: "Build ns/app-1 failed",
+  count: 1,
+  firstSeen: "2026-03-02T09:16:00Z",
+  lastSeen: "2026-03-02T09:16:00Z",
+  ...overrides,
+});
+
+test("a warning about a commit's resource shows with the commit and is saved with its builds", async () => {
+  const h = harness();
+  h.cluster.warnings = { warnings: [buildWarning()], denied: [], failed: [] };
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  expect(h.service.getCommitData(SHA)?.warnings?.map(w => w.id)).toEqual(["event-1"]);
+  expect(h.saved.get(SHA)?.warnings?.map(w => w.id)).toEqual(["event-1"]);
+  expect(h.saved.get(SHA)?.builds.map(b => b.name)).toEqual(["app-1"]);
+});
+
+test("a warning the cluster no longer lists stays with its commit; a newer read of it updates it", async () => {
+  const h = harness();
+  h.cluster.warnings = { warnings: [buildWarning(), buildWarning({ id: "event-2" })], denied: [], failed: [] };
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  h.cluster.warnings = {
+    warnings: [buildWarning({ id: "event-2", count: 4, lastSeen: "2026-03-02T09:30:00Z" })],
+    denied: [],
+    failed: [],
+  };
+  await h.service.refresh();
+  expect(h.service.getCommitData(SHA)?.warnings?.map(w => [w.id, w.count])).toEqual([
+    ["event-2", 4],
+    ["event-1", 1],
+  ]);
+  expect(h.saved.get(SHA)?.warnings?.map(w => [w.id, w.count])).toEqual([
+    ["event-2", 4],
+    ["event-1", 1],
+  ]);
+});
+
+test("a namespace whose events the token may not list is named, until it may", async () => {
+  const h = harness();
+  h.cluster.warnings = { warnings: [], denied: ["ns"], failed: [] };
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  expect(h.service.warningsDenied()).toEqual(["ns"]);
+  h.cluster.warnings = { warnings: [], denied: [], failed: [] };
+  await h.service.refresh();
+  expect(h.service.warningsDenied()).toEqual([]);
 });

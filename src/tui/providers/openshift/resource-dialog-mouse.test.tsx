@@ -21,6 +21,7 @@ async function renderResource(
   consoleUrl?: string,
   loadEvents?: (resource: OpenShiftResource) => Promise<OpenShiftEvent[]>,
   object: unknown = { objectMarker: "fake-object" },
+  initialView?: "events",
 ) {
   const resource: OpenShiftResource = {
     id: `${kind}/resource`,
@@ -52,6 +53,7 @@ async function renderResource(
             followLog={follow ? followLog : undefined}
             consoleUrl={consoleUrl}
             loadEvents={loadEvents}
+            initialView={initialView}
             onClose={close}
           />
         </Show>
@@ -494,6 +496,28 @@ const warning = (reason: string, minutes: number): OpenShiftEvent => ({
   message: `${reason} message`,
   count: 3,
   lastSeen: minutesAgo(minutes),
+});
+
+test("opened from the Events tab, the dialog starts on the events; c still cycles to the log", async () => {
+  const loadEvents = mock(
+    async (): Promise<OpenShiftEvent[]> => [
+      { type: "Warning", reason: "BackOff", message: "Back-off restarting", count: 3, lastSeen: null },
+    ],
+  );
+  const d = await renderResource("Pod", false, true, undefined, loadEvents, undefined, "events");
+  try {
+    await Bun.sleep(0);
+    await d.flush();
+    expect(d.frame()).toMatch(/test-resource · events/);
+    expect(d.frame()).toContain("BackOff");
+    expect(d.loadLog).not.toHaveBeenCalled();
+    await d.key("c");
+    await Bun.sleep(0);
+    await d.flush();
+    expect(d.frame()).toMatch(/test-resource · log/);
+  } finally {
+    d.renderer.destroy();
+  }
 });
 
 test("the events view starts with what the status says is wrong; the title counts the warnings", async () => {

@@ -94,7 +94,7 @@
 
 === shot 3: openshift (200x45) ===
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-  Graph                         Commit   Description                                                        Live           Cache                        Resources                      Info
+  Graph                         Commit   Description                                                        Live           Cache                    Resources            Events             Info
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
     █                           bf08113   dev   origin/dev   shop-dev  feat(api): export request metrics     2   1          1                 Reload commit                                       live
     │                                                                                                                                         total resources                                        4
@@ -104,7 +104,7 @@
     │                                                                                                                                            ├─ Pods
     │ █                         6adc455   feature/payments-r…   origin/feature/pay…  wip(payments): retry…  ·······        ·······               │  ├─ shop-api-7d9f8-r2m4p                          ✓
     │ │                                                                                                                                          │  └─ shop-api-7d9f8-pull9                          ●
-    █─╯                         64ddc8a   shop-test  feat(payments): retry failed payments with exponenti…   4   1          1   1                └─ Builds
+    █─╯                         64ddc8a   shop-test  feat(payments): retry failed payments with exponenti…   4   1      !   1   1                └─ Builds
     │                                                                                                                                               └─ shop-api-44                                   ✓
     █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······
     │
@@ -139,27 +139,74 @@
                                                                         tab Snyk · enter reload · esc back · ←/→ switch tab · ↑/↓ navigate                              ✓ ok  ● in progress  ✗ failing
 
 
-=== shot 4: snyk (200x45) ===
+=== shot 4: openshift-events (200x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                        Live           Cache                    Resources            Events             Info
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+    █                           bf08113   dev   origin/dev   shop-dev  feat(api): export request metrics     2   1          1                 total warnings                                         5
+    │                                                                                                                                         ├─ ▾ shop-dev                                          1
+    █                           e6209dd  feat(api): add a health endpoint                                   ·······        ·······            │  └─ BuildFailed  Build shop-api-41              2h ago
+    │                                                                                                                                         │     Build shop-dev/shop-api-41 failed
+    █                           3447db9   v0.42.0   main   origin/…   shop-pr…   +2  docs: rewrite the RE…   4              1                 └─ ▾ shop-test                                         4
+    │                                                                                                                                            ├─ BackOff  Pod shop-api-7d9f8-x2k4q         just now
+    │ █                         6adc455   feature/payments-r…   origin/feature/pay…  wip(payments): retry…  ·······        ·······               ├─ Unhealthy  Pod shop-api-7d9f8-x2k4q         1m ago
+    │ │                                                                                                                                          ├─ OOMKilling  Pod shop-api-7d9f8-oom7k       18m ago
+    █─╯                         64ddc8a   shop-test  feat(payments): retry failed payments with exponentia   4   1      !   1   1                └─ ProgressDeadlineExceeded  Deployment sho…  40m ago
+    │
+    █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······
+    │
+    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······
+    │ │
+    │ █                         0166f71  feat(i18n): add French                                             ·······        ·······
+    │ │
+    │ █─╮                       5245790  Merge branch 'main' into feature/i18n                              ·······        ·······
+    │ │ │
+    │ █ │                       484821c  feat(i18n): add German                                             ·······        ·······
+    │ │ │
+    │ █ │                       3ad11a2  feat(i18n): extract the checkout strings                           ·······        ·······
+    │ │ │
+    █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                     ·······        ·······
+    │ │ │ │
+    │ │ │ █                     9d1b361  fix(search): ignore accents                                        ·······        ·······
+    │ │ │ │
+    │ │ │ █                     cce93f9  feat(search): search as you type                                   ·······        ·······
+    │ │ │ │
+    │ │ │ █─╮                   ae57e03  Merge branch 'main' into feature/search                            ·······        ·······
+    │ │ │ │ │
+    │ │ │ █ │                   a89a18f  feat(search): highlight matching words                             ·······        ·······
+    │ │ │ │ │
+    │ │ │ █ │                   52defc5  feat(search): rank results by popularity                           ·······        ·······
+
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                           normal   search   path   ancestry
+  │
+  │   customer-notification-service   shop   shop-web                                                                 main   86 commits       │
+  │                                                                                                                                           │     No permission to list events in shop-prod   ✕
+                                                                                                                                              │     The token needs list on events.
+                                                               tab Snyk · enter events · o open · esc back · ←/→ switch tab · ↑/↓ navigate    │
+
+
+=== shot 5: snyk (200x45) ===
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
   Graph                         Commit   Description                                                  Severity             Last Scan              Vulnerabilities        Dependencies         Info
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-    █                           bf08113   dev   origin/dev  feat(api): export request metrics          C1   H3   M0   L0   just now           Rescan commit
-    │                                                                                                                                         Copy scan as JSON
-    █                           e6209dd  feat(api): add a health endpoint                             ·······              ·······
-    │                                                                                                                                         Group by                                      [severity]
-    █                           3447db9   v0.42.0   main   origin/main   +2  docs: rewrite the READ…   C1   H3   M0   L0   just now           Enter vulnerability filter...                          4
+    █                           bf08113   dev   origin/dev  feat(api): export request metrics          C1   H3   M0   L0   just now           Scan commit
     │
-    │ █                         6adc455   feature/payment…   origin/feature/…  wip(payments): retry…  ·······              ·······            ▾ CRITICAL                                             1
-    │ │                                                                                                                                       └─ ▸ CVE-2022-23540                                9.1 ●
-    █─╯                         64ddc8a  feat(payments): retry failed payments with exponential bac…  ·······              ·······            ▾ HIGH                                                 3
-    │                                                                                                                                         ├─ ▸ CVE-2026-10001                                8.2 ●
-    █                           917f7b3  perf(cart): cache price lookups                              ·······              ·······            ├─ ▸ CVE-2020-8203                                 7.5 ●
-    │                                                                                                                                         └─ ▸ CVE-2024-4068                                 7.5 ●
-    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                ·······              ·······            · MEDIUM                                               0
-    │ │                                                                                                                                       · LOW                                                  0
+    █                           e6209dd  feat(api): add a health endpoint                             ·······              ·······
+    │
+    █                           3447db9   v0.42.0   main   origin/main   +2  docs: rewrite the READ…   C1   H3   M0   L0   just now
+    │
+    │ █                         6adc455   feature/payment…   origin/feature/…  wip(payments): retry…  ·······              ·······
+    │ │
+    █─╯                         64ddc8a  feat(payments): retry failed payments with exponential back  ·······              ·······
+    │
+    █                           917f7b3  perf(cart): cache price lookups                              ·······              ·······
+    │
+    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                ·······              ·······
+    │ │
     │ █                         0166f71  feat(i18n): add French                                       ·······              ·······
-    │ │                                                                                                                                       · NEW  vs 3447db9, 2 commits back                      0
-    │ █─╮                       5245790  Merge branch 'main' into feature/i18n                        ·······              ·······            · FIXED  vs 3447db9, 2 commits back                    0
+    │ │
+    │ █─╮                       5245790  Merge branch 'main' into feature/i18n                        ·······              ·······
     │ │ │
     │ █ │                       484821c  feat(i18n): add German                                       ·······              ·······
     │ │ │
@@ -183,6 +230,6 @@
   │   customer-notification-service   shop   shop-web                                                                 main   86 commits
   │
 
-                                                            tab Dashboard · enter/→ show details · shift ←/→ switch project · ↑/↓ navigate           ● upgrade  ● override  ● no fix  ! mature exploit
+                                                            tab Dashboard · enter/→ show details · shift ←/→ switch project · ↑/↓ navigate
 
 

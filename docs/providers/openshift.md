@@ -90,7 +90,7 @@ snapshot by Build id, preserving its snapshot ID and logs. OpenShift history
 prune does not drop Builds already cached. Every cached commit shows its Builds,
 also below the fetch size, and keeps them through refreshes. Least-recently-accessed
 snapshots evict at the limit, cascading to their log artifacts. Pods, workloads, and
-ImageStreamTags are not written to disk.
+ImageStreamTags are not written to disk; the warnings about them are (see Warnings).
 
 An expired token (401) stops automatic requests: polls, watches, and fetches on
 view switches or selection. The banner reads **Token expired** · OpenShift with
@@ -174,6 +174,26 @@ A failing row shows only its name and `✗`, to keep the tree quiet. Why it fail
 is in the resource dialog's events view: what its containers wait on, exit codes,
 restarts, failing conditions and their messages.
 
+## Warnings
+
+Kubernetes events of type `Warning` in the configured namespaces are read with every
+build list fetch (Reload and auto refresh). codepulse takes them as OpenShift reports
+them: a warning is never turned into a failure, and `✗` comes only from a resource's
+own status.
+
+- A warning belongs to the commit whose resource it is about. One about a ReplicaSet or
+  ReplicationController goes to its Deployment's or DeploymentConfig's commit. A warning
+  about a resource no commit has is not kept.
+- Warnings are saved in the commit's snapshot (see Cache), so they outlast the cluster's
+  copy and are evicted with the snapshot by the cache limit.
+- The graph shows `!` in the warning colour after a commit's **Live** counts.
+- In **Resources**, a resource OpenShift warned about shows `!` before its status mark.
+- The **Events** tab lists the commit's warnings by namespace, newest first: reason,
+  resource and when. The selected warning shows its whole message and how many times it
+  happened. Enter opens its resource's dialog on the events view, `o` opens it in the
+  web console. A namespace whose events the token may not list is named in a notice
+  under the tab.
+
 ## Required read permissions
 
 Configured token needs `list` access for:
@@ -185,7 +205,7 @@ Configured token needs `list` access for:
 - `deploymentconfigs.apps.openshift.io`
 - `replicationcontrollers`
 - `pods`
-- `events` (only for the resource dialog: its events view and warning count)
+- `events` (for the **Events** tab, and the resource dialog's events view and warning count)
 
 Live freshness also needs `watch` on Deployments, DeploymentConfigs, and Pods
 in each configured namespace. OpenShift/`kubernetes` `view` already has
