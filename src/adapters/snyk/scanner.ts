@@ -4,6 +4,7 @@ import { basename, dirname, isAbsolute, join, posix, relative, resolve } from "n
 import { BANNER } from "../../core/banner";
 import { addDebugEvent, redactDebugValue } from "../../core/debug-events";
 import { monotonicNow } from "../../core/monotonic";
+import { ProviderError } from "../../core/provider-failure";
 import { normalizeSnykTargetFile, parseSnykDepGraphs } from "../../core/snyk/dep-graph";
 import { snykFailureReason } from "../../core/snyk/failure-reason";
 import { parseSnykOutput } from "../../core/snyk/parser";
@@ -765,7 +766,7 @@ export async function scanSnykCommit(
     const existing = await cache.read(options.repoPath, sha);
     throwIfAborted(options.signal);
     if (!shouldReplaceSnykResult(existing ?? undefined, result, options.force)) {
-      throw new Error(BANNER.snyk.partialRescan);
+      throw new ProviderError(BANNER.snyk.partialRescan, "partial");
     }
     await cache.write(options.repoPath, result);
     return result;

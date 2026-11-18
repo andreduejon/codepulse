@@ -5,6 +5,7 @@ import { expect, mock, test } from "bun:test";
 import { BANNER } from "../banner";
 import { FetchLifecycle } from "../fetch-lifecycle";
 import type { GraphRow } from "../git/types";
+import type { ProviderFailure } from "../provider-failure";
 import type { GraphBadge } from "../provider-model";
 import type { ProviderStatus } from "../provider-status";
 import type { GitHubCacheEntry } from "./merge";
@@ -59,7 +60,10 @@ function harness() {
       return items.length;
     },
   };
-  let answer: { data: GitHubWorkflowRun[]; error: string | null } = { data: [run()], error: null };
+  let answer: { data: GitHubWorkflowRun[]; error: string | null; failure?: ProviderFailure } = {
+    data: [run()],
+    error: null,
+  };
   const api = {
     fetchCIDataForSHAs: mock(async () => ({ ...answer, jobs: new Map() })),
     fetchRunJobs: mock(async () => ({ jobs: [job], error: null })),
@@ -129,7 +133,7 @@ test("a first fetch asks GitHub about the graph's commits, shows their runs and 
 
 test("an expired token stops automatic requests until a Reload", async () => {
   const h = harness();
-  h.answer({ data: [], error: BANNER.github.tokenExpired });
+  h.answer({ data: [], error: BANNER.github.tokenExpired, failure: "auth" });
   await h.lifecycle.fetchInitial(undefined, undefined, true);
   expect(h.app.status).toEqual({ kind: "error", message: BANNER.github.tokenExpired });
   h.answer({ data: [run()], error: null });

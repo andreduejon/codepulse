@@ -47,6 +47,7 @@ function harness() {
   const listed = () => ({
     data: error ? [] : [build],
     error,
+    failure: error ? ("auth" as const) : undefined,
     jobUrls: [JOB],
     discoveryComplete: true,
     discoveryTruncated: false,

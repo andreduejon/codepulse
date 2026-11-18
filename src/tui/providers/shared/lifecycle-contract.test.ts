@@ -115,6 +115,8 @@ function harness<T>(
 
 const errorFor = (failure: ContractFailure, texts: { auth: string; server: string }) =>
   failure === "auth" ? texts.auth : failure === "server" ? texts.server : null;
+/** What a real adapter says beside an expired token's message. */
+const kindFor = (failure: ContractFailure) => (failure === "auth" ? ("auth" as const) : undefined);
 
 // ── GitHub ──────────────────────────────────────────────────────────────────────
 
@@ -143,6 +145,7 @@ const github: ContractFixture = {
         data: hasData && !failure ? [githubRun] : [],
         jobs: new Map(),
         error: errorFor(failure, { auth: BANNER.github.tokenExpired, server: BANNER.github.fetchFailed }),
+        failure: kindFor(failure),
       })),
     );
     options.onCleanup(() => list.mockRestore());
@@ -197,6 +200,7 @@ const jenkins: ContractFixture = {
         return {
           data,
           error: errorFor(failure, { auth: BANNER.jenkins.tokenExpired, server: BANNER.jenkins.fetchFailed }),
+          failure: kindFor(failure),
           jobUrls: [JOB_URL],
           discoveryComplete: true,
           discoveryTruncated: false,
@@ -273,6 +277,7 @@ const openshift: ContractFixture = {
       options.backend.request(untrack(repoPath), signal, (hasData, failure) => ({
         data: hasData && !failure ? new Map([[SHA, listedCommit]]) : new Map(),
         error: errorFor(failure, { auth: BANNER.openshift.tokenExpired, server: BANNER.openshift.inventoryFailed }),
+        failure: kindFor(failure),
         failures: [],
         successfulRequests: failure ? 0 : 1,
       })),

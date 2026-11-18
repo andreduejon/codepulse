@@ -1,4 +1,3 @@
-import { BANNER } from "../../../core/banner";
 import type { OpenShiftCommitData, OpenShiftResource } from "../../../core/openshift/types";
 import { scopedMemory } from "../../components/detail-memory";
 import { OPENSHIFT_LEGEND } from "../legends";
@@ -12,11 +11,17 @@ export interface OpenShiftDetailSource extends ProviderDetailSource<OpenShiftCom
   isLoading?: (sha: string) => boolean;
   /** How old the live list is (`live`, `2m ago`). */
   liveAge?: () => string;
+  /** Whether an expired token stopped the live list until a Reload. */
+  isFrozen?: () => boolean;
   /** Web console URL from the settings, for `o`. */
   consoleUrl?: () => string;
   /** Enter on a resource: its log, object and events. */
   onOpenResource?: (resource: OpenShiftResource) => void;
 }
+
+/** The live list is off: an expired token froze it. Reads the status, so a view redraws when it changes. */
+export const liveListFrozen = (source: OpenShiftDetailSource) =>
+  source.status?.kind === "error" && (source.isFrozen?.() ?? false);
 
 export const openshiftDetail = detailEntry({
   view: "openshift",
@@ -35,9 +40,7 @@ export const openshiftDetail = detailEntry({
       targetResourceId={props.context.target}
       targetColor={props.context.targetColor}
       unavailableReason={props.context.unavailable("openshift", props.source.status)}
-      liveUnavailable={
-        props.source.status?.kind === "error" && props.source.status.message === BANNER.openshift.tokenExpired
-      }
+      liveUnavailable={liveListFrozen(props.source)}
       loading={props.source.status?.kind === "loading"}
       {...props.context.cursor}
     />

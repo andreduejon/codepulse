@@ -1,3 +1,4 @@
+import type { ProviderFailure } from "../provider-failure";
 import {
   DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS,
   type ProviderAutoRefreshSeconds,
@@ -111,6 +112,8 @@ export function isCachedOpenShiftResource(resource: OpenShiftResource): boolean 
 export interface OpenShiftInventoryResult {
   data: Map<string, OpenShiftCommitData>;
   error: string | null;
+  /** What kind of failure `error` is (core/provider-failure.ts). */
+  failure?: ProviderFailure;
   failures: OpenShiftInventoryFailure[];
   successfulRequests: number;
 }
@@ -129,6 +132,8 @@ export interface OpenShiftListedInventory {
   failures: OpenShiftInventoryFailure[];
   successfulRequests: number;
   error: string | null;
+  /** What kind of failure `error` is (core/provider-failure.ts). */
+  failure?: ProviderFailure;
   resourceVersions: Map<string, string>;
 }
 

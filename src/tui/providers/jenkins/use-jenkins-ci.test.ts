@@ -12,6 +12,7 @@ import { buildGraph } from "../../../core/git/graph";
 import type { Commit } from "../../../core/git/types";
 import type { JenkinsRun } from "../../../core/jenkins/types";
 import * as monotonic from "../../../core/monotonic";
+import type { ProviderFailure } from "../../../core/provider-failure";
 import { tabNoticeFor } from "../../app/app-tab-notice";
 import { createAppState } from "../../context/state";
 import { useJenkinsCI } from "./use-jenkins-ci";
@@ -35,9 +36,10 @@ const run = (overrides: Partial<JenkinsRun> = {}): JenkinsRun => ({
   ...overrides,
 });
 
-const result = (data: JenkinsRun[], error: string | null = null) => ({
+const result = (data: JenkinsRun[], error: string | null = null, failure?: ProviderFailure) => ({
   data,
   error,
+  failure,
   jobUrls: [JOB_URL],
   discoveryComplete: true,
   discoveryTruncated: false,
@@ -215,7 +217,7 @@ test("after a 401, entering the view again stays frozen; only Reload retries", a
   const running = spyOn(api, "fetchJenkinsRunsForBuilds").mockResolvedValue({ data: [], error: null });
   cleanup.push(() => running.mockRestore());
   // A running build arrives with the 401, so re-entering the view would normally re-check it.
-  graph.mockResolvedValue(result([run({ status: "running", conclusion: null })], BANNER.jenkins.tokenExpired));
+  graph.mockResolvedValue(result([run({ status: "running", conclusion: null })], BANNER.jenkins.tokenExpired, "auth"));
   await jenkins.refresh();
   await settle();
   expect(state.providerStatusFor("jenkins")).toEqual({ kind: "error", message: BANNER.jenkins.tokenExpired });

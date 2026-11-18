@@ -11,6 +11,7 @@ import {
   type JenkinsTestReport,
 } from "../../core/jenkins/types";
 import { isSafeJenkinsRequestUrl } from "../../core/jenkins/validation";
+import { failureOf, ProviderAuthError, type ProviderFailure } from "../../core/provider-failure";
 import { fetchWithRetry as fetchWithRetryPolicy, runLimited } from "../http";
 
 interface JenkinsBuildApi {
@@ -166,7 +167,7 @@ function isJenkinsLoginRedirect(location: string | null): boolean {
 
 function jenkinsAuthError(detail: string): Error {
   debugError("Jenkins", detail);
-  return new Error(BANNER.jenkins.authFailed);
+  return new ProviderAuthError(BANNER.jenkins.authFailed);
 }
 
 async function fetchJson<T>(
@@ -184,7 +185,7 @@ async function fetchJson<T>(
     throw jenkinsAuthError(`login redirect ${url}`);
   }
   const contentType = res.headers.get("content-type") ?? "";
-  if (res.status === 401) throw new Error(BANNER.jenkins.tokenExpired);
+  if (res.status === 401) throw new ProviderAuthError(BANNER.jenkins.tokenExpired);
   if (!res.ok) {
     debugError("Jenkins", `${res.status} ${res.statusText} ${url}`);
     throw new Error(BANNER.jenkins.fetchFailed);
@@ -207,6 +208,7 @@ export async function resolveJenkinsJobs(
   /** Each branch job's last build, from its project's listing: what a probe compares. */
   branchLastBuilds: Map<string, JenkinsJobApi["lastBuild"]>;
   error: string | null;
+  failure?: ProviderFailure;
   complete: boolean;
   truncated: boolean;
   /** Branch jobs of multibranch projects: how many are read, out of how many enabled ones. */
@@ -216,6 +218,7 @@ export async function resolveJenkinsJobs(
   const rootData = new Map<string, JenkinsJobApi>();
   const branchLastBuilds = new Map<string, JenkinsJobApi["lastBuild"]>();
   let firstError: string | null = null;
+  let failure: ProviderFailure | undefined;
   let discoveredCount = 0;
   let branchJobTotal = 0;
   let truncated = false;
@@ -235,6 +238,7 @@ export async function resolveJenkinsJobs(
       } catch (err) {
         if (isAbortError(err, signal)) throw err;
         firstError ??= bannerOrFallback(err, BANNER.jenkins.fetchFailed, "Jenkins");
+        failure ??= failureOf(err);
       }
     },
     signal,
@@ -329,6 +333,7 @@ export async function resolveJenkinsJobs(
     rootData,
     branchLastBuilds,
     error: firstError,
+    failure,
     complete: discoveries.every(Boolean) && !truncated,
     truncated,
     branchJobs: { shown: discoveredCount, total: branchJobTotal },
@@ -503,9 +508,10 @@ export async function fetchJenkinsRunsForBuilds(
   username: string | undefined,
   token: string,
   signal?: AbortSignal,
-): Promise<{ data: JenkinsRun[]; error: string | null }> {
+): Promise<{ data: JenkinsRun[]; error: string | null; failure?: ProviderFailure }> {
   const out: JenkinsRun[] = [];
   let firstError: string | null = null;
+  let failure: ProviderFailure | undefined;
   await runLimited(
     runs,
     JENKINS_CONCURRENCY,
@@ -527,11 +533,12 @@ export async function fetchJenkinsRunsForBuilds(
       } catch (err) {
         if (isAbortError(err, signal)) throw err;
         firstError ??= bannerOrFallback(err, BANNER.jenkins.fetchFailed, "Jenkins");
+        failure ??= failureOf(err);
       }
     },
     signal,
   );
-  return { data: out, error: firstError };
+  return { data: out, error: firstError, failure };
 }
 
 export async function fetchJenkinsDataForSHAs(
@@ -553,6 +560,7 @@ export async function fetchJenkinsDataForSHAs(
     opts.preferredBranches,
   );
   let firstError = resolved.error;
+  let failure = resolved.failure;
   await runLimited(
     resolved.jobs,
     JENKINS_CONCURRENCY,
@@ -581,6 +589,7 @@ export async function fetchJenkinsDataForSHAs(
             } catch (err) {
               if (isAbortError(err, opts.signal)) throw err;
               firstError ??= bannerOrFallback(err, BANNER.jenkins.fetchFailed, "Jenkins");
+              failure ??= failureOf(err);
             }
           },
           opts.signal,
@@ -588,6 +597,7 @@ export async function fetchJenkinsDataForSHAs(
       } catch (err) {
         if (isAbortError(err, opts.signal)) throw err;
         firstError ??= bannerOrFallback(err, BANNER.jenkins.fetchFailed, "Jenkins");
+        failure ??= failureOf(err);
       }
     },
     opts.signal,
@@ -596,6 +606,7 @@ export async function fetchJenkinsDataForSHAs(
   return {
     data: runs,
     error: firstError,
+    failure,
     jobUrls: resolved.jobs.map(job => normalizeJenkinsJobUrl(job.url)),
     discoveryComplete: resolved.complete,
     discoveryTruncated: resolved.truncated,
@@ -635,6 +646,7 @@ export async function fetchJenkinsGraphDataForSHAs(
     opts.preferredBranches,
   );
   let firstError = resolved.error;
+  let failure = resolved.failure;
   await runLimited(
     resolved.jobs,
     JENKINS_CONCURRENCY,
@@ -668,6 +680,7 @@ export async function fetchJenkinsGraphDataForSHAs(
       } catch (err) {
         if (isAbortError(err, opts.signal)) throw err;
         firstError ??= bannerOrFallback(err, BANNER.jenkins.fetchFailed, "Jenkins");
+        failure ??= failureOf(err);
       }
     },
     opts.signal,
@@ -676,6 +689,7 @@ export async function fetchJenkinsGraphDataForSHAs(
   return {
     data: runs,
     error: firstError,
+    failure,
     jobUrls: resolved.jobs.map(job => normalizeJenkinsJobUrl(job.url)),
     discoveryComplete: resolved.complete,
     discoveryTruncated: resolved.truncated,
@@ -749,7 +763,7 @@ export async function fetchJenkinsRunJobs(
   username: string | undefined,
   token: string,
   signal?: AbortSignal,
-): Promise<{ jobs: JenkinsJob[]; error: string | null }> {
+): Promise<{ jobs: JenkinsJob[]; error: string | null; failure?: ProviderFailure }> {
   try {
     const wfapi = await fetchJson<JenkinsWfapiDescribe>(
       jenkinsApiUrl(onOrigin(run.url, run.jobUrl), "wfapi/describe"),
@@ -793,7 +807,7 @@ export async function fetchJenkinsRunJobs(
   } catch (err) {
     if (isAbortError(err, signal)) throw err;
     // Like GitHub's "jobs failed": say which part failed, not a generic fetch failure.
-    return { jobs: [], error: bannerOrFallback(err, BANNER.jenkins.stagesFailed, "Jenkins") };
+    return { jobs: [], error: bannerOrFallback(err, BANNER.jenkins.stagesFailed, "Jenkins"), failure: failureOf(err) };
   }
 }
 
@@ -810,7 +824,7 @@ export async function fetchJenkinsConsoleLog(
     headers: authHeaders(username, token),
     signal,
   });
-  if (res.status === 401) throw new Error(BANNER.jenkins.tokenExpired);
+  if (res.status === 401) throw new ProviderAuthError(BANNER.jenkins.tokenExpired);
   if (!res.ok) {
     debugError("Jenkins", `${res.status} ${res.statusText} ${url}`);
     throw new Error(BANNER.jenkins.logFailed);

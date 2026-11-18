@@ -8,6 +8,7 @@
 
 import { BANNER, bannerOrFallback } from "../banner";
 import type { ProviderFetchArgs } from "../fetch-lifecycle";
+import { failureOf, type ProviderFailure } from "../provider-failure";
 import type { ProviderAppPort, ProviderLifecycle } from "../provider-ports";
 import type { ProviderCacheLimit } from "../provider-settings";
 import { providerError, providerIdle, providerLoading, providerUnavailable, providerWarning } from "../provider-status";
@@ -59,13 +60,13 @@ export interface JenkinsApiPort {
     username: string | undefined,
     token: string,
     signal?: AbortSignal,
-  ) => Promise<{ data: JenkinsRun[]; error: string | null }>;
+  ) => Promise<{ data: JenkinsRun[]; error: string | null; failure?: ProviderFailure }>;
   fetchJenkinsRunJobs: (
     run: JenkinsRun,
     username: string | undefined,
     token: string,
     signal?: AbortSignal,
-  ) => Promise<{ jobs: JenkinsJob[]; error: string | null }>;
+  ) => Promise<{ jobs: JenkinsJob[]; error: string | null; failure?: ProviderFailure }>;
   fetchJenkinsConsoleLog: (
     run: JenkinsRun,
     username: string | undefined,
@@ -152,8 +153,8 @@ export function createJenkinsService(ports: JenkinsServicePorts) {
     return names;
   };
 
-  function rememberAuthError(error: string | null): void {
-    if (error === BANNER.jenkins.tokenExpired || error === BANNER.jenkins.authFailed) {
+  function rememberAuthError(error: string | null, failure: ProviderFailure | undefined): void {
+    if (failure === "auth") {
       authFrozen = true;
       authError = error;
     }
@@ -185,10 +186,10 @@ export function createJenkinsService(ports: JenkinsServicePorts) {
   async function fetchForSHAs(shas: string[], mode: "shallow" | "full", signal?: AbortSignal, thorough = false) {
     const epoch = lifecycle().getEpoch();
     const repoPath = app.repoPath();
-    if (!lifecycle().isCurrent(epoch, repoPath)) return { firstError: null, stale: true };
+    if (!lifecycle().isCurrent(epoch, repoPath)) return { firstError: null, failure: undefined, stale: true };
     const config = ports.config();
     const token = ports.token(config.tokenEnvVar);
-    if (!token || shas.length === 0) return { firstError: null };
+    if (!token || shas.length === 0) return { firstError: null, failure: undefined };
     const jobs = config.jobs;
     const shortcuts = !thorough && shas.every(sha => queriedSHAs.has(sha));
     const result =
@@ -204,7 +205,8 @@ export function createJenkinsService(ports: JenkinsServicePorts) {
             buildLimit: config.fetchDepth,
             preferredBranches: graphBranches(),
           });
-    if (signal?.aborted || !lifecycle().isCurrent(epoch, repoPath)) return { firstError: null, stale: true };
+    if (signal?.aborted || !lifecycle().isCurrent(epoch, repoPath))
+      return { firstError: null, failure: undefined, stale: true };
     if (result.error === null) {
       for (const sha of shas) {
         queriedSHAs.add(sha);
@@ -223,7 +225,7 @@ export function createJenkinsService(ports: JenkinsServicePorts) {
     // Like GitHub's and OpenShift's: a truncated discovery still caches the finished builds it read. The notice says
     // some branch jobs were not read, and each session asks again, so a build missing here is added later.
     await persistTerminalRuns(repoPath, shas, epoch);
-    return { firstError: result.error, stale: false };
+    return { firstError: result.error, failure: result.failure, stale: false };
   }
 
   /**
@@ -321,10 +323,10 @@ export function createJenkinsService(ports: JenkinsServicePorts) {
       lifecycle().noteFetchStarted();
       return;
     }
-    const { firstError, stale } = await fetchForSHAs(target, "shallow", signal, retry);
+    const { firstError, failure, stale } = await fetchForSHAs(target, "shallow", signal, retry);
     if (stale || !lifecycle().isCurrent(epoch, repoPath)) return;
     lifecycle().noteFetchStarted();
-    rememberAuthError(firstError ?? null);
+    rememberAuthError(firstError ?? null, failure);
     // Reading only some branch jobs is a notice (its own banner), not a failure that delays the next refresh.
     lifecycle().noteFetchResult(!firstError);
     if (!firstError) app.noteSuccess();
@@ -344,25 +346,32 @@ export function createJenkinsService(ports: JenkinsServicePorts) {
       run => wanted.has(run.headSha.toLowerCase()) && run.status === "running",
     );
     let runningError: string | null = null;
+    let runningFailure: ProviderFailure | undefined;
     if (runningRuns.length > 0) {
       const config = ports.config();
       const token = ports.token(config.tokenEnvVar);
       if (!token) return;
-      const { data, error } = await ports.api.fetchJenkinsRunsForBuilds(runningRuns, config.username, token, signal);
+      const { data, error, failure } = await ports.api.fetchJenkinsRunsForBuilds(
+        runningRuns,
+        config.username,
+        token,
+        signal,
+      );
       if (signal?.aborted || !lifecycle().isCurrent(epoch, repoPath)) return;
       for (const run of data) runCache.set(`${run.id}:${run.headSha}`, run);
       rebuildCaches();
       await persistTerminalRuns(repoPath, target, epoch);
       if (!lifecycle().isCurrent(epoch, repoPath)) return;
       runningError = error;
+      runningFailure = failure;
     }
     // Builds that started since: each job's last build is probed, and only the jobs with a new one are listed.
     const window = collectTopSHAs(app.graphRows(), ports.config().fetchDepth);
-    const { firstError, stale } = await fetchForSHAs(window, "shallow", signal);
+    const { firstError, failure, stale } = await fetchForSHAs(window, "shallow", signal);
     if (stale || !lifecycle().isCurrent(epoch, repoPath)) return;
     lifecycle().noteRefreshSettled();
     const error = runningError ?? firstError ?? null;
-    rememberAuthError(error);
+    rememberAuthError(error, runningError ? runningFailure : failure);
     lifecycle().noteFetchResult(!error);
     if (!error) app.noteSuccess();
     if (error) app.setStatus(providerError(error));
@@ -464,17 +473,20 @@ export function createJenkinsService(ports: JenkinsServicePorts) {
     // Reload commit is an explicit retry: it clears an auth freeze and reports its own outcome.
     authFrozen = false;
     let firstError: string | null;
+    let failure: ProviderFailure | undefined;
     try {
       const result = await lifecycle().trackFetch(() =>
         lifecycle().runRequest(signal => fetchForSHAs([sha], "full", signal)),
       );
       if (result.stale || !lifecycle().isCurrent(epoch, repoPath)) return;
       firstError = result.firstError ?? null;
+      failure = result.failure;
     } catch (err) {
       if (!lifecycle().isCurrent(epoch, repoPath) || (err instanceof Error && err.name === "AbortError")) return;
       firstError = bannerOrFallback(err, BANNER.jenkins.fetchFailed, "Jenkins");
+      failure = failureOf(err);
     }
-    rememberAuthError(firstError);
+    rememberAuthError(firstError, failure);
     if (firstError) {
       app.setStatus(providerError(firstError));
       return;

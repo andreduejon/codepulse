@@ -63,6 +63,11 @@ function isGitHubRateLimit(res: Response): boolean {
   return res.status === 429 || (res.status === 403 && remaining === "0");
 }
 
+/** A 401 is an auth failure: the service stops automatic requests until a Reload. */
+function httpFailure(res: Response): { failure?: "auth" } {
+  return res.status === 401 ? { failure: "auth" } : {};
+}
+
 function githubHttpBanner(res: Response, kind: "fetch" | "jobs" | "logs"): string {
   if (res.status === 401) return BANNER.github.tokenExpired;
   if (isGitHubRateLimit(res)) return BANNER.github.rateLimit;
@@ -378,6 +383,7 @@ async function fetchCIDataForSHAsOnce(
       return {
         ...empty,
         error: debugGitHubHttp(res, "fetch", `GraphQL HTTP ${res.status} for ${repo.owner}/${repo.repo}`),
+        ...httpFailure(res),
       };
     }
 
@@ -413,6 +419,7 @@ async function fetchCIDataForSHAsOnce(
           data: runs,
           jobs,
           error: debugGitHubHttp(pageRes, "fetch", `GraphQL HTTP ${pageRes.status} for ${repo.owner}/${repo.repo}`),
+          ...httpFailure(pageRes),
           jobsUnsupported: jobsUnsupported || undefined,
         };
       }
@@ -530,7 +537,11 @@ export async function fetchRunJobs(
     for (let page = 0; page < MAX_JOB_PAGES && url; page++) {
       const res = await fetchWithRetry(url, { headers, signal });
       if (!res.ok) {
-        return { jobs, error: debugGitHubHttp(res, "jobs", `Jobs HTTP ${res.status} for run ${runId}`) };
+        return {
+          jobs,
+          error: debugGitHubHttp(res, "jobs", `Jobs HTTP ${res.status} for run ${runId}`),
+          ...httpFailure(res),
+        };
       }
       const json = (await res.json()) as { jobs?: GitHubApiJob[] };
       jobs.push(...(json.jobs ?? []).map(mapApiJob));

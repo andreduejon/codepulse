@@ -6,7 +6,9 @@
  * Everything outside comes through ports; the Solid hook (providers/snyk/use-snyk.ts) builds them and tells the
  * service what changed (the graph's commits, the branches, suspension, another repository).
  */
+
 import { BANNER } from "../banner";
+import { failureOf } from "../provider-failure";
 import type { ProviderAppPort } from "../provider-ports";
 import { providerError, providerIdle, providerLoading, providerUnavailable, providerWarning } from "../provider-status";
 import { buildSnykGraphBadges } from "./badges";
@@ -212,7 +214,7 @@ export function createSnykService(ports: SnykServicePorts) {
       ) {
         const message = error instanceof Error ? error.message : String(error);
         // A partial rescan kept the complete snapshot: Snyk still works, so it's a warning for the tab notice.
-        const partial = message === BANNER.snyk.partialRescan;
+        const partial = failureOf(error) === "partial";
         app.setStatus(partial ? providerWarning(message) : providerError(message));
         if (!partial && app.view() !== "snyk") setFailedOutOfSight({ sha: entry.sha, message });
       }

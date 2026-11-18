@@ -1,6 +1,7 @@
 import { BANNER, bannerOrFallback, debugError } from "../banner";
 import { addDebugEvent } from "../debug-events";
 import type { ProviderFetchArgs } from "../fetch-lifecycle";
+import { failureOf, type ProviderFailure } from "../provider-failure";
 import type { ProviderAppPort, ProviderLifecycle } from "../provider-ports";
 import type { ProviderCacheLimit } from "../provider-settings";
 import { providerError, providerIdle, providerLoading, providerUnavailable } from "../provider-status";
@@ -110,8 +111,8 @@ export function createGitHubService(ports: GitHubServicePorts) {
   /** Skip unsupported WorkflowRun.jobs after the first retry. */
   let jobsUnsupported = false;
 
-  function rememberAuthError(error: string | null): void {
-    if (error === BANNER.github.tokenExpired) authFrozen = true;
+  function rememberAuthError(failure: ProviderFailure | undefined): void {
+    if (failure === "auth") authFrozen = true;
   }
 
   const isAvailable = (): boolean => {
@@ -130,7 +131,7 @@ export function createGitHubService(ports: GitHubServicePorts) {
   async function fetchForSHAs(
     shas: string[],
     signal?: AbortSignal,
-  ): Promise<{ firstError: string | null; failedSHAs: string[] }> {
+  ): Promise<{ firstError: string | null; failure?: ProviderFailure; failedSHAs: string[] }> {
     const epoch = lifecycle().getEpoch();
     const repoPath = app.repoPath();
     if (!lifecycle().isCurrent(epoch, repoPath)) return { firstError: null, failedSHAs: [] };
@@ -155,7 +156,8 @@ export function createGitHubService(ports: GitHubServicePorts) {
         message: "GraphQL workflow jobs unavailable. Using REST on expand.",
       });
     }
-    const firstError = results.find(r => r.error)?.error ?? null;
+    const failed = results.find(r => r.error);
+    const firstError = failed?.error ?? null;
     const failedSHAs: string[] = [];
     for (let i = 0; i < results.length; i++) if (results[i]?.error) failedSHAs.push(...(batches[i] ?? []));
     const failedShaSet = new Set(failedSHAs);
@@ -179,7 +181,7 @@ export function createGitHubService(ports: GitHubServicePorts) {
     ports.onDataChange();
     publishBadges();
     await persistTerminalRuns(repoPath, shas, epoch);
-    return { firstError, failedSHAs };
+    return { firstError, failure: failed?.failure, failedSHAs };
   }
 
   /**
@@ -274,11 +276,11 @@ export function createGitHubService(ports: GitHubServicePorts) {
     if (unqueried.length === 0) return;
     if (showStatus) app.setStatus(providerLoading());
     try {
-      const { firstError, failedSHAs } = await fetchForSHAs(unqueried, signal);
+      const { firstError, failure, failedSHAs } = await fetchForSHAs(unqueried, signal);
       if (signal?.aborted || !lifecycle().isCurrent(epoch, repoPath)) return;
       for (const sha of unqueried) queriedSHAs.add(sha);
       for (const sha of failedSHAs) queriedSHAs.delete(sha);
-      rememberAuthError(firstError);
+      rememberAuthError(failure);
       lifecycle().noteFetchResult(!firstError);
       if (!firstError) app.noteSuccess();
       // An error shows also from a background fetch (like Jenkins): the runs would otherwise look not loaded yet.
@@ -287,7 +289,7 @@ export function createGitHubService(ports: GitHubServicePorts) {
     } catch (err) {
       if (signal?.aborted) return;
       const message = bannerOrFallback(err, BANNER.github.fetchFailed, "GitHub");
-      rememberAuthError(message);
+      rememberAuthError(failureOf(err));
       lifecycle().noteFetchResult(false);
       app.setStatus(providerError(message));
       for (const sha of unqueried) queriedSHAs.delete(sha);
@@ -305,9 +307,9 @@ export function createGitHubService(ports: GitHubServicePorts) {
     const shas = [...new Set([...runningSHAs, ...collectTopSHAs(app.graphRows(), ports.config().fetchDepth)])];
     if (shas.length === 0) return;
     try {
-      const { firstError } = await fetchForSHAs(shas, signal);
+      const { firstError, failure } = await fetchForSHAs(shas, signal);
       if (signal?.aborted || !lifecycle().isCurrent(epoch, repoPath)) return;
-      rememberAuthError(firstError);
+      rememberAuthError(failure);
       lifecycle().noteFetchResult(!firstError);
       if (!firstError) app.noteSuccess();
       // Like Jenkins: a failed refresh is visible (cached runs stay), not only in Debug.

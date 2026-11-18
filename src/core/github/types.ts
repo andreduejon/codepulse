@@ -6,6 +6,7 @@
  * other providers; each provider owns its own type hierarchy.
  */
 
+import type { ProviderFailure } from "../provider-failure";
 import {
   DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS,
   DEFAULT_PROVIDER_CACHE_LIMIT,
@@ -87,11 +88,15 @@ export interface GitHubJob {
 export interface GitHubJobFetchResult {
   jobs: GitHubJob[];
   error: string | null;
+  /** What kind of failure `error` is (core/provider-failure.ts). */
+  failure?: ProviderFailure;
 }
 
 export interface GitHubResult<T> {
   data: T;
   error: string | null;
+  /** What kind of failure `error` is (core/provider-failure.ts). */
+  failure?: ProviderFailure;
 }
 
 /** Mapped step within a job. */

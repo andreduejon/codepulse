@@ -41,6 +41,8 @@ export interface UseOpenShiftResult {
   fetchCommitDataForSHA: (sha: string, force?: boolean) => Promise<void>;
   isLoading: (sha: string) => boolean;
   liveAge: () => string;
+  /** Whether an expired token stopped the live list until a Reload. */
+  isFrozen: () => boolean;
   isAvailable: () => boolean;
   invalidate: () => void;
   loadBuildLog: (resource: OpenShiftResource, force?: boolean) => Promise<string>;
@@ -178,6 +180,7 @@ export function useOpenShift(opts: {
     fetchCommitDataForSHA: service.fetchCommitDataForSHA,
     isLoading: () => liveState() === "loading",
     liveAge: () => (liveState() === "live" ? "live" : ""),
+    isFrozen: service.isFrozen,
     isAvailable: service.isAvailable,
     invalidate: lifecycle.resetCaches,
     loadBuildLog: service.loadBuildLog,

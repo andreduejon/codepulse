@@ -25,6 +25,7 @@ export const openShiftModule = {
         fetchCommitData: openShift.fetchCommitDataForSHA,
         isLoading: openShift.isLoading,
         liveAge: openShift.liveAge,
+        isFrozen: openShift.isFrozen,
         consoleUrl: () => settings.openShift().consoleUrl,
         get status() {
           return state.providerStatusFor("openshift");

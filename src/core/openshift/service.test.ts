@@ -45,6 +45,7 @@ function harness() {
     fetchOpenShiftInventory: mock(async () => ({
       data: error ? new Map() : new Map([[SHA, listed]]),
       error,
+      failure: error ? ("auth" as const) : undefined,
       failures: [],
       successfulRequests: error ? 0 : 1,
     })),

@@ -3,6 +3,7 @@ import { createRoot, createSignal } from "solid-js";
 import { snykAdapters } from "../../../adapters/snyk/adapters";
 import { BANNER } from "../../../core/banner";
 import { buildGraph } from "../../../core/git/graph";
+import { ProviderError } from "../../../core/provider-failure";
 import type { SnykAdapters } from "../../../core/snyk/service";
 import type { SnykScanOptions, SnykScanResult } from "../../../core/snyk/types";
 import type { AppActions, AppState } from "../../context/state";
@@ -167,7 +168,7 @@ describe("useSnyk", () => {
   test("a partial scan that kept the complete snapshot is a warning for the tab notice", async () => {
     const { state, snyk } = mountSnyk({
       scan: async () => {
-        throw new Error(BANNER.snyk.partialRescan);
+        throw new ProviderError(BANNER.snyk.partialRescan, "partial");
       },
     });
     await snyk.scanCommit(SHA_A);

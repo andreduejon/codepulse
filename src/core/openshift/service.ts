@@ -10,6 +10,7 @@
 import { sleep } from "../abort";
 import { BANNER, debugError } from "../banner";
 import type { ProviderFetchArgs } from "../fetch-lifecycle";
+import { failureOf } from "../provider-failure";
 import type { ProviderAppPort, ProviderLifecycle } from "../provider-ports";
 import type { ProviderCacheLimit } from "../provider-settings";
 import { providerError, providerIdle, providerLoading, providerUnavailable, providerWarning } from "../provider-status";
@@ -318,7 +319,7 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
         commitShas: window,
       });
       if (args.signal?.aborted || !lifecycle().isCurrent(args.epoch, repoPath)) return;
-      if (result.error === BANNER.openshift.tokenExpired) {
+      if (result.failure === "auth") {
         lifecycle().noteFetchResult(false);
         freezeAuth();
         publish();
@@ -370,11 +371,9 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
     } catch (err) {
       if (args.signal?.aborted || !lifecycle().isCurrent(args.epoch, repoPath)) return;
       debugError("OpenShift", err);
-      const message =
-        err instanceof Error && err.message === BANNER.openshift.tokenExpired
-          ? BANNER.openshift.tokenExpired
-          : BANNER.openshift.inventoryFailed;
-      if (message === BANNER.openshift.tokenExpired) freezeAuth();
+      const auth = failureOf(err) === "auth";
+      const message = auth ? BANNER.openshift.tokenExpired : BANNER.openshift.inventoryFailed;
+      if (auth) freezeAuth();
       lifecycle().noteFetchResult(false);
       publish();
       app.setStatus(providerError(message));
@@ -418,7 +417,7 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
             commitShas: [],
           });
           if (signal.aborted || !lifecycle().isCurrent(epoch, repoPath)) return;
-          if (listed.error === BANNER.openshift.tokenExpired) {
+          if (listed.failure === "auth") {
             authFrozen = true;
             setLiveStatus("error", BANNER.openshift.tokenExpired);
             return;

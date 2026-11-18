@@ -516,6 +516,7 @@ describe("OpenShift expired token", () => {
       failures: [],
       successfulRequests: 0,
       error: BANNER.openshift.tokenExpired,
+      failure: "auth" as const,
       resourceVersions: new Map(),
     };
     mounted.live.mockResolvedValueOnce(expired);
@@ -552,6 +553,7 @@ describe("OpenShift auth recovery", () => {
     failures: [],
     successfulRequests: 0,
     error: BANNER.openshift.tokenExpired,
+    failure: "auth" as const,
     resourceVersions: new Map(),
   };
 
@@ -575,6 +577,7 @@ describe("OpenShift auth recovery", () => {
     mounted.inventory.mockResolvedValueOnce({
       data: new Map(),
       error: BANNER.openshift.tokenExpired,
+      failure: "auth" as const,
       failures: [],
       successfulRequests: 0,
     });
@@ -617,6 +620,7 @@ describe("OpenShift auth recovery across inventory and live list", () => {
     failures: [],
     successfulRequests: 0,
     error: BANNER.openshift.tokenExpired,
+    failure: "auth" as const,
     resourceVersions: new Map(),
   };
   const fine = { data: new Map(), error: null, failures: [], successfulRequests: 1 };

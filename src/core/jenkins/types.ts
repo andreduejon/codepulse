@@ -1,3 +1,4 @@
+import type { ProviderFailure } from "../provider-failure";
 import {
   DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS,
   DEFAULT_PROVIDER_CACHE_LIMIT,
@@ -109,12 +110,16 @@ export interface JenkinsCommitData {
 export interface JenkinsJobFetchResult {
   jobs: JenkinsJob[];
   error: string | null;
+  /** What kind of failure `error` is (core/provider-failure.ts). */
+  failure?: ProviderFailure;
 }
 
 /** One listing of the configured jobs' builds for some commits. */
 export interface JenkinsListedBuilds {
   data: JenkinsRun[];
   error: string | null;
+  /** What kind of failure `error` is (core/provider-failure.ts). */
+  failure?: ProviderFailure;
   jobUrls: string[];
   discoveryComplete: boolean;
   discoveryTruncated: boolean;
