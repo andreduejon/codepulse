@@ -24,7 +24,7 @@
 		"demo:golden": "bun run scripts/demo/golden.ts",
 		"bench": "bun run scripts/bench/run.ts",
 		"build": "bun run scripts/build.ts",
-		"test": "bun test",
+		"test": "bun test --timeout 30000",
 		"lint": "biome lint src/ tests/ scripts/",
 		"format": "biome format src/ tests/ scripts/",
 		"check": "biome check src/ tests/ scripts/",

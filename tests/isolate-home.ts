@@ -10,7 +10,8 @@ import { join } from "node:path";
 
 // A test cut at its time limit keeps running beside the next one: its renderer and the next test's overlap, and its
 // errors land there (OpenTUI's WrongContext, counts read from the wrong screen). The UI tests mount large screens, which
-// on a loaded machine can take over Bun's default 5 s: give them room, so only a test that really hangs is cut.
+// on a loaded machine can take over Bun's default 5 s: give them room, so only a test that really hangs is cut. `bun run
+// test` passes the same as --timeout, which Bun 1.4.3 (CI's) needs: it doesn't apply this from a preload.
 setDefaultTimeout(30_000);
 
 const realHome = os.homedir();
