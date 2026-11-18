@@ -2,7 +2,8 @@ import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
 import { onCleanup } from "solid-js";
 import { scrollDeltaFor } from "../../core/scroll-window";
 
-const SCROLL_RETRY_MS = 16;
+/** How long a scroll waits for layout before it tries again. */
+export const SCROLL_RETRY_MS = 16;
 
 export interface ScrollSchedule {
   scrollTimer?: ReturnType<typeof setTimeout>;

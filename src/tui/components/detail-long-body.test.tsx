@@ -6,6 +6,7 @@ import type { CommitDetail } from "../../core/git/types";
 import { AppStateContext, createAppState } from "../context/state";
 import { createThemeState, ThemeContext } from "../context/theme";
 import { handleDetailKey } from "../hooks/handle-detail-keys";
+import { SCROLL_RETRY_MS } from "../utils/scroll";
 import DetailPanel from "./detail-panel";
 import type { DetailNavRef } from "./detail-types";
 
@@ -70,9 +71,10 @@ test("a commit body taller than the panel scrolls with ↓ before the cursor mov
     },
     { width: 80, height: 24, kittyKeyboard: true },
   );
+  // Past the scroll's retry, with room for a loaded machine: a key pressed before it fires cancels it.
   const flush = async () => {
     await setup.flush({ maxPasses: 20 });
-    await Bun.sleep(15);
+    await Bun.sleep(SCROLL_RETRY_MS * 3);
     await setup.flush({ maxPasses: 20 });
   };
   try {
