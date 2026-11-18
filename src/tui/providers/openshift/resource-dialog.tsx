@@ -40,6 +40,9 @@ interface OpenShiftResourceDialogProps {
 
 type ViewMode = "log" | "json" | "events";
 
+/** A build only the cache has, whose log nobody opened while it existed: codepulse never got it. */
+export const OPENSHIFT_NO_SAVED_LOG = "No saved log. OpenShift pruned the build before its log was opened.";
+
 function resourceHasLog(resource: OpenShiftResource): boolean {
   return resource.kind === "Build" || resource.kind === "Pod";
 }
@@ -229,7 +232,8 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
       if (logLoading()) return { kind: "loading", text: BUSY.fetchingLog };
       const error = logError();
       if (error) return { kind: "error", title: "Failed to load log", message: error };
-      if (!logText()?.trim()) return { kind: "empty", text: "No log output." };
+      if (!logText()?.trim())
+        return { kind: "empty", text: props.resource.cacheOnly ? OPENSHIFT_NO_SAVED_LOG : "No log output." };
       return null;
     }
     if (viewMode() === "events") {

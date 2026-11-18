@@ -67,7 +67,7 @@ export const GOLDEN_PLAYS: readonly GoldenPlay[] = [
         'esc tab wait:"main #41" right shot:jenkins',
         "esc g tab wait:pull9 right shot:openshift",
         // The first commit has no warnings yet; the one shop-test runs has several.
-        'right wait:"No warnings" esc j j j j right right wait:"total events" j shot:openshift-events',
+        'right wait:"total events" esc j j j j right right wait:"BackOff" j shot:openshift-events',
         'esc tab wait:"Vulnerabilities" shot:snyk',
       ].join("\n"),
     ],

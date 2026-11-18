@@ -52,8 +52,6 @@ export interface OpenShiftEventsTabProps {
   onOpenResource?: (resource: OpenShiftResource, options: { eventsOnly: boolean }) => void;
 }
 
-export const OPENSHIFT_NO_WARNINGS = "No warnings about this commit's resources.";
-
 const RELOAD = "reload";
 
 /** The namespaces closed in one commit. */
@@ -267,16 +265,8 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
         index={() => indexOf(RELOAD)}
         rowRef={tree.ref(RELOAD)}
       />
-      <Show
-        when={warnings().length > 0}
-        fallback={
-          <Show when={!!data()}>
-            <text fg={t().foregroundMuted} wrapMode="word">
-              {OPENSHIFT_NO_WARNINGS}
-            </text>
-          </Show>
-        }
-      >
+      {/* As Resources: the count once the commit is loaded, the tree when there is one. */}
+      <Show when={!!data()}>
         <ProviderSummaryRow label="total events" count={warnings().length} />
         <For each={rows()}>{renderRow}</For>
       </Show>

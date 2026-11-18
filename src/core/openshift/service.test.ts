@@ -297,3 +297,16 @@ test("a finished build the cluster prunes while the app runs is shown from the c
   ]);
   expect(h.app.badges.get(SHA)?.cachedCount).toBe(1);
 });
+
+test("a build only the cache has gives its saved log, or none: the cluster no longer has it to ask", async () => {
+  const h = harness();
+  const fetchLog = mock(async () => "from the cluster");
+  Object.assign(h.api, { fetchOpenShiftBuildLog: fetchLog });
+  const pruned: OpenShiftResource = { ...build, cacheOnly: true };
+  expect(await h.service.loadBuildLog(pruned)).toBe("");
+  // Refresh (force) doesn't ask either.
+  expect(await h.service.loadBuildLog(pruned, true)).toBe("");
+  expect(fetchLog).not.toHaveBeenCalled();
+  // A listed build still asks.
+  expect(await h.service.loadBuildLog(build, true)).toBe("from the cluster");
+});

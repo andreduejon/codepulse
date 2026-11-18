@@ -249,10 +249,10 @@ test("a warning about a resource without events of its own (a ReplicaSet) has no
   }
 });
 
-test("no warnings says so", async () => {
+test("a commit without warnings shows only Reload commit and the count, as Resources does", async () => {
   const t = await renderEventsTab([]);
   try {
-    expect(t.frame()).toContain("No warnings about this commit's resources.");
+    expect(t.lines()).toEqual(["Reload commit live", "total events 0"]);
   } finally {
     t.renderer.destroy();
   }

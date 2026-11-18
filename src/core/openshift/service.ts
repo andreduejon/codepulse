@@ -735,11 +735,13 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
       const repoPath = app.repoPath();
       if (!lifecycle().isCurrent(epoch, repoPath)) return "";
       const sha = resource.commitSha;
-      if (sha && isTerminalBuildStatus(resource.status) && !force) {
+      // A build only the cache has: its saved log or none, also on refresh. The cluster would only answer 404.
+      if (sha && isTerminalBuildStatus(resource.status) && (!force || resource.cacheOnly)) {
         const cached = await ports.cache().readLog(repoPath, sha, resource.namespace, resource.name);
         if (!lifecycle().isCurrent(epoch, repoPath)) return "";
         if (cached) return cached;
       }
+      if (resource.cacheOnly) return "";
       const token = ports.token(ports.config().tokenEnvVar);
       if (!token) throw new Error(unavailableMessage());
       const log = await lifecycle().runRequest(signal =>

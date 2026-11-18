@@ -133,6 +133,8 @@ that produced them.
 
 - Terminal Build logs load from the shared database when present, otherwise from
   the Build log API, then cache if the parent snapshot exists. They are not streamed.
+  A Build only the cache has (OpenShift pruned it) gives its saved log or, when nobody
+  opened it while it existed, says *No saved log*; the cluster is not asked.
 - Running Build logs and Pod logs use `?follow=true`. History then tail. Last
   1000 lines. Open at the bottom; stay pinned only if you are already at the
   bottom. When the stream closes the title shows `log ended`. Press `r` to

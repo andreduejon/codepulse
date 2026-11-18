@@ -8,7 +8,7 @@ import { OPENSHIFT_BANNER } from "../../../core/openshift/banner";
 import type { OpenShiftEvent, OpenShiftResource } from "../../../core/openshift/types";
 import type { OpenShiftWarning } from "../../../core/openshift/warnings";
 import { createThemeState, ThemeContext } from "../../context/theme";
-import OpenShiftResourceDialog from "./resource-dialog";
+import OpenShiftResourceDialog, { OPENSHIFT_NO_SAVED_LOG } from "./resource-dialog";
 
 const descendants = (node: Renderable): Renderable[] =>
   node.getChildren().flatMap(child => [child, ...descendants(child)]);
@@ -754,6 +754,35 @@ test("a read that answers after the dialog closed shows nothing and raises nothi
     expect(errors).not.toHaveBeenCalled();
   } finally {
     errors.mockRestore();
+    setup.renderer.destroy();
+  }
+});
+
+test("a pruned build without a saved log says so, muted, not as a failure", async () => {
+  const resource: OpenShiftResource = {
+    id: "Build/pruned",
+    kind: "Build",
+    namespace: "test-ns",
+    name: "test-pruned",
+    status: "pass",
+    imageRefs: [],
+    cacheOnly: true,
+  };
+  const theme = createThemeState();
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={theme}>
+        <OpenShiftResourceDialog resource={resource} loadLog={async () => ""} onClose={() => {}} />
+      </ThemeContext.Provider>
+    ),
+    { width: 110, height: 20 },
+  );
+  try {
+    await Bun.sleep(0);
+    await setup.flush();
+    expect(setup.captureCharFrame()).toContain(OPENSHIFT_NO_SAVED_LOG);
+    expect(setup.captureCharFrame()).not.toContain("Failed to load log");
+  } finally {
     setup.renderer.destroy();
   }
 });
