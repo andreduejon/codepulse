@@ -33,11 +33,14 @@ function harness() {
     rows: [{ commit: { hash: SHA, refs: [] } }] as unknown as GraphRow[],
   };
   const saved = new Map<string, JenkinsCacheEntry>();
+  const logs = new Map<string, string>();
   const cache: JenkinsCachePort = {
     read: async (_repo, sha) => saved.get(sha) ?? null,
     peekAll: async () => [...saved.values()],
-    readLog: async () => null,
-    writeLog: async () => {},
+    readLog: async (_repo, sha, key) => logs.get(`${sha}:${key}`) ?? null,
+    writeLog: async (_repo, sha, key, log) => {
+      logs.set(`${sha}:${key}`, log);
+    },
     mergeMany: async (_repo, items, merge) => {
       for (const item of items) saved.set(item.sha, merge(item.sha, saved.get(item.sha) ?? null, [...item.incoming]));
       return items.length;
@@ -101,6 +104,7 @@ function harness() {
   return {
     app,
     saved,
+    logs,
     api,
     service,
     lifecycle,
@@ -130,4 +134,18 @@ test("an authentication failure stops automatic requests until a Reload", async 
   await h.service.refreshWindow();
   expect(h.api.fetchJenkinsGraphDataForSHAs).toHaveBeenCalledTimes(2);
   expect(h.service.getCommitData(SHA)?.runs).toHaveLength(1);
+});
+
+test("a finished build's log is kept in the cache, not in memory: once the cache lost it, Jenkins is asked again", async () => {
+  const h = harness();
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  expect(await h.service.fetchRunLog(build)).toBe("log");
+  expect(await h.service.fetchRunLog(build)).toBe("log");
+  // The second open read the cache.
+  expect(h.api.fetchJenkinsConsoleLog).toHaveBeenCalledTimes(1);
+  expect(h.logs.get(`${SHA}:${build.id}`)).toBe("log");
+  // Evicted (the cache screen, or its limit): asked again.
+  h.logs.clear();
+  expect(await h.service.fetchRunLog(build)).toBe("log");
+  expect(h.api.fetchJenkinsConsoleLog).toHaveBeenCalledTimes(2);
 });

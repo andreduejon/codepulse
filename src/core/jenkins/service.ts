@@ -118,7 +118,6 @@ export function createJenkinsService(ports: JenkinsServicePorts) {
 
   const commitDataCache = new Map<string, JenkinsCommitData>();
   const jobsCache = new Map<string, JenkinsJobFetchResult>();
-  const logCache = new Map<string, string>();
   const runCache = new Map<string, JenkinsRun>();
   const resolvedShas = new Set<string>();
   const queriedSHAs = new Set<string>();
@@ -381,7 +380,6 @@ export function createJenkinsService(ports: JenkinsServicePorts) {
   const onResetCaches = () => {
     commitDataCache.clear();
     jobsCache.clear();
-    logCache.clear();
     runCache.clear();
     resolvedShas.clear();
     queriedSHAs.clear();
@@ -429,21 +427,19 @@ export function createJenkinsService(ports: JenkinsServicePorts) {
     return result;
   }
 
-  /** A build's console log: a finished build's from memory or the cache, else from Jenkins (and kept once finished). */
+  /**
+   * A build's console log: a finished build's from the cache, else from Jenkins (and kept in the cache once finished).
+   * Nothing stays in memory: a long log is read again from the cache when it opens again.
+   */
   async function fetchRunLog(run: JenkinsRun, signal?: AbortSignal): Promise<string> {
     const epoch = lifecycle().getEpoch();
-    const cached = logCache.get(run.id);
-    if (cached) return cached;
     const repoPath = app.repoPath();
     if (!lifecycle().isCurrent(epoch, repoPath)) return "";
     const disk = ports.cache();
     if (isTerminalJenkinsRun(run)) {
       const diskLog = await disk.readLog(repoPath, run.headSha, run.id).catch(() => null);
       if (!lifecycle().isCurrent(epoch, repoPath)) return "";
-      if (diskLog) {
-        logCache.set(run.id, diskLog);
-        return diskLog;
-      }
+      if (diskLog) return diskLog;
     }
     const config = ports.config();
     const token = ports.token(config.tokenEnvVar);
@@ -453,11 +449,7 @@ export function createJenkinsService(ports: JenkinsServicePorts) {
       signal,
     );
     if (!lifecycle().isCurrent(epoch, repoPath)) return "";
-    if (run.status === "completed" && log) {
-      logCache.set(run.id, log);
-      if (lifecycle().isCurrent(epoch, repoPath))
-        await disk.writeLog(repoPath, run.headSha, run.id, log).catch(() => {});
-    }
+    if (run.status === "completed" && log) await disk.writeLog(repoPath, run.headSha, run.id, log).catch(() => {});
     return log;
   }
 
