@@ -120,6 +120,9 @@ export function createProviderSet(entries: readonly ProviderEntry[]): ProviderSe
     adapters: <Adapters, Settings extends SettingsSection>(definition: ProviderDefinition<Adapters, Settings>) => {
       const entry = byId.get(definition.id);
       if (!entry) throw new Error(`Provider "${definition.id}" is not registered`);
+      // The adapters were built for the registered definition: another one with the same id may expect others.
+      if ((entry.definition as unknown) !== definition)
+        throw new Error(`Provider "${definition.id}" is registered with another definition`);
       return entry.adapters as Adapters;
     },
   };

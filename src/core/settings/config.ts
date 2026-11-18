@@ -10,7 +10,7 @@ import {
 import { type DebugLog, debugLog } from "../debug-events";
 import type { ProviderView } from "../provider-model";
 import type { ProviderDefinition } from "../provider-set";
-import { missingSettings, type SettingsSection, sectionReader } from "./provider-section";
+import { missingSettings, type SettingsOwner, type SettingsSection, sectionReader } from "./provider-section";
 
 /** The providers whose sections the settings hold: their definitions, from the app's provider set. */
 type Providers = readonly ProviderDefinition[];
@@ -29,7 +29,7 @@ export type ProviderSection = SettingsSection & { readonly [field: string]: unkn
 /** A provider's section, typed by its definition; undefined when the settings have none. */
 export function providerSettings<Settings extends SettingsSection>(
   config: CodepulseConfig,
-  definition: ProviderDefinition<never, Settings>,
+  definition: Pick<SettingsOwner<Settings>, "key">,
 ): Partial<Settings> | undefined {
   return config.providers?.[definition.key] as Partial<Settings> | undefined;
 }

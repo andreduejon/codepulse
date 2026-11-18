@@ -10,6 +10,13 @@ export interface SettingsSection {
   enabled?: boolean;
 }
 
+/** What reads and resolves a provider's settings needs of its definition: its section's key and its settings. */
+export interface SettingsOwner<Settings extends SettingsSection> {
+  id: string;
+  key: string;
+  settings: ProviderSettingsDefinition<Settings>;
+}
+
 /** Reads one provider's values from the file: a value that is wrong is left out, and a warning says why. */
 export interface SettingsReader {
   /** Records that a field's value was left out: `"providers.jenkins.jobs" must be an array, ignoring`. */

@@ -7,7 +7,7 @@
 import { type Accessor, createEffect, createSignal, type Setter, untrack } from "solid-js";
 import { dashboardSettings } from "../../core/dashboard-settings";
 import type { ProviderView } from "../../core/provider-model";
-import type { ProviderDefinition, ProviderSet } from "../../core/provider-set";
+import type { ProviderSet } from "../../core/provider-set";
 import {
   type CodepulseConfig,
   defaultConfig,
@@ -16,7 +16,7 @@ import {
   startViewFor,
 } from "../../core/settings/config";
 import type { SettingsPort } from "../../core/settings/port";
-import type { SettingsSection } from "../../core/settings/provider-section";
+import type { SettingsOwner, SettingsSection } from "../../core/settings/provider-section";
 import type { AppActions, AppState } from "../context/state";
 import type { createThemeState } from "../context/theme";
 
@@ -24,9 +24,9 @@ type ThemeState = ReturnType<typeof createThemeState>;
 
 export interface RepoSettings {
   /** A provider's settings, its defaults filled in. */
-  of: <Settings extends SettingsSection>(definition: ProviderDefinition<never, Settings>) => Accessor<Settings>;
+  of: <Settings extends SettingsSection>(definition: SettingsOwner<Settings>) => Accessor<Settings>;
   /** Changes a provider's settings (the Menu saves them itself). */
-  set: <Settings extends SettingsSection>(definition: ProviderDefinition<never, Settings>, next: Settings) => void;
+  set: <Settings extends SettingsSection>(definition: SettingsOwner<Settings>, next: Settings) => void;
   dashboard: Accessor<ReturnType<typeof dashboardSettings>>;
   setDashboard: Setter<ReturnType<typeof dashboardSettings>>;
   /** The view this repository opens in, as Menu → Providers → Start in shows it. */
@@ -48,7 +48,7 @@ export interface RepoSettings {
 
 /** A provider's section with its defaults filled in. */
 export function resolvedSettings<Settings extends SettingsSection>(
-  definition: ProviderDefinition<never, Settings>,
+  definition: SettingsOwner<Settings>,
   config: CodepulseConfig,
 ): Settings {
   return { ...definition.settings.defaults, ...providerSettings(config, definition) };
@@ -75,12 +75,10 @@ export function useRepoSettings(opts: {
   const sections = new Map<string, ReturnType<typeof createSignal<SettingsSection>>>(
     providers.definitions.map(definition => [
       definition.key,
-      createSignal<SettingsSection>(
-        resolvedSettings(definition as ProviderDefinition<never, SettingsSection>, { providers: opts.initial }),
-      ),
+      createSignal<SettingsSection>(resolvedSettings(definition, { providers: opts.initial })),
     ]),
   );
-  const section = <Settings extends SettingsSection>(definition: ProviderDefinition<never, Settings>) => {
+  const section = <Settings extends SettingsSection>(definition: SettingsOwner<Settings>) => {
     const found = sections.get(definition.key);
     if (!found) throw new Error(`Provider "${definition.id}" is not in the app's provider set`);
     return found;
@@ -103,8 +101,7 @@ export function useRepoSettings(opts: {
     const path = opts.repoPath();
     opts.port.backfill(path);
     const config = read(path);
-    for (const definition of providers.definitions)
-      section(definition)[1](resolvedSettings(definition as ProviderDefinition<never, SettingsSection>, config));
+    for (const definition of providers.definitions) section(definition)[1](resolvedSettings(definition, config));
     setDashboard(dashboardSettings(config.dashboard));
     setStartView(config.startView ?? "git");
     setAutoFastForward(config.autoFastForward ?? false);
@@ -121,7 +118,7 @@ export function useRepoSettings(opts: {
   });
 
   return {
-    of: <Settings extends SettingsSection>(definition: ProviderDefinition<never, Settings>) =>
+    of: <Settings extends SettingsSection>(definition: SettingsOwner<Settings>) =>
       section(definition)[0] as Accessor<Settings>,
     set: (definition, next) => section(definition)[1](() => next),
     dashboard,

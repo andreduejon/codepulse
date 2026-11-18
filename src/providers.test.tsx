@@ -23,6 +23,7 @@ import type { AppActions, AppState } from "./tui/context/state";
 import { createThemeState } from "./tui/context/theme";
 import * as dataLoader from "./tui/hooks/use-data-loader";
 import * as detailLoader from "./tui/hooks/use-detail-loader";
+import { githubModule } from "./tui/providers/github-actions/module";
 import { providerModule } from "./tui/providers/module";
 import { detailEntry } from "./tui/providers/shared/detail-entry";
 
@@ -323,3 +324,9 @@ function point(screen: string, label: string): [number, number] {
   const y = lines.findIndex(line => line.includes(label));
   return [(lines[y]?.indexOf(label) ?? 0) + 1, y];
 }
+
+test("the root's list takes a module only with the adapters it runs on", () => {
+  // @ts-expect-error GitHub's module runs on GitHub's adapters (API, cache, token), not on an empty object.
+  const wrong = providerPlugin(githubModule, () => ({}));
+  expect(wrong.definition.id).toBe("github-actions");
+});

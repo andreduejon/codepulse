@@ -118,11 +118,11 @@ export interface ProviderModule<Adapters, Settings extends SettingsSection, Inst
 /** A module with its types left out, so one list holds every provider's. */
 export type AnyProviderModule = ProviderModule<unknown, SettingsSection, unknown, unknown>;
 
-/** A module as the list holds it, checked to fit its definition. */
+/** A module, its parts checked against each other (its start, Menu rows and detail tabs against its definition). */
 export function providerModule<Adapters, Settings extends SettingsSection, Instance, DetailSource>(
   module: ProviderModule<Adapters, Settings, Instance, DetailSource>,
-): AnyProviderModule {
-  return module as unknown as AnyProviderModule;
+): ProviderModule<Adapters, Settings, Instance, DetailSource> {
+  return module;
 }
 
 /** Starts a module with its own adapters and settings from the app's. */
