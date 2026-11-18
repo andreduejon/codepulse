@@ -1,6 +1,7 @@
 import type { ProviderCacheLimit } from "../provider-settings";
+import type { Severity, SeverityCounts } from "../severity";
 
-export type SnykSeverity = "critical" | "high" | "medium" | "low";
+export type SnykSeverity = Severity;
 
 export type SnykDependencyScope = "prod" | "dev" | "unknown";
 
@@ -42,12 +43,7 @@ export interface SnykDependencyProjectResult {
   reason: string | null;
 }
 
-export interface SnykSeverityCounts {
-  critical: number;
-  high: number;
-  medium: number;
-  low: number;
-}
+export type SnykSeverityCounts = SeverityCounts;
 
 export interface SnykFinding {
   id: string;

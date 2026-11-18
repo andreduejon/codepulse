@@ -15,6 +15,7 @@ import type { RepoSettings } from "../app/repo-settings";
 import type { AppActions, AppState } from "../context/state";
 import type { Theme } from "../context/theme";
 import type { SettingItem } from "../hooks/menu-items-types";
+import type { HelpRow } from "../keybinds";
 import type { GraphColumnWidths } from "./graph-column-widths";
 import type { DetailEntry } from "./shared/detail-entry";
 import type { LegendItem } from "./shared/detail-legend";
@@ -109,6 +110,8 @@ export interface ProviderModule<Adapters, Settings extends SettingsSection, Inst
   menuItems: (menu: ProviderMenuContext<Settings>) => SettingItem[];
   /** What its own detail tab and the ones it adds render, by tab. */
   detailEntries: Readonly<Record<string, DetailEntry<DetailSource>>>;
+  /** Its section of Help → Providers and of `codepulse --help`: its Menu rows explained, its name first. */
+  help?: readonly HelpRow[];
   /** The marks its events show on the Dashboard, explained in the side panel. */
   legend: readonly LegendItem[];
   /** The mark before one of its events on the Dashboard; how its run or build ended by default. */

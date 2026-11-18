@@ -106,24 +106,27 @@ A provider is its own files, one folder per layer, joined by its id:
 
 | Layer | Folder | What it holds |
 |-------|--------|---------------|
-| core | `core/<provider>/` | `definition.ts`: its id, settings key, names and tabs, its settings (defaults, how the file's section is read and checked, what a backfill writes) and the Dashboard events it stored; `events.ts`, `banner.ts` (its messages), its service and model |
+| core | `core/<provider>/` | `definition.ts`: its id (`id.ts`), settings key, names and tabs, its messages (`banner.ts`), its settings (defaults, how the file's section is read and checked, what a backfill writes) and the Dashboard events it stored (`events.ts`); its service and model |
 | adapters | `adapters/<provider>/` | `adapters.ts`: its API, cache (named by its id) and token |
-| terminal | `tui/providers/<provider>/` | `module.ts`: `start` (the provider itself, with its settings and adapters), its colors, Menu rows (`menu-items.ts`), detail tabs, graph columns, legend (`legend.ts`) and what it does on its own (a background error, a tab notice, a dialog) |
+| terminal | `tui/providers/<provider>/` | `module.ts`: `start` (the provider itself, with its settings and adapters), its colors, Menu rows (`menu-items.ts`), help (`help.ts`), detail tabs, graph columns, legend (`legend.ts`) and what it does on its own (a background error, a tab notice, a dialog) |
 
 `src/providers.ts` lists them once: each provider's module (which carries its definition) and its adapters' factory,
 which the compiler checks fit together. The ports build a provider set from the list (`AppPorts.providers`: the
 definitions, in order, and each one's adapters, handed back only for the definition they were built for), and startup
 registers the modules. The set refuses a provider whose id, settings key or tabs collide with another's or the app's
 own (`git`, `dashboard`, Git's tabs), and the host (`modulesFor` in `tui/providers/module.ts`) one without exactly one
-module for its own definition.
+module for its own definition, rendering each of its tabs and no other.
 
 Everything else reads them: the settings model reads, writes and backfills each section through its definition (a
-field given as undefined is cleared); the views, their order and names come from the set; the provider host
-(`tui/app/providers.ts`) starts the modules and is the rest of the app's one way to them (refresh, start over, the
-events they hold, their detail tabs, graph columns and messages); the Menu, the graph, the detail view, the Dashboard
-and `:hide`/`:show` ask the modules. Outside a provider's folders only the built-in themes name the built-in providers:
-their colors are theme keys (`tui/context/theme.ts`). A new provider picks its colors from the theme, and each one a
-theme lacks falls back to the accent, so a custom theme made before it still works.
+field is removed only when the Menu clears it, and a provider's rows write only what they changed); the views, their
+order and names come from the set; the provider host (`tui/app/providers.ts`) starts the modules and is the rest of
+the app's one way to them (refresh, start over, the events they hold, their detail tabs, graph columns and messages);
+the Menu, the graph, the detail view, the Dashboard,
+`:hide`/`:show` and Help ask the modules. Outside a provider's folders only the themes name the built-in providers:
+their badge colors are theme keys (`tui/context/theme.ts`, its definitions and the theme dialog's labels). A new
+provider adds no key: it picks its colors from the theme's others, and a color it leaves out is the accent (the
+badge) or the background (its text). A custom theme made before a built-in provider's colors gets the same: its pair
+comes from the theme's accent and background.
 
 A provider needs only what it uses: a graph column, a background error or a dialog of its own is optional, and a
 provider without columns shows a CI provider's counts and last run. `src/providers.test.tsx` adds one written only in
@@ -138,13 +141,17 @@ The layers test checks imports. What the code reaches while it runs, without an 
 
 - **Registered defaults.** A component without a context reads the ports and modules the root registered
   (`tui/context/ports.ts`, `tui/context/provider-modules.ts`), for a component rendered on its own in a test. The app
-  provides its own; `src/providers.test.tsx` checks a whole app never reads the registered ones.
+  provides its own; `src/providers.test.tsx` checks an app never reads the registered ones while it goes through the
+  views, the Menu, the cache screen and Debug, with a provider written in the test (the built-in ones are off there).
 - **Process-wide objects.** The debug log (below), the cache registry's default, and small caches (dates, colors).
 - **The runtime.** Core uses the clock and timers every JavaScript runtime has: the fetch lifecycle and the commit
   details take timers as a port, Snyk's scan queue and `core/abort.ts` use the global ones. The terminal front end
   uses Bun only for text width (`tui/utils/terminal-text.ts`).
-- **Strings that must agree.** A provider's id names its cache rows and its events' source; its settings key is its
-  section in the settings file and its `:hide` name. Each comes from its definition.
+- **Strings that must agree.** A provider's id (`core/<provider>/id.ts`) names its view, its cache rows and its events'
+  source; its settings key is its section in the settings file and its `:hide` name. Each comes from its definition.
+- **Known messages.** A message shows as it is, without a fallback, when it is one a `banners()` group made
+  (`core/banner.ts`): a process-wide list each group joins when it loads. A provider's definition carries its group,
+  so it loads with the provider (`tests/banner-registration.test.ts` checks it in a fresh process).
 - **Shared files.** The providers share one SQLite cache and one settings file; Git runs as a process on `PATH`.
 - **Screens that close.** OpenTUI refuses an element used by another renderer than the one that drew it: a timer or
   retry that touches the screen is cancelled when its screen closes (`useScrollSchedule` in `tui/utils/scroll.ts`).

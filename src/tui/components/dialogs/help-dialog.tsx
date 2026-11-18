@@ -3,14 +3,17 @@ import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { createSignal, For } from "solid-js";
 import packageJson from "../../../../package.json";
 import { SHIFT_JUMP } from "../../constants";
+import { useProviderModules } from "../../context/provider-modules";
 import { useT } from "../../hooks/use-t";
-import { HELP_TABS, type HelpTab, KEYBINDS } from "../../keybinds";
+import { HELP_TABS, type HelpTab, helpRows } from "../../keybinds";
 import { useModalKeys } from "../../keyboard/dispatcher";
 import { KeyHint, KeyHintSeparator } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
 export default function HelpDialog(_props: Readonly<{ onClose: () => void }>) {
   const t = useT();
+  /** Each provider's module: its section of the Providers tab. */
+  const providerModules = useProviderModules();
   const renderer = useRenderer();
   const dimensions = useTerminalDimensions();
   const dialogWidth = () => 80;
@@ -123,7 +126,7 @@ export default function HelpDialog(_props: Readonly<{ onClose: () => void }>) {
           verticalScrollbarOptions={{ visible: false }}
         >
           <box flexDirection="column">
-            <For each={KEYBINDS[activeTab()]}>
+            <For each={helpRows(activeTab(), providerModules)}>
               {row => {
                 if (row.kind === "spacer") return <box height={1} />;
                 if (row.kind === "section") {

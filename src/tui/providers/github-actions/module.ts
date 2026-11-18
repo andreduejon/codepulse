@@ -5,6 +5,7 @@ import { githubEvents } from "../../../core/github/events";
 import type { GitHubJob, GitHubWorkflowRun } from "../../../core/github/types";
 import { providerModule } from "../module";
 import { type GitHubDetailSource, githubDetail } from "./detail-entry";
+import { GITHUB_HELP } from "./help";
 import { GITHUB_LEGEND } from "./legend";
 import { githubJobLogTarget } from "./log-target";
 import { buildGitHubProviderItems } from "./menu-items";
@@ -44,5 +45,6 @@ export const githubModule = providerModule({
       menu.lastRefresh,
     ),
   detailEntries: { [githubProvider.id]: githubDetail },
+  help: GITHUB_HELP,
   legend: GITHUB_LEGEND,
 });

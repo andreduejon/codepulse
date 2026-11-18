@@ -1,6 +1,7 @@
 /** Snyk's Dashboard events: what it stored for an app, as the Dashboard shows it. */
 import { type DashboardEvent, fact, timeOf } from "../dashboard/events";
 import type { StatusCategory } from "../status";
+import { SNYK_ID } from "./id";
 import type { SnykScanResult } from "./types";
 
 export function snykEvents(
@@ -24,9 +25,9 @@ export function snykEvents(
     const counted = `${total} ${total === 1 ? "vulnerability" : "vulnerabilities"}`;
     return [
       {
-        id: `${app}:snyk:${scan.sha}`,
+        id: `${app}:${SNYK_ID}:${scan.sha}`,
         app,
-        source: "snyk" as const,
+        source: SNYK_ID,
         time,
         status,
         severity: bySeverity.find(([, count]) => count > 0)?.[0] ?? null,

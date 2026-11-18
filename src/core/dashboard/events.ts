@@ -4,7 +4,7 @@
  */
 
 import type { EventSource } from "../provider-model";
-import type { SnykScanResult, SnykSeverity } from "../snyk/types";
+import type { Severity, SeverityCounts } from "../severity";
 import type { StatusCategory } from "../status";
 
 /** One line of an event's side panel: a label and its value. */
@@ -24,10 +24,10 @@ export interface DashboardEvent {
   /** How it ended; null for a commit. */
   status: StatusCategory | null;
   /** A scan's worst finding; null for a clean scan. */
-  severity?: SnykSeverity | null;
+  severity?: Severity | null;
   /** A scan's findings per severity: the dashboard colors each count. */
-  counts?: SnykScanResult["counts"];
-  /** A scan that left projects out: its counts end in Snyk's warning `?`. */
+  counts?: SeverityCounts;
+  /** A scan that left projects out: its counts end in the warning `?`. */
   partial?: boolean;
   /** What happened, without the commit (shown beside it). */
   text: string;

@@ -235,7 +235,14 @@ export const runSnykCommand: SnykCommandRunner = async (command, options) => {
     }
     throwIfAborted(options.signal);
     const exitCode = child.exitCode ?? 1;
-    addDebugEvent({ source, message, status: String(exitCode), durationMs: monotonicNow() - started });
+    // Snyk exits 1 when it finds vulnerabilities: a result. 2 and up is a failure.
+    addDebugEvent({
+      source,
+      message,
+      status: String(exitCode),
+      failed: exitCode >= 2,
+      durationMs: monotonicNow() - started,
+    });
     if (exitCode > 1 && stderr.trim()) {
       addDebugEvent({ source, message: redactDebugValue(stderr.trim()), status: "error" });
     }

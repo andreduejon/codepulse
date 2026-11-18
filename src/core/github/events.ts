@@ -2,6 +2,7 @@
 import { type DashboardEvent, fact, runEvents, VERBS } from "../dashboard/events";
 import { formatDuration } from "../duration";
 import { categorize } from "../status";
+import { GITHUB_ID } from "./id";
 import type { GitHubCacheEntry } from "./merge";
 
 export function githubEvents(
@@ -10,7 +11,7 @@ export function githubEvents(
 ): DashboardEvent[] {
   return runEvents(
     app,
-    "github-actions",
+    GITHUB_ID,
     entries.flatMap(entry => entry.runs),
     run => {
       const status = categorize(run.status, run.conclusion);

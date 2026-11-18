@@ -5,6 +5,7 @@ import { jenkinsEvents } from "../../../core/jenkins/events";
 import type { JenkinsFailedTest, JenkinsJob, JenkinsRun } from "../../../core/jenkins/types";
 import { providerModule } from "../module";
 import { type JenkinsDetailSource, jenkinsDetail } from "./detail-entry";
+import { JENKINS_HELP } from "./help";
 import { JENKINS_LEGEND } from "./legend";
 import { jenkinsBuildLogTarget, jenkinsTestFailureTarget } from "./log-target";
 import { buildJenkinsProviderItems } from "./menu-items";
@@ -39,5 +40,6 @@ export const jenkinsModule = providerModule({
   menuItems: menu =>
     buildJenkinsProviderItems(menu.settings, undefined, menu.update, menu.lastRefresh, menu.tokenIsSet),
   detailEntries: { [jenkinsProvider.id]: jenkinsDetail },
+  help: JENKINS_HELP,
   legend: JENKINS_LEGEND,
 });

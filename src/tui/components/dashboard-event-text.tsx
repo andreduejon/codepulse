@@ -3,7 +3,7 @@ import type { DashboardEvent } from "../../core/dashboard/events";
 import { useProviderModules } from "../context/provider-modules";
 import { eventMark } from "../dashboard/legend";
 import { useT } from "../hooks/use-t";
-import { severityColor } from "../providers/snyk/severity";
+import { severityColor } from "../utils/severity";
 
 const SEVERITIES = ["critical", "high", "medium", "low"] as const;
 

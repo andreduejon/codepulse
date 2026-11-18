@@ -1,6 +1,7 @@
 /** OpenShift's Dashboard events: what it stored for an app, as the Dashboard shows it. */
 import { type DashboardEvent, fact, timeOf } from "../dashboard/events";
 import { formatDuration } from "../duration";
+import { OPENSHIFT_ID } from "./id";
 import type { OpenShiftCacheEntry } from "./merge";
 
 export function openShiftEvents(app: string, entries: readonly OpenShiftCacheEntry[]): DashboardEvent[] {
@@ -12,7 +13,7 @@ export function openShiftEvents(app: string, entries: readonly OpenShiftCacheEnt
     const completed = text("completionTimestamp");
     const time = timeOf(completed) ?? timeOf(build.updatedAt);
     const reason = [text("reason"), text("message")].filter(Boolean).join(": ");
-    const id = `${app}:openshift:${build.namespace}/${build.id}`;
+    const id = `${app}:${OPENSHIFT_ID}:${build.namespace}/${build.id}`;
     if (time === null || events.has(id)) continue;
     const outcome = build.status === "pass" ? "complete" : build.status === "fail" ? "failed" : "running";
     // The Git ref its BuildConfig builds, when it names one (`develop`, `refs/heads/develop`); else Git finds it.
@@ -23,7 +24,7 @@ export function openShiftEvents(app: string, entries: readonly OpenShiftCacheEnt
       id,
       app,
       entry: build.id,
-      source: "openshift",
+      source: OPENSHIFT_ID,
       time,
       status: build.status,
       text: `build ${build.name} ${outcome} in ${build.namespace}`,

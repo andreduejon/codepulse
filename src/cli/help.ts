@@ -1,4 +1,5 @@
-import { HELP_TABS, KEYBINDS } from "../tui/keybinds";
+import { builtInProviders, modulesOf } from "../providers";
+import { HELP_TABS, helpRows } from "../tui/keybinds";
 
 /** Print the CLI usage text to stdout. */
 export function printHelp() {
@@ -6,7 +7,7 @@ export function printHelp() {
 
   const renderTab = (tab: (typeof HELP_TABS)[number], includeHeader = true) => {
     const header = `  ${tab.label.toUpperCase()}`;
-    const rows = KEYBINDS[tab.id]
+    const rows = helpRows(tab.id, modulesOf(builtInProviders))
       .map(row => {
         if (row.kind === "section") return `  ${row.label.toUpperCase()}`;
         if (row.kind === "spacer") return "";

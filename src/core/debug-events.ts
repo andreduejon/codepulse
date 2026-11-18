@@ -6,6 +6,11 @@ export interface DebugEvent {
   source: DebugEventSource;
   message: string;
   status?: string;
+  /**
+   * Whether the command or request failed, when its source says so itself (Snyk exits 1 when it finds
+   * vulnerabilities: a result, not a failure). Without it, the status tells (an error, a non-zero exit, an HTTP 4xx/5xx).
+   */
+  failed?: boolean;
   durationMs?: number;
 }
 

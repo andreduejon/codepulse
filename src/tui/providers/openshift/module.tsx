@@ -6,6 +6,7 @@ import type { OpenShiftResource } from "../../../core/openshift/types";
 import { providerModule } from "../module";
 import { type OpenShiftDetailSource, openshiftDetail } from "./detail-entry";
 import { OPENSHIFT_GRAPH_COLUMNS } from "./graph-columns";
+import { OPENSHIFT_HELP } from "./help";
 import { OPENSHIFT_LEGEND } from "./legend";
 import { buildOpenShiftProviderItems } from "./menu-items";
 import OpenShiftResourceDialog from "./resource-dialog";
@@ -56,5 +57,6 @@ export const openShiftModule = providerModule({
   menuItems: menu =>
     buildOpenShiftProviderItems(menu.settings, undefined, menu.update, menu.lastRefresh, menu.tokenIsSet),
   detailEntries: { [openShiftProvider.id]: openshiftDetail },
+  help: OPENSHIFT_HELP,
   legend: OPENSHIFT_LEGEND,
 });

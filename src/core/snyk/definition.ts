@@ -5,12 +5,13 @@ import { PROVIDER_CACHE_LIMIT_OPTIONS } from "../provider-settings";
 import { definedFields } from "../settings/provider-section";
 import { SNYK_BANNER } from "./banner";
 import { snykEvents } from "./events";
+import { SNYK_ID } from "./id";
 import type { SnykAdapters, SnykSettings } from "./service";
 
 const TEXT_MAX_LENGTH = 255;
 
 export const snykProvider: ProviderDefinition<SnykAdapters, SnykSettings> = {
-  id: "snyk",
+  id: SNYK_ID,
   key: "snyk",
   displayName: "Snyk",
   detailLabel: "Vulnerabilities",

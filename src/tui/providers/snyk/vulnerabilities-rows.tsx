@@ -2,8 +2,8 @@ import type { Renderable } from "@opentui/core";
 import { For, Show } from "solid-js";
 import { isMatureExploit, type SnykVulnerabilityEntry } from "../../../core/snyk/parser";
 import { useT } from "../../hooks/use-t";
+import { severityColor } from "../../utils/severity";
 import { highlightMatch } from "./filter";
-import { severityColor } from "./severity";
 import type { SnykRows } from "./tab-shared";
 import {
   type DetailLine,

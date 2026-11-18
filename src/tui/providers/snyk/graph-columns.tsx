@@ -6,10 +6,10 @@ import type { Theme } from "../../context/theme";
 import { useT } from "../../hooks/use-t";
 import { BUSY } from "../../utils/busy-text";
 import { formatRelativeDate } from "../../utils/date";
+import { severityColor } from "../../utils/severity";
 import { cachedWidths } from "../graph-column-widths";
 import type { ProviderGraphColumns } from "../module";
 import { providerTextColor, type StatusChip, StatusChips } from "../shared/status-chips";
-import { severityColor } from "./severity";
 
 export interface SnykGraphColumnProps {
   /** Exact scan for the row's commit, or null when that commit has not been scanned. */

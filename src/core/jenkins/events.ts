@@ -2,6 +2,7 @@
 import { type DashboardEvent, fact, runEvents, VERBS } from "../dashboard/events";
 import { formatDuration } from "../duration";
 import { categorize } from "../status";
+import { JENKINS_ID } from "./id";
 import type { JenkinsCacheEntry } from "./merge";
 
 export function jenkinsEvents(
@@ -10,7 +11,7 @@ export function jenkinsEvents(
 ): DashboardEvent[] {
   return runEvents(
     app,
-    "jenkins",
+    JENKINS_ID,
     entries.flatMap(entry => entry.runs),
     run => {
       const status = categorize(run.status, run.conclusion);

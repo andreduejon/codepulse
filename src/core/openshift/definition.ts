@@ -13,6 +13,7 @@ import {
 import { definedFields, type SettingsReader, type SettingsSection } from "../settings/provider-section";
 import { OPENSHIFT_BANNER } from "./banner";
 import { openShiftEvents } from "./events";
+import { OPENSHIFT_ID } from "./id";
 import type { OpenShiftAdapters } from "./service";
 import { DEFAULT_OPENSHIFT_CONFIG } from "./types";
 import {
@@ -45,7 +46,7 @@ const httpsUrl = (reader: SettingsReader, field: string, value: unknown): string
 };
 
 export const openShiftProvider: ProviderDefinition<OpenShiftAdapters, OpenShiftSettings> = {
-  id: "openshift",
+  id: OPENSHIFT_ID,
   key: "openshift",
   displayName: "OpenShift",
   detailLabel: "Resources",

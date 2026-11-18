@@ -170,8 +170,9 @@ test("Debug marks a failed command or request in the status column", async () =>
   clearDebugEvents();
   addDebugEvent({ source: "Git", message: "git fetch --all --prune", status: "exit 128" });
   addDebugEvent({ source: "GitHub", message: "GET /runs", status: "401" });
-  addDebugEvent({ source: "Snyk", message: "snyk test (failed)", status: "2" });
-  addDebugEvent({ source: "Snyk", message: "snyk test (vulnerable)", status: "1" });
+  // As Snyk's scanner writes them: exit 1 is findings, not a failure.
+  addDebugEvent({ source: "Snyk", message: "snyk test (failed)", status: "2", failed: true });
+  addDebugEvent({ source: "Snyk", message: "snyk test (vulnerable)", status: "1", failed: false });
   addDebugEvent({ source: "GitHub", message: "POST /graphql", status: "200" });
   addDebugEvent({ source: "Git", message: "git status", status: "ok" });
   const setup = await testRender(

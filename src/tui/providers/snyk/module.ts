@@ -2,13 +2,14 @@
 import { snykProvider } from "../../../core/snyk/definition";
 import type { SnykScanResult } from "../../../core/snyk/types";
 import type { TabNotice } from "../../app/app-tab-notice";
+import { severityColor } from "../../utils/severity";
 import { providerModule } from "../module";
 import { type SnykDetailSource, snykDependenciesDetail, snykVulnerabilitiesDetail } from "./detail-entry";
 import { snykGraphColumns } from "./graph-columns";
+import { SNYK_HELP } from "./help";
 import { SNYK_SEVERITY_LEGEND } from "./legend";
 import { buildSnykProviderItems } from "./menu-items";
 import { snykPartialScanNotice, snykProjectNotice } from "./project-notice";
-import { severityColor } from "./severity";
 import { useSnyk } from "./use-snyk";
 
 const DEPENDENCIES_TAB = "snyk-deps";
@@ -64,6 +65,7 @@ export const snykModule = providerModule({
       menu.tokenIsSet,
     ),
   detailEntries: { [snykProvider.id]: snykVulnerabilitiesDetail, [DEPENDENCIES_TAB]: snykDependenciesDetail },
+  help: SNYK_HELP,
   legend: SNYK_SEVERITY_LEGEND,
   // A scan's mark is its worst finding's severity; a clean scan has none.
   eventMark: event => {

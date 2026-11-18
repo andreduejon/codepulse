@@ -13,6 +13,7 @@ import {
 import { definedFields, type SettingsSection } from "../settings/provider-section";
 import { JENKINS_BANNER } from "./banner";
 import { jenkinsEvents } from "./events";
+import { JENKINS_ID } from "./id";
 import type { JenkinsAdapters } from "./service";
 import { DEFAULT_JENKINS_CONFIG, type JenkinsJobConfig } from "./types";
 import { isValidJenkinsJobUrl, JENKINS_JOB_URL_MAX_LENGTH } from "./validation";
@@ -32,7 +33,7 @@ export interface JenkinsSettings extends SettingsSection {
 }
 
 export const jenkinsProvider: ProviderDefinition<JenkinsAdapters, JenkinsSettings> = {
-  id: "jenkins",
+  id: JENKINS_ID,
   key: "jenkins",
   displayName: "Jenkins",
   detailLabel: "Builds",

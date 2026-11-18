@@ -14,6 +14,7 @@ import { definedFields, type SettingsSection } from "../settings/provider-sectio
 import { GITHUB_BANNER } from "./banner";
 import { githubEvents } from "./events";
 import { normalizeGitHubHost } from "./host";
+import { GITHUB_ID } from "./id";
 import type { GitHubAdapters } from "./service";
 import { DEFAULT_GITHUB_CONFIG } from "./types";
 
@@ -31,7 +32,7 @@ export interface GitHubSettings extends SettingsSection {
 }
 
 export const githubProvider: ProviderDefinition<GitHubAdapters, GitHubSettings> = {
-  id: "github-actions",
+  id: GITHUB_ID,
   key: "github",
   displayName: "GitHub",
   detailLabel: "Actions",
