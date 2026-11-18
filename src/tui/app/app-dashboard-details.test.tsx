@@ -8,6 +8,7 @@ import * as config from "../../adapters/settings/config";
 import * as configWrite from "../../adapters/settings/config-write";
 import * as openUrlModule from "../../adapters/system/open-url";
 import type { DashboardEvent } from "../../core/dashboard/events";
+import { DETAIL_DEBOUNCE_MS } from "../../core/git/commit-detail";
 import { buildGraph } from "../../core/git/graph";
 import type { CodepulseConfig } from "../../core/settings/config";
 import type { AppActions, AppState } from "../context/state";
@@ -364,6 +365,8 @@ test("Info for a commit the graph doesn't hold shows what Git reads: hash, autho
   try {
     await d.press("ARROW_RIGHT");
     await d.press("ARROW_RIGHT");
+    // The commit is read once the cursor rests.
+    await new Promise(resolve => setTimeout(resolve, DETAIL_DEBOUNCE_MS + 50));
     for (let tries = 0; tries < 5; tries++) await d.setup.flush();
     expect(d.state.detailActiveTab()).toBe("info");
     for (const text of [OUTSIDE, "Old Author <old@example.com>", "an old commit", "Its body."])

@@ -2,6 +2,7 @@ import { MouseButton, type ScrollBoxRenderable } from "@opentui/core";
 import { type Accessor, createEffect, createSignal, For, type JSX, onCleanup, Show } from "solid-js";
 import type { DashboardEvent } from "../../core/dashboard/events";
 import type { CommitInfo } from "../../core/dashboard/load";
+import { DETAIL_DEBOUNCE_MS } from "../../core/git/commit-detail";
 import { providerDisplayName } from "../../core/provider-model";
 import { useGit } from "../context/git";
 import type { DetailTab } from "../context/state";
@@ -10,6 +11,9 @@ import { useT } from "../hooks/use-t";
 import { DetailLegend, type LegendItem } from "../providers/shared/detail-legend";
 import { formatDate } from "../utils/date";
 import { DashboardEventText } from "./dashboard-event-text";
+
+/** How many commits the panel keeps once read. */
+const KEPT_COMMITS = 100;
 
 /** One of the selected event's provider tabs (Snyk has two). */
 export interface DashboardDetailTab {
@@ -27,7 +31,7 @@ export function DashboardDetail(
     event: Accessor<DashboardEvent | null>;
     appName: (path: string) => string;
     /** How an event's commit is read (tests); from the app's repository otherwise. */
-    loadCommit?: (app: string, sha: string) => Promise<CommitInfo | null>;
+    loadCommit?: (app: string, sha: string, signal?: AbortSignal) => Promise<CommitInfo | null>;
     /** The content's scrollbox, for the compact dialog's ↑/↓. */
     scrollboxRef?: (element: ScrollBoxRenderable) => void;
     /** The first row: the event's commit in its provider's view, with that provider's details. */
@@ -51,25 +55,50 @@ export function DashboardDetail(
   const git = useGit();
   const t = useT();
   const [actionHovered, setActionHovered] = createSignal(false);
-  const commits = new Map<string, Promise<CommitInfo | null>>();
+  /** The commits read, the newest last: an event shown again shows its commit at once. */
+  const commits = new Map<string, CommitInfo | null>();
   const [commit, setCommit] = createSignal<CommitInfo | null>(null);
-  let disposed = false;
-  onCleanup(() => {
-    disposed = true;
-  });
+  /** The read waiting for the cursor to rest, and the one running: another event stops both. */
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let reading: AbortController | undefined;
+  const stopReading = () => {
+    clearTimeout(timer);
+    reading?.abort();
+    timer = reading = undefined;
+  };
+  onCleanup(stopReading);
+  /** Only the Info view and the panel without tabs show the commit; a provider's tab doesn't read it. */
+  const showsCommit = () => {
+    const tab = props.activeTab?.();
+    return !props.renderTab || !tab || tab === "info";
+  };
   createEffect(() => {
     const event = props.event();
+    const shown = showsCommit();
+    stopReading();
     setCommit(null);
-    if (!event) return;
+    if (!event || !shown) return;
     const key = `${event.app}\u0000${event.sha}`;
-    let pending = commits.get(key);
-    if (!pending) {
-      pending = props.loadCommit ? props.loadCommit(event.app, event.sha) : git.getCommitInfo(event.app, event.sha);
-      commits.set(key, pending);
+    if (commits.has(key)) {
+      setCommit(commits.get(key) ?? null);
+      return;
     }
-    void pending.then(info => {
-      if (!disposed && props.event() === event) setCommit(info);
-    });
+    // Like the graph's details: moving fast through the events starts no Git.
+    timer = setTimeout(() => {
+      timer = undefined;
+      const read = new AbortController();
+      reading = read;
+      const load = props.loadCommit ?? git.getCommitInfo;
+      void load(event.app, event.sha, read.signal)
+        .catch(() => null)
+        .then(info => {
+          if (read.signal.aborted) return;
+          reading = undefined;
+          commits.set(key, info);
+          if (commits.size > KEPT_COMMITS) commits.delete(commits.keys().next().value as string);
+          setCommit(info);
+        });
+    }, DETAIL_DEBOUNCE_MS);
   });
 
   const legend = () => {

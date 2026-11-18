@@ -4,6 +4,7 @@ import { MouseButtons } from "@opentui/core/testing";
 import { testRender } from "@opentui/solid";
 import { createSignal } from "solid-js";
 import type { DashboardEvent } from "../../core/dashboard/events";
+import { DETAIL_DEBOUNCE_MS } from "../../core/git/commit-detail";
 import { createThemeState, ThemeContext } from "../context/theme";
 import { DashboardDetail } from "./dashboard-detail";
 
@@ -53,7 +54,8 @@ test("the side panel shows the event, its facts, its commit and its provider's m
     { width: 60, height: 30 },
   );
   try {
-    await new Promise(resolve => setTimeout(resolve, 0));
+    // The commit is read once the cursor rests.
+    await new Promise(resolve => setTimeout(resolve, DETAIL_DEBOUNCE_MS + 50));
     await setup.renderOnce();
     let frame = setup.captureCharFrame();
     expect(frame).toContain("GitHub");
@@ -226,6 +228,74 @@ test("with its provider's tabs, the panel shows the tab bar and the provider's o
     expect(selected).toHaveBeenCalledWith("snyk-deps");
     frame = setup.captureCharFrame();
     expect(frame).toContain("the snyk-deps tab");
+  } finally {
+    setup.renderer.destroy();
+  }
+});
+
+test("the commit is read once the cursor rests, for the Info view only; leaving an event stops its read", async () => {
+  const event = (id: string, sha: string): DashboardEvent => ({
+    id,
+    app: "/shop",
+    source: "github-actions",
+    time: Date.parse("2026-03-02T10:52:00Z"),
+    status: "fail",
+    text: `CI ${id} failed`,
+    sha,
+  });
+  const reads: Array<{ sha: string; signal?: AbortSignal }> = [];
+  const loadCommit = mock(async (_app: string, sha: string, signal?: AbortSignal) => {
+    reads.push({ sha, signal });
+    return null;
+  });
+  const [selected, setSelected] = createSignal<DashboardEvent | null>(event("a", "a".repeat(40)));
+  const [active, setActive] = createSignal<"github-actions" | "info">("info");
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={createThemeState()}>
+        <DashboardDetail
+          event={selected}
+          appName={() => "shop"}
+          loadCommit={loadCommit}
+          tabs={() => [
+            { id: "github-actions", label: "Actions" },
+            { id: "info", label: "Info" },
+          ]}
+          activeTab={active}
+          renderTab={(_event, tab) => <text>{`the ${tab} tab`}</text>}
+        />
+      </ThemeContext.Provider>
+    ),
+    { width: 70, height: 20 },
+  );
+  const rest = () => new Promise(resolve => setTimeout(resolve, DETAIL_DEBOUNCE_MS + 50));
+  try {
+    await setup.renderOnce();
+    // Moving through events fast: only the one the cursor rests on is read.
+    for (const id of ["b", "c", "d"]) {
+      setSelected(event(id, id.repeat(40)));
+      await setup.renderOnce();
+    }
+    await rest();
+    expect(reads.map(read => read.sha)).toEqual(["d".repeat(40)]);
+    // On a provider's tab the commit is not read; the Info view reads it.
+    setActive("github-actions");
+    setSelected(event("e", "e".repeat(40)));
+    await rest();
+    expect(reads).toHaveLength(1);
+    setActive("info");
+    await rest();
+    expect(reads.map(read => read.sha)).toEqual(["d".repeat(40), "e".repeat(40)]);
+    // A read still running when the cursor moves on is stopped.
+    loadCommit.mockImplementation((_app, sha, signal) => {
+      reads.push({ sha, signal });
+      return new Promise(() => {});
+    });
+    setSelected(event("f", "f".repeat(40)));
+    await rest();
+    setSelected(event("g", "g".repeat(40)));
+    await setup.renderOnce();
+    expect(reads[2]?.signal?.aborted).toBe(true);
   } finally {
     setup.renderer.destroy();
   }
