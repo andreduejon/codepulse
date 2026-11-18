@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-11-18
+
 ### Changed
 
 - The Dashboard and the graph keep details of their own: coming back to one, its
@@ -24,6 +26,17 @@ All notable changes to this project will be documented in this file.
 - A CI log opens at once, however long it is: one of 20,000 lines takes 20 ms
   instead of 650 ms, and codepulse takes about 110 MB with it open instead of
   930 MB. With wrap on, a long log still takes as long as before.
+- The Dashboard draws only the events near the screen: with 1,000 events it
+  opens in 50 ms instead of 170 ms and takes 5 MB instead of 66 MB, and a
+  reload redraws only the events that changed.
+- The Dashboard's side panel reads an event's commit once the cursor stops on
+  it, and only for Info: moving through the events starts no Git.
+- A refresh with nothing new starts 7 Git processes instead of 9.
+- A finished Jenkins build's console log is kept in the cache instead of in
+  memory, and its stages share one read of it while its log is open.
+- A custom theme without a `base` may leave out the providers' colors: each
+  provider's badge then takes the theme's accent, with its background for the
+  text.
 
 ### Fixed
 
@@ -42,6 +55,8 @@ All notable changes to this project will be documented in this file.
 - Auto refresh shows a changed remote, a tag's new message and a stash replaced
   by another, also when no commit or branch moved. A selected Uncommitted
   changes row shows the files as they are now on each refresh.
+- Turning off Allow host for a GitHub Enterprise host is saved. Before, the host
+  stayed in the settings file and was trusted again after a reload.
 
 ## [0.18.0] - 2026-11-17
 
