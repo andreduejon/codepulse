@@ -814,7 +814,7 @@ describe("buildOpenShiftGraphBadges", () => {
     expect(badge?.lanes?.cache).toEqual({ passCount: 0, failCount: 1, runningCount: 0, unknownCount: 0 });
   });
 
-  test("says whether OpenShift warned about the commit, also when only its warnings are left", () => {
+  test("counts the warnings about the commit (not how often each happened), also when only they are left", () => {
     const warning = {
       id: "event-1",
       namespace: "ns",
@@ -828,13 +828,14 @@ describe("buildOpenShiftGraphBadges", () => {
     };
     const withResources = buildOpenShiftCommitMap([{ ...resource("pod-1", "pass"), commitSha: SHA }]);
     const quiet = buildOpenShiftGraphBadges(withResources).get(SHA);
-    expect(quiet?.warnings).toBeUndefined();
+    expect(quiet?.warningCount).toBeUndefined();
     const commit = withResources.get(SHA) as OpenShiftCommitData;
-    const warned = buildOpenShiftGraphBadges(new Map([[SHA, { ...commit, warnings: [warning] }]])).get(SHA);
-    expect(warned?.warnings).toBe(true);
-    // The pod is gone; its warnings stay with the commit, and so does the mark.
+    const two = [warning, { ...warning, id: "event-2", count: 40 }];
+    const warned = buildOpenShiftGraphBadges(new Map([[SHA, { ...commit, warnings: two }]])).get(SHA);
+    expect(warned?.warningCount).toBe(2);
+    // The pod is gone; its warnings stay with the commit, and so does the count.
     const onlyWarnings = new Map([[SHA, { sha: SHA, namespaces: [], liveFetched: true, warnings: [warning] }]]);
-    expect(buildOpenShiftGraphBadges(onlyWarnings).get(SHA)).toMatchObject({ warnings: true, resourceCount: 0 });
+    expect(buildOpenShiftGraphBadges(onlyWarnings).get(SHA)).toMatchObject({ warningCount: 1, resourceCount: 0 });
   });
 });
 

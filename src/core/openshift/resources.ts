@@ -654,7 +654,7 @@ export function buildOpenShiftGraphBadges(data: Map<string, OpenShiftCommitData>
       },
       latestRunAt: "",
       latestStatus: badge,
-      ...(warned ? { warnings: true } : {}),
+      ...(warned ? { warningCount: entry.warnings?.length } : {}),
     });
   }
   return badges;

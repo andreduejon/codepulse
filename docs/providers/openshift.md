@@ -186,7 +186,8 @@ own status.
   about a resource no commit has is not kept.
 - Warnings are saved in the commit's snapshot (see Cache), so they outlast the cluster's
   copy and are evicted with the snapshot by the cache limit.
-- The graph shows `!` in the warning colour after a commit's **Live** counts.
+- The graph counts a commit's warnings in a yellow chip after its **Live** counts (how many
+  warnings, not how often each happened).
 - In **Resources**, a resource OpenShift warned about shows `!` before its status mark.
 - The **Events** tab lists the commit's warnings by namespace, newest first: reason,
   resource and when. The selected warning shows its whole message and how many times it

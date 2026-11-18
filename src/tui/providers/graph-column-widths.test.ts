@@ -52,13 +52,14 @@ describe("provider column widths", () => {
     expect(widths.second).toBe(DATE_COL_WIDTH);
   });
 
-  test("OpenShift Live makes room for ` !` after the counts only when a commit has warnings", () => {
+  test("OpenShift Live fits a commit's warning count as one more chip", () => {
     const lanes = {
       live: { failCount: 1, runningCount: 1, unknownCount: 1, passCount: 1 },
       cache: { failCount: 0, runningCount: 0, unknownCount: 0, passCount: 0 },
     };
-    const widths = OPENSHIFT_GRAPH_COLUMNS.widths(new Map([["a", badge({ lanes, warnings: true })]]));
-    expect(widths.first).toBe(15 + 2 + 2);
+    const widths = OPENSHIFT_GRAPH_COLUMNS.widths(new Map([["a", badge({ lanes, warningCount: 12 })]]));
+    // Four ` 1 ` chips (15), a gap and ` 12 `, then the padding.
+    expect(widths.first).toBe(15 + 1 + 4 + 2);
   });
 });
 
