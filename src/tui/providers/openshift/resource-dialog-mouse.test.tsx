@@ -24,6 +24,7 @@ async function renderResource(
   object: unknown = { objectMarker: "fake-object" },
   initialView?: "events",
   savedWarnings: OpenShiftWarning[] = [],
+  eventsOnly = false,
 ) {
   const resource: OpenShiftResource = {
     id: `${kind}/resource`,
@@ -57,6 +58,7 @@ async function renderResource(
             loadEvents={loadEvents}
             initialView={initialView}
             savedWarnings={() => savedWarnings}
+            eventsOnly={eventsOnly}
             onClose={close}
           />
         </Show>
@@ -571,6 +573,39 @@ test("the events view ends with the warnings only the cache has, newest first, n
     expect(gone.frame()).toContain("OOMKilling message");
   } finally {
     gone.renderer.destroy();
+  }
+});
+
+test("a resource that is gone shows only its events: no log or object to switch to, nothing to open", async () => {
+  const loadEvents = mock(
+    async (): Promise<OpenShiftEvent[]> => [
+      { type: "Warning", reason: "OOMKilling", message: "Memory cgroup out of memory", count: 1, lastSeen: null },
+    ],
+  );
+  const d = await renderResource(
+    "Pod",
+    false,
+    true,
+    "https://console.example.com",
+    loadEvents,
+    undefined,
+    "events",
+    [],
+    true,
+  );
+  try {
+    await Bun.sleep(0);
+    await d.flush();
+    expect(d.frame()).toMatch(/test-resource · events/);
+    await d.key("c");
+    await d.flush();
+    expect(d.frame()).toMatch(/test-resource · events/);
+    expect(d.frame()).not.toMatch(/\bview\b|\bopen\b/);
+    expect(d.loadLog).not.toHaveBeenCalled();
+    // The object isn't asked for: what its status said is gone with it.
+    expect(d.loadObject).not.toHaveBeenCalled();
+  } finally {
+    d.renderer.destroy();
   }
 });
 

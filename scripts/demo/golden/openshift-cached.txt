@@ -5,13 +5,13 @@
     █                           bf08113   dev   origin/dev   shop-dev  feat(api): export request metrics     2   1   2      1                 total warnings                                         5
     │                                                                                                                                         ├─ ▾ shop-dev                                          1
     █                           e6209dd  feat(api): add a health endpoint                                   ·······        ·······            │  └─ BuildFailed  Build shop-api-41 (cached)     2h ago
-    │                                                                                                                                         └─ ▾ shop-test                                         4
+    │                                                                                                                                         └─ ▾ shop-test                                         3
     █                           3447db9   v0.42.0   main   origin/…   shop-pr…   +2  docs: rewrite the RE…   4              1                    ├─ BackOff  Pod shop-api-7d9f8-x2k4q         just now
     │                                                                                                                                            ├─ Unhealthy  Pod shop-api-7d9f8-x2k4q         1m ago
-    │ █                         6adc455   feature/payments-r…   origin/feature/pay…  wip(payments): retry…  ·······        ·······               ├─ OOMKilling  Pod shop-api-7d9f8-oom7k       18m ago
-    │ │                                                                                                                                          └─ ProgressDeadlineExceeded  Deployment sho…  40m ago
-    █─╯                         64ddc8a   shop-test  feat(payments): retry failed payments with exponentia   4   1   5      1   1
-    │
+    │ █                         6adc455   feature/payments-r…   origin/feature/pay…  wip(payments): retry…  ·······        ·······               └─ ProgressDeadlineExceeded  Deployment sho…  40m ago
+    │ │                                                                                                                                       resources no longer present                            1
+    █─╯                         64ddc8a   shop-test  feat(payments): retry failed payments with exponentia   3   2   4      1   1             └─ ▾ shop-test                                         1
+    │                                                                                                                                            └─ OOMKilling  Pod shop-api-7d9f8-oom7k       18m ago
     █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······
     │
     █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······
@@ -52,13 +52,13 @@
     █                    OpenShift · Build · shop-dev · shop-api-41 · events                                                                                          esc close                      5
     │                                                                                                                                                                                                1
     █                    1  STATUS  REASON             MESSAGE                                                                                                                      cached)     2h ago
-    │                    2  Failed  DockerBuildFailed  Docker build strategy has failed.                                                                                                             4
+    │                    2  Failed  DockerBuildFailed  Docker build strategy has failed.                                                                                                             3
     █                    3                                                                                                                                                          q         just now
     │                    4  LAST SEEN  TYPE    REASON        COUNT  MESSAGE                                                                                                         k4q         1m ago
-    │ █                  5  2h ago     Normal  BuildStarted      1  Build shop-dev/shop-api-41 is now running                                                                       om7k       18m ago
-    │ │                  6                                                                                                                                                          ment sho…  40m ago
-    █─╯                  7  Cached (no longer in the cluster)
-    │                    8  LAST SEEN  TYPE     REASON       COUNT  MESSAGE
+    │ █                  5  2h ago     Normal  BuildStarted      1  Build shop-dev/shop-api-41 is now running                                                                       ment sho…  40m ago
+    │ │                  6                                                                                                                                                                           1
+    █─╯                  7  Cached (no longer in the cluster)                                                                                                                                        1
+    │                    8  LAST SEEN  TYPE     REASON       COUNT  MESSAGE                                                                                                         om7k       18m ago
     █                    9  2h ago     Warning  BuildFailed      1  Build shop-dev/shop-api-41 failed
     │
     █─╮

@@ -74,7 +74,7 @@ export const GOLDEN_PLAYS: readonly GoldenPlay[] = [
   },
   {
     name: "openshift-cached",
-    covers: "a warning OpenShift deleted: (cached) in the Events tab, the Cached section of its resource's events",
+    covers: "the next phase: (cached) and resources no longer present in the Events tab, the Cached section of the events",
     args: [
       ...WIDE,
       "--play",

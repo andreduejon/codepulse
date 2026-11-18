@@ -19,8 +19,10 @@ export interface OpenShiftDetailSource extends ProviderDetailSource<OpenShiftCom
   consoleUrl?: () => string;
   /** Whether only the cache has a warning: OpenShift deleted it. */
   warningIsCached?: (warning: OpenShiftWarning) => boolean;
+  /** Whether the commit still has what a warning is about. */
+  warningIsPresent?: (sha: string, warning: OpenShiftWarning) => boolean;
   /** Enter on a resource: its log, object and events; or, from the Events tab, its events. */
-  onOpenResource?: (resource: OpenShiftResource, view?: "events") => void;
+  onOpenResource?: (resource: OpenShiftResource, view?: "events", eventsOnly?: boolean) => void;
 }
 
 /** The live list is off: an expired token froze it. Reads the status, so a view redraws when it changes. */
@@ -76,7 +78,8 @@ export const openshiftEventsDetail = detailEntry<OpenShiftDetailSource>({
       consoleUrl={props.source.consoleUrl}
       memory={scopedMemory(props.context.memory, "openshift")}
       isCached={props.source.warningIsCached}
-      onOpenResource={resource => props.source.onOpenResource?.(resource, "events")}
+      isPresent={warning => props.source.warningIsPresent?.(props.context.sha, warning) ?? true}
+      onOpenResource={(resource, options) => props.source.onOpenResource?.(resource, "events", options.eventsOnly)}
       {...props.context.cursor}
     />
   ),

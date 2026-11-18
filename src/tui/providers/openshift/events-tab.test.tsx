@@ -23,11 +23,15 @@ const warning = (overrides: Partial<OpenShiftWarning>): OpenShiftWarning => ({
   ...overrides,
 });
 
-async function renderEventsTab(warnings: OpenShiftWarning[], cached: readonly string[] = []) {
+async function renderEventsTab(
+  warnings: OpenShiftWarning[],
+  cached: readonly string[] = [],
+  gone: readonly string[] = [],
+) {
   const data: OpenShiftCommitData = { sha: SHA, liveFetched: true, namespaces: [], warnings };
   const [cursor, setCursor] = createSignal(0);
   const action = mock((_action: string | null) => {});
-  const opened = mock((_resource: OpenShiftResource) => {});
+  const opened = mock((_resource: OpenShiftResource, _options?: { eventsOnly: boolean }) => {});
   const navRef: DetailNavRef = {
     itemCount: 0,
     itemRefs: [],
@@ -51,6 +55,7 @@ async function renderEventsTab(warnings: OpenShiftWarning[], cached: readonly st
             setDetailCursorIndex={setCursor}
             onOpenResource={opened}
             isCached={warning => cached.includes(warning.id)}
+            isPresent={warning => !gone.includes(warning.id)}
           />
         </box>
       </ThemeContext.Provider>
@@ -128,6 +133,7 @@ test("Enter on a warning opens its resource's events; on a namespace it closes t
     t.enter();
     expect(t.opened).toHaveBeenCalledWith(
       expect.objectContaining({ kind: "Pod", namespace: "shop-test", name: "shop-api-7d9f8-x2k4q" }),
+      { eventsOnly: false },
     );
     t.setCursor(0);
     await t.settle();
@@ -175,6 +181,47 @@ test("a warning only the cache has says (cached) after its resource, muted", asy
         .find(line => line.includes(text)) ?? "";
     expect(row("OOMKilling")).toContain("Pod shop-api-7d9f8-x2k4q (cached)");
     expect(row("BackOff")).not.toContain("(cached)");
+  } finally {
+    t.renderer.destroy();
+  }
+});
+
+test("warnings about resources the commit no longer has are in a section of their own; Enter shows only events", async () => {
+  const t = await renderEventsTab(
+    [
+      warning({ id: "event-1" }),
+      warning({ id: "event-2", name: "shop-api-7d9f8-oom7k", reason: "OOMKilling", lastSeen: minutesAgo(18) }),
+    ],
+    [],
+    ["event-2"],
+  );
+  try {
+    const lines = t
+      .frame()
+      .split("\n")
+      .map(line => line.replace(/\s+/g, " ").trim())
+      .filter(Boolean);
+    expect(lines.slice(0, 6)).toEqual([
+      "total warnings 2",
+      "└─ ▾ shop-test 1",
+      "└─ BackOff Pod shop-api-7d9f8-x2k4q 2m ago",
+      "resources no longer present 1",
+      "└─ ▾ shop-test 1",
+      "└─ OOMKilling Pod shop-api-7d9f8-oom7k 18m ago",
+    ]);
+    // Cursor order: present namespace, its warning, then the other section's namespace and warning.
+    t.setCursor(3);
+    await t.settle();
+    t.enter();
+    expect(t.opened).toHaveBeenLastCalledWith(expect.objectContaining({ name: "shop-api-7d9f8-oom7k" }), {
+      eventsOnly: true,
+    });
+    t.setCursor(1);
+    await t.settle();
+    t.enter();
+    expect(t.opened).toHaveBeenLastCalledWith(expect.objectContaining({ name: "shop-api-7d9f8-x2k4q" }), {
+      eventsOnly: false,
+    });
   } finally {
     t.renderer.destroy();
   }

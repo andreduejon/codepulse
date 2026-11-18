@@ -1094,12 +1094,19 @@ export function openShiftWorld(state: DemoState, phase: Phase): OpenShiftWorld {
       }),
     ],
   });
-  pod("shop-test", "shop-api-7d9f8-oom7k", testRs, "shop-api", {
-    ...notReady,
-    containerStatuses: [
-      container(s.payments, { restartCount: 0, state: { terminated: { reason: "OOMKilled", exitCode: 137 } } }),
-    ],
-  });
+  // By the next phase the pod killed for memory is replaced: its warning is about a resource no longer present.
+  if (failed)
+    pod("shop-test", "shop-api-7d9f8-n3w8p", testRs, "shop-api", {
+      ...ready,
+      containerStatuses: [container(s.payments, { ready: true, restartCount: 0, state: { running: {} } })],
+    });
+  else
+    pod("shop-test", "shop-api-7d9f8-oom7k", testRs, "shop-api", {
+      ...notReady,
+      containerStatuses: [
+        container(s.payments, { restartCount: 0, state: { terminated: { reason: "OOMKilled", exitCode: 137 } } }),
+      ],
+    });
   pod("shop-test", "shop-api-7d9f8-ev1ct", testRs, "shop-api", {
     phase: "Failed",
     reason: "Evicted",

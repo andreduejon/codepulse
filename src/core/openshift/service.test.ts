@@ -210,3 +210,53 @@ test("warnings read from the cache are cached until their namespace is listed", 
   expect(h.service.getCommitData(SHA)?.warnings?.map(w => w.id)).toEqual(["event-1"]);
   expect(h.service.warningIsCached(buildWarning())).toBe(true);
 });
+
+test("a warning about a resource the live list no longer has is not present; the graph counts only present ones", async () => {
+  const h = harness();
+  const pod = (name: string, uid: string): OpenShiftResource => ({
+    id: `Pod:ns:${name}`,
+    kind: "Pod",
+    namespace: "ns",
+    name,
+    uid,
+    status: "pass",
+    imageRefs: [],
+    commitSha: SHA,
+  });
+  const liveList = (resources: OpenShiftResource[]) => ({
+    resources,
+    controllers: [],
+    error: null,
+    failures: [],
+    successfulRequests: 1,
+    resourceVersions: new Map(),
+  });
+  let listed = liveList([pod("app-1-abcde", "pod-1")]);
+  Object.assign(h.api, {
+    fetchOpenShiftResources: mock(async () => listed),
+    watchOpenShiftStream: mock(async () => "end"),
+  });
+  const liveOnce = async () => {
+    const stop = new AbortController();
+    const session = h.service.runWatchSession(stop.signal, h.lifecycle.getEpoch());
+    await Bun.sleep(5);
+    stop.abort();
+    await session;
+  };
+  const podWarning = buildWarning({ id: "event-pod", kind: "Pod", name: "app-1-abcde", uid: "pod-1" });
+  h.cluster.warnings = { warnings: [buildWarning(), podWarning], denied: [], failed: [] };
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  // No live list yet: nothing is known gone.
+  expect(h.service.warningIsPresent(SHA, podWarning)).toBe(true);
+  await liveOnce();
+  expect(h.service.getCommitData(SHA)?.warnings?.map(w => w.id).sort()).toEqual(["event-1", "event-pod"]);
+  expect(h.service.warningIsPresent(SHA, podWarning)).toBe(true);
+  expect(h.app.badges.get(SHA)?.warningCount).toBe(2);
+  // The pod was replaced by another one with the same commit.
+  listed = liveList([pod("app-1-fghij", "pod-2")]);
+  await liveOnce();
+  expect(h.service.warningIsPresent(SHA, podWarning)).toBe(false);
+  expect(h.service.warningIsPresent(SHA, buildWarning())).toBe(true);
+  expect(h.service.getCommitData(SHA)?.warnings).toHaveLength(2);
+  expect(h.app.badges.get(SHA)?.warningCount).toBe(1);
+});

@@ -53,6 +53,8 @@ export interface OpenShiftControllerReference {
   kind: "ReplicaSet" | "ReplicationController";
   namespace: string;
   uid: string;
+  /** When it was created (ISO): a Deployment's newest one marks when its current rollout began. */
+  createdAt?: string;
   ownerReferences: OpenShiftOwnerReference[];
 }
 

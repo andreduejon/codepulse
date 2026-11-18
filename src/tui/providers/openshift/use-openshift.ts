@@ -56,6 +56,8 @@ export interface UseOpenShiftResult {
   loadResourceEvents: (resource: OpenShiftResource) => Promise<OpenShiftEvent[]>;
   /** Whether only the cache has the warning: its namespace's last list didn't. Reactive. */
   warningIsCached: (warning: OpenShiftWarning) => boolean;
+  /** Whether the commit still has what the warning is about; true until the live list loaded. Reactive. */
+  warningIsPresent: (sha: string, warning: OpenShiftWarning) => boolean;
   /** Every warning kept about a resource, newest first. Reactive. */
   warningsAboutResource: (resource: OpenShiftResource) => OpenShiftWarning[];
   /** The namespaces whose warnings the token may not read. Reactive. */
@@ -196,6 +198,10 @@ export function useOpenShift(opts: {
     followLog: service.followLog,
     loadResourceObject: service.loadResourceObject,
     loadResourceEvents: service.loadResourceEvents,
+    warningIsPresent: (sha, warning) => {
+      dataVersion();
+      return service.warningIsPresent(sha, warning);
+    },
     warningIsCached: warning => {
       dataVersion();
       return service.warningIsCached(warning);

@@ -51,6 +51,7 @@ import {
   mergeWarnings,
   type OpenShiftWarning,
   type OpenShiftWarningList,
+  isAboutPresentResource,
   sameWarnings,
   warningsAbout,
 } from "./warnings";
@@ -221,6 +222,15 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
    */
   const listedIds = new Map<string, Set<string>>();
 
+  /**
+   * Whether the commit still has what the warning is about. Known only once the live list loaded: before it, every
+   * warning counts as present.
+   */
+  function warningIsPresent(sha: string, warning: OpenShiftWarning): boolean {
+    if (!live.listed) return true;
+    return isAboutPresentResource(warning, commits.get(sha.toLowerCase()), live.listed.controllers);
+  }
+
   /** Links the listed warnings to the commits now held, attaches each commit's, and saves what is new. */
   function attachWarnings(): void {
     const linked = linkWarningsToCommits(listedWarnings, commits, live.listed?.controllers ?? []);
@@ -266,7 +276,7 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
   function publish(): void {
     attachWarnings();
     ports.onDataChange();
-    const badges = buildOpenShiftGraphBadges(commits);
+    const badges = buildOpenShiftGraphBadges(commits, warningIsPresent);
     // What each namespace runs comes from the whole live list, so a deployed commit below the window is marked too.
     const markers = live.listed
       ? buildOpenShiftNamespaceMarkers(live.listed.resources, ports.config().namespaces)
@@ -660,6 +670,8 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
           .filter(build => build !== null),
       })),
     queriedSHAs,
+    /** Whether the commit still has what the warning is about (the Events tab's sections, the graph's count). */
+    warningIsPresent,
     /** Whether only the cache has this warning: its namespace's last list didn't (or none was read yet). */
     warningIsCached: (warning: OpenShiftWarning) => !(listedIds.get(warning.namespace)?.has(warning.id) ?? false),
     /** Every warning kept about a resource, newest first: the resource dialog shows the ones OpenShift deleted. */

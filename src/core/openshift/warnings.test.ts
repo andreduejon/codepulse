@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { OpenShiftCommitData, OpenShiftControllerReference, OpenShiftResource } from "./types";
 import {
+  isAboutPresentResource,
   linkWarningsToCommits,
   mergeWarnings,
   type OpenShiftWarning,
@@ -114,4 +115,79 @@ describe("OpenShift warnings", () => {
     // A kind codepulse doesn't show as a resource has none.
     expect(resourceOfWarning(warning({ kind: "ReplicaSet", name: "shop-api-7d9f8" }), data)).toBeNull();
   });
+
+  test("a Deployment's warning from before its commit's rollout is not that commit's", () => {
+    const deployment = resource({ kind: "Deployment", name: "shop-api", uid: "deploy-uid", status: "running" });
+    const commits = new Map([["b".repeat(40), commit("b".repeat(40), [deployment])]]);
+    // The commit's ReplicaSet was created at 10:00: its rollout started then.
+    const controllers: OpenShiftControllerReference[] = [
+      {
+        kind: "ReplicaSet",
+        namespace: "shop-dev",
+        uid: "old-rs",
+        createdAt: "2026-03-02T08:00:00Z",
+        ownerReferences: [{ kind: "Deployment", uid: "deploy-uid" }],
+      },
+      {
+        kind: "ReplicaSet",
+        namespace: "shop-dev",
+        uid: "new-rs",
+        createdAt: "2026-03-02T10:00:00Z",
+        ownerReferences: [{ kind: "Deployment", uid: "deploy-uid" }],
+      },
+    ];
+    const about = { kind: "Deployment", name: "shop-api", reason: "ProgressDeadlineExceeded" };
+    const linked = linkWarningsToCommits(
+      [
+        // The previous commit's rollout: not this one's.
+        warning({ id: "old", ...about, lastSeen: "2026-03-02T09:20:00Z" }),
+        warning({ id: "new", ...about, lastSeen: "2026-03-02T10:20:00Z" }),
+      ],
+      commits,
+      controllers,
+    );
+    expect(linked.get("b".repeat(40))?.map(entry => entry.id)).toEqual(["new"]);
+  });
+
+  test("a warning is about a present resource when the commit has it with the same uid", () => {
+    const pod = resource({ kind: "Pod", name: "shop-api-7d9f8-pull9", uid: "pod-uid" });
+    const data = commit("a".repeat(40), [pod]);
+    const controllers: OpenShiftControllerReference[] = [
+      { kind: "ReplicaSet", namespace: "shop-dev", uid: "rs-uid", ownerReferences: [] },
+    ];
+    expect(isAboutPresentResource(warning({ uid: "pod-uid" }), data, controllers)).toBe(true);
+    // The same name, another object: the pod was recreated.
+    expect(isAboutPresentResource(warning({ uid: "older-pod-uid" }), data, controllers)).toBe(false);
+    expect(isAboutPresentResource(warning({ name: "replaced-pod" }), data, controllers)).toBe(false);
+    // A ReplicaSet: by its uid in the live list.
+    const rs = { kind: "ReplicaSet", name: "shop-api-7d9f8" };
+    expect(isAboutPresentResource(warning({ ...rs, uid: "rs-uid" }), data, controllers)).toBe(true);
+    expect(isAboutPresentResource(warning({ ...rs, uid: "gone-rs" }), data, controllers)).toBe(false);
+    // Its mark in Resources follows the same rule.
+    expect(warningsAbout(pod, [warning({ uid: "older-pod-uid" })])).toEqual([]);
+  });
+
+  test("before the live list has its new ReplicaSet, the commit's oldest pod marks its rollout", () => {
+    const deployment = resource({ kind: "Deployment", name: "shop-api", uid: "deploy-uid", status: "running" });
+    const pod = resource({ kind: "Pod", name: "shop-api-5c6d7-a1b2", updatedAt: "2026-03-02T10:00:00Z" });
+    const commits = new Map([["b".repeat(40), commit("b".repeat(40), [deployment, pod])]]);
+    // Only the previous rollout's ReplicaSet is listed yet.
+    const controllers: OpenShiftControllerReference[] = [
+      {
+        kind: "ReplicaSet",
+        namespace: "shop-dev",
+        uid: "old-rs",
+        createdAt: "2026-03-02T08:00:00Z",
+        ownerReferences: [{ kind: "Deployment", uid: "deploy-uid" }],
+      },
+    ];
+    const about = { kind: "Deployment", name: "shop-api", reason: "ProgressDeadlineExceeded" };
+    const linked = linkWarningsToCommits(
+      [warning({ id: "old", ...about, lastSeen: "2026-03-02T09:20:00Z" })],
+      commits,
+      controllers,
+    );
+    expect(linked.size).toBe(0);
+  });
 });
+

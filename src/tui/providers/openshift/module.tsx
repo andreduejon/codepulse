@@ -32,11 +32,12 @@ export const openShiftModule = providerModule({
   start: ({ state, actions, settings, suspended, onOpenDialog, adapters }) => {
     const openShift = useOpenShift({ state, actions, config: settings, suspended, adapters });
     /** A resource's log, events and object, over the app; Esc goes back. */
-    const openResource = (resource: OpenShiftResource, view?: "events") =>
+    const openResource = (resource: OpenShiftResource, view?: "events", eventsOnly?: boolean) =>
       onOpenDialog(close => (
         <OpenShiftResourceDialog
           resource={resource}
           initialView={view}
+          eventsOnly={eventsOnly}
           savedWarnings={() => openShift.warningsAboutResource(resource)}
           loadLog={async (item, force) =>
             item.kind === "Pod" ? openShift.loadPodLog(item) : openShift.loadBuildLog(item, force)
@@ -59,6 +60,7 @@ export const openShiftModule = providerModule({
         return state.providerStatusFor(openShiftProvider.id);
       },
       warningIsCached: openShift.warningIsCached,
+      warningIsPresent: openShift.warningIsPresent,
       onOpenResource: openResource,
     };
     return {

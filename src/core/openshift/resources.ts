@@ -13,6 +13,7 @@ import {
   type OpenShiftStatus,
 } from "./types";
 import { isOpenShiftWatchGone, type OpenShiftWatchEvent } from "./watch";
+import type { OpenShiftWarning } from "./warnings";
 
 type AnyObj = Record<string, unknown>;
 
@@ -450,7 +451,8 @@ export function extractController(
 ): OpenShiftControllerReference | null {
   const uid = str(metadata(item).uid);
   if (!uid) return null;
-  return { kind, namespace, uid, ownerReferences: ownerReferences(item) };
+  const createdAt = str(metadata(item).creationTimestamp);
+  return { kind, namespace, uid, ...(createdAt ? { createdAt } : {}), ownerReferences: ownerReferences(item) };
 }
 
 export function openShiftBuildLogUrl(serverUrl: string, namespace: string, buildName: string, follow = false): string {
@@ -627,7 +629,11 @@ export function buildOpenShiftNamespaceMarkers(
   );
 }
 
-export function buildOpenShiftGraphBadges(data: Map<string, OpenShiftCommitData>): Map<string, GraphBadge> {
+/** A commit's badges; its warning count counts the warnings `counts` accepts (by default, every one). */
+export function buildOpenShiftGraphBadges(
+  data: Map<string, OpenShiftCommitData>,
+  counts: (sha: string, warning: OpenShiftWarning) => boolean = () => true,
+): Map<string, GraphBadge> {
   const badges = new Map<string, GraphBadge>();
   for (const [sha, entry] of data) {
     const resources = entry.namespaces.flatMap(ns => [
@@ -637,7 +643,8 @@ export function buildOpenShiftGraphBadges(data: Map<string, OpenShiftCommitData>
       ...ns.builds,
       ...ns.imageStreamTags,
     ]);
-    const warned = (entry.warnings?.length ?? 0) > 0;
+    const warningCount = (entry.warnings ?? []).filter(warning => counts(sha, warning)).length;
+    const warned = warningCount > 0;
     if (resources.length === 0 && !warned) continue;
     const live = resources.filter(r => !isCachedOpenShiftResource(r));
     const cached = resources.filter(isCachedOpenShiftResource);
@@ -654,7 +661,7 @@ export function buildOpenShiftGraphBadges(data: Map<string, OpenShiftCommitData>
       },
       latestRunAt: "",
       latestStatus: badge,
-      ...(warned ? { warningCount: entry.warnings?.length } : {}),
+      ...(warned ? { warningCount } : {}),
     });
   }
   return badges;

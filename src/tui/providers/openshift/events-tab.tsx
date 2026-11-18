@@ -33,18 +33,47 @@ export interface OpenShiftEventsTabProps {
   consoleUrl?: () => string;
   /** Whether only the cache has the warning (OpenShift deleted it): its row says `(cached)`. */
   isCached?: (warning: OpenShiftWarning) => boolean;
-  /** Enter on a warning: its resource, with its events shown. */
-  onOpenResource?: (resource: OpenShiftResource) => void;
+  /** Whether the commit still has what the warning is about; one it no longer has is in the second section. */
+  isPresent?: (warning: OpenShiftWarning) => boolean;
+  /** Enter on a warning: its resource, with its events shown (only them, for one that is gone). */
+  onOpenResource?: (resource: OpenShiftResource, options: { eventsOnly: boolean }) => void;
 }
 
 export const OPENSHIFT_NO_WARNINGS = "No warnings about this commit's resources.";
 
-type FlatItem = { kind: "namespace"; namespace: string } | { kind: "warning"; warning: OpenShiftWarning };
+/** The commit's resources the warnings are about, and the ones it no longer has. */
+type Section = "present" | "gone";
 
-/** Whether the resource dialog can show the warning's resource: a ReplicaSet or ReplicationController it cannot. */
+export const OPENSHIFT_GONE_SECTION = "resources no longer present";
 
+type FlatItem =
+  | { kind: "namespace"; section: Section; namespace: string }
+  | { kind: "warning"; section: Section; warning: OpenShiftWarning };
+
+const namespaceKey = (section: Section, namespace: string) => `namespace:${section}:${namespace}`;
 const itemKey = (item: FlatItem) =>
-  item.kind === "namespace" ? `namespace:${item.namespace}` : `warning:${item.warning.id}`;
+  item.kind === "namespace" ? namespaceKey(item.section, item.namespace) : `warning:${item.warning.id}`;
+
+interface NamespaceGroup {
+  namespace: string;
+  warnings: OpenShiftWarning[];
+}
+
+/** Namespaces by name, so a new warning never moves them; each one's warnings newest first. */
+function byNamespace(warnings: readonly OpenShiftWarning[]): NamespaceGroup[] {
+  const groups = new Map<string, OpenShiftWarning[]>();
+  for (const entry of warnings) {
+    const list = groups.get(entry.namespace) ?? [];
+    list.push(entry);
+    groups.set(entry.namespace, list);
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([namespace, list]) => ({
+      namespace,
+      warnings: list.sort((a, b) => (b.lastSeen ?? "").localeCompare(a.lastSeen ?? "")),
+    }));
+}
 
 /** The namespaces closed in one commit. */
 interface EventsMemory {
@@ -68,35 +97,30 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
     kept.collapsed = new Set();
     setCollapsed(kept.collapsed);
   });
-  const toggle = (namespace: string) => {
+  const toggle = (key: string) => {
     const next = new Set(collapsed());
-    if (next.has(namespace)) next.delete(namespace);
-    else next.add(namespace);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
     kept.collapsed = next;
     setCollapsed(next);
   };
 
   const warnings = () => props.getCommitData(props.sha)?.warnings ?? [];
-  // Namespaces by name, so a new warning never moves them; each one's warnings newest first.
-  const namespaces = createMemo(() => {
-    const byNamespace = new Map<string, OpenShiftWarning[]>();
-    for (const entry of warnings()) {
-      const list = byNamespace.get(entry.namespace) ?? [];
-      list.push(entry);
-      byNamespace.set(entry.namespace, list);
-    }
-    return [...byNamespace.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([namespace, list]) => ({
-        namespace,
-        warnings: list.sort((a, b) => (b.lastSeen ?? "").localeCompare(a.lastSeen ?? "")),
-      }));
-  });
+  const present = (warning: OpenShiftWarning) => props.isPresent?.(warning) ?? true;
+  const sections = createMemo(() => ({
+    present: byNamespace(warnings().filter(present)),
+    gone: byNamespace(warnings().filter(warning => !present(warning))),
+  }));
+  const goneCount = () => sections().gone.reduce((sum, ns) => sum + ns.warnings.length, 0);
   const flatItems = createMemo<FlatItem[]>(() =>
-    namespaces().flatMap(ns => [
-      { kind: "namespace" as const, namespace: ns.namespace },
-      ...(collapsed().has(ns.namespace) ? [] : ns.warnings.map(warning => ({ kind: "warning" as const, warning }))),
-    ]),
+    (["present", "gone"] as const).flatMap(section =>
+      sections()[section].flatMap(ns => [
+        { kind: "namespace" as const, section, namespace: ns.namespace },
+        ...(collapsed().has(namespaceKey(section, ns.namespace))
+          ? []
+          : ns.warnings.map(warning => ({ kind: "warning" as const, section, warning }))),
+      ]),
+    ),
   );
   const indexes = createMemo(() => new Map(flatItems().map((item, index) => [itemKey(item), index])));
   const indexOf = (key: string) => indexes().get(key) ?? -1;
@@ -110,10 +134,10 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
 
   const activate = () => {
     const item = current();
-    if (item?.kind === "namespace") toggle(item.namespace);
+    if (item?.kind === "namespace") toggle(namespaceKey(item.section, item.namespace));
     else if (item) {
       const resource = openable(item.warning);
-      if (resource) props.onOpenResource?.(resource);
+      if (resource) props.onOpenResource?.(resource, { eventsOnly: item.section === "gone" });
     }
     return false;
   };
@@ -139,7 +163,8 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
       const item = current();
       const consoleUrl = props.consoleUrl?.() ?? "";
       if (item?.kind === "namespace") return openShiftConsoleUrl(consoleUrl, { namespace: item.namespace });
-      const resource = item?.kind === "warning" ? openable(item.warning) : null;
+      // A resource that is gone has no console page.
+      const resource = item?.kind === "warning" && item.section === "present" ? openable(item.warning) : null;
       return resource ? openShiftConsoleUrl(consoleUrl, { namespace: resource.namespace, resource }) : null;
     },
     setDetailCursorShortcut: props.setDetailCursorShortcut,
@@ -149,11 +174,11 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
     const item = current();
     if (!props.detailFocused() || !item) props.setDetailCursorAction(null);
     else if (item.kind === "namespace")
-      props.setDetailCursorAction(collapsed().has(item.namespace) ? "expand" : "collapse");
+      props.setDetailCursorAction(collapsed().has(namespaceKey(item.section, item.namespace)) ? "expand" : "collapse");
     else props.setDetailCursorAction(openable(item.warning) ? "events" : null);
   });
 
-  const renderWarning = (warning: OpenShiftWarning, lead: string, last: boolean) => {
+  const renderWarning = (warning: OpenShiftWarning, section: Section, lead: string, last: boolean) => {
     const key = `warning:${warning.id}`;
     const isCursored = () => cursored(key);
     return (
@@ -174,7 +199,7 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
           tail={`  ${warning.kind} ${warning.name}${props.isCached?.(warning) ? " (cached)" : ""}`}
           tailFg={t().foregroundMuted}
           active={isCursored()}
-          fg={isCursored() ? t().accent : t().foreground}
+          fg={isCursored() ? t().accent : section === "gone" ? t().foregroundMuted : t().foreground}
           grow={false}
         />
         <box flexGrow={1} />
@@ -184,6 +209,56 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
       </box>
     );
   };
+
+  const renderTree = (section: Section, namespaces: readonly NamespaceGroup[]) => (
+    <For each={namespaces}>
+      {(ns, nsIndex) => {
+        const key = namespaceKey(section, ns.namespace);
+        const isCursored = () => cursored(key);
+        const last = () => nsIndex() === namespaces.length - 1;
+        const open = () => !collapsed().has(key);
+        return (
+          <box flexDirection="column" width="100%">
+            <box
+              {...mouseRow(key, () => indexOf(key))}
+              ref={tree.ref(key)}
+              flexDirection="row"
+              width="100%"
+              backgroundColor={isCursored() ? t().backgroundElementActive : hoverBg(key)}
+            >
+              <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().border}>
+                {last() ? "└─ " : "├─ "}
+              </text>
+              <text
+                selectable={!props.mouseEnabled}
+                flexShrink={0}
+                wrapMode="none"
+                fg={isCursored() ? t().accent : t().foregroundMuted}
+              >
+                {open() ? "▾ " : "▸ "}
+              </text>
+              <ScrollingLabel
+                selectable={!props.mouseEnabled}
+                text={ns.namespace}
+                active={isCursored()}
+                fg={isCursored() ? t().accent : t().foreground}
+              />
+              <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                {String(ns.warnings.length).padStart(3)}
+              </text>
+            </box>
+            <Show when={open()}>
+              <For each={ns.warnings}>
+                {(warning, index) =>
+                  renderWarning(warning, section, last() ? "   " : "│  ", index() === ns.warnings.length - 1)
+                }
+              </For>
+            </Show>
+          </box>
+        );
+      }}
+    </For>
+  );
 
   return (
     <box flexDirection="column" width="100%">
@@ -196,53 +271,11 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
         }
       >
         <ProviderSummaryRow label="total warnings" count={warnings().length} />
-        <For each={namespaces()}>
-          {(ns, nsIndex) => {
-            const key = `namespace:${ns.namespace}`;
-            const isCursored = () => cursored(key);
-            const last = () => nsIndex() === namespaces().length - 1;
-            const open = () => !collapsed().has(ns.namespace);
-            return (
-              <box flexDirection="column" width="100%">
-                <box
-                  {...mouseRow(key, () => indexOf(key))}
-                  ref={tree.ref(key)}
-                  flexDirection="row"
-                  width="100%"
-                  backgroundColor={isCursored() ? t().backgroundElementActive : hoverBg(key)}
-                >
-                  <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().border}>
-                    {last() ? "└─ " : "├─ "}
-                  </text>
-                  <text
-                    selectable={!props.mouseEnabled}
-                    flexShrink={0}
-                    wrapMode="none"
-                    fg={isCursored() ? t().accent : t().foregroundMuted}
-                  >
-                    {open() ? "▾ " : "▸ "}
-                  </text>
-                  <ScrollingLabel
-                    selectable={!props.mouseEnabled}
-                    text={ns.namespace}
-                    active={isCursored()}
-                    fg={isCursored() ? t().accent : t().foreground}
-                  />
-                  <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                    {String(ns.warnings.length).padStart(3)}
-                  </text>
-                </box>
-                <Show when={open()}>
-                  <For each={ns.warnings}>
-                    {(warning, index) =>
-                      renderWarning(warning, last() ? "   " : "│  ", index() === ns.warnings.length - 1)
-                    }
-                  </For>
-                </Show>
-              </box>
-            );
-          }}
-        </For>
+        {renderTree("present", sections().present)}
+        <Show when={goneCount() > 0}>
+          <ProviderSummaryRow label={OPENSHIFT_GONE_SECTION} count={goneCount()} />
+          {renderTree("gone", sections().gone)}
+        </Show>
       </Show>
     </box>
   );

@@ -29,6 +29,11 @@ interface OpenShiftResourceDialogProps {
   loadEvents?: (resource: OpenShiftResource) => Promise<OpenShiftEvent[]>;
   /** The view it opens on (the Events tab opens the events); the log, or the object without one, by default. */
   initialView?: "events";
+  /**
+   * The resource is gone (its commit no longer has it): only its events, kept by the cluster for a while and by the
+   * cache; no log, object or console page.
+   */
+  eventsOnly?: boolean;
   /** The warnings codepulse kept about the resource: the events view adds the ones the cluster no longer has. */
   savedWarnings?: () => readonly OpenShiftWarning[];
 }
@@ -44,7 +49,9 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
   const system = useSystem();
   const [viewMode, setViewMode] = createSignal<ViewMode>(
     untrack(() =>
-      props.initialView === "events" && props.loadEvents && OPENSHIFT_EVENT_KINDS.has(props.resource.kind)
+      (props.initialView === "events" || props.eventsOnly) &&
+      props.loadEvents &&
+      OPENSHIFT_EVENT_KINDS.has(props.resource.kind)
         ? "events"
         : resourceHasLog(props.resource)
           ? "log"
@@ -64,12 +71,14 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
   const [events, setEvents] = createSignal<OpenShiftEvent[] | null>(null);
   const [eventsError, setEventsError] = createSignal<string | null>(null);
   const [eventsLoading, setEventsLoading] = createSignal(false);
-  const canLog = () => resourceHasLog(props.resource) && !!props.loadLog;
+  const canLog = () => !props.eventsOnly && resourceHasLog(props.resource) && !!props.loadLog;
+  /** Its object: what the events view's status comes from, and the JSON view. */
+  const canObject = () => !props.eventsOnly && !!props.loadObject;
   const canEvents = () => !!props.loadEvents && OPENSHIFT_EVENT_KINDS.has(props.resource.kind);
   /** The views `c` cycles through, in order: log, object, events. */
   const viewModes = createMemo((): ViewMode[] => [
     ...(canLog() ? (["log"] as const) : []),
-    "json",
+    ...(canObject() || !canEvents() ? (["json"] as const) : []),
     ...(canEvents() ? (["events"] as const) : []),
   ]);
 
@@ -108,7 +117,7 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
   };
 
   const loadObject = async (force = false) => {
-    if (!props.loadObject) return;
+    if (!props.loadObject || !canObject()) return;
     setObjectLoading(true);
     setObjectError(null);
     try {
@@ -135,7 +144,7 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
       // The events came when the dialog opened (for the title's count); the status above them is in the object.
       untrack(() => {
         if (events() === null && !eventsLoading() && !eventsError()) void loadEvents();
-        if (objectText() === null && !objectLoading()) void loadObject();
+        if (objectText() === null && !objectLoading() && canObject()) void loadObject();
       });
       return;
     }
@@ -238,12 +247,11 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
   };
 
   /** `r` refreshes what is on screen: the object in JSON view, the log (restarting a follow) in log view. */
-  const canRefresh = () =>
-    viewMode() === "json" ? !!props.loadObject : viewMode() === "events" ? canEvents() : canLog();
+  const canRefresh = () => (viewMode() === "json" ? canObject() : viewMode() === "events" ? canEvents() : canLog());
   const refresh = () => {
     if (viewMode() === "events") {
       void loadEvents();
-      if (props.loadObject) void loadObject(true);
+      if (canObject()) void loadObject(true);
       return;
     }
     if (viewMode() === "json") {
@@ -262,7 +270,9 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
   };
 
   const consolePage = () =>
-    openShiftConsoleUrl(props.consoleUrl ?? "", { namespace: props.resource.namespace, resource: props.resource });
+    props.eventsOnly
+      ? null
+      : openShiftConsoleUrl(props.consoleUrl ?? "", { namespace: props.resource.namespace, resource: props.resource });
   const openConsole = () => system.openUrl(consolePage() ?? undefined);
 
   return (

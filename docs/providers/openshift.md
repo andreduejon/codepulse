@@ -182,17 +182,27 @@ build list fetch (Reload and auto refresh). codepulse takes them as OpenShift re
 them: a warning is never turned into a failure, and `✗` comes only from a resource's
 own status.
 
-- A warning belongs to the commit whose resource it is about. One about a ReplicaSet or
-  ReplicationController goes to its Deployment's or DeploymentConfig's commit. A warning
-  about a resource no commit has is not kept.
+- A warning belongs to the commit whose resource it is about: the same name, and the same
+  uid, so a resource recreated under its old name is another one. One about a ReplicaSet
+  or ReplicationController goes to its Deployment's or DeploymentConfig's commit. A
+  Deployment keeps its name across commits, so its warning goes to the commit it runs
+  only when it happened after that commit's rollout began (the later of its newest
+  ReplicaSet's creation and the commit's oldest pod there); an earlier one was the
+  previous commit's and is left out. A warning about a resource no commit has is not
+  kept.
 - Warnings are saved in the commit's snapshot (see Cache), so they outlast the cluster's
   copy and are evicted with the snapshot by the cache limit.
-- The graph counts a commit's warnings in a yellow chip after its **Live** counts (how many
-  warnings, not how often each happened).
+- The graph counts a commit's warnings in a yellow chip after its **Live** counts: how many
+  warnings about resources it still has, not how often each happened.
 - In **Resources**, a resource OpenShift warned about shows `!` before its status mark.
 - The **Events** tab lists the commit's warnings by namespace, newest first: reason,
   resource and when, one line each. Enter (or a click) opens its resource's dialog on the
-  events view, where the whole message is; `o` opens it in the web console.
+  events view, where the whole message is; `o` opens it in the web console. A namespace
+  whose events the token may not list is named in a notice under the tab.
+- Warnings about resources the commit no longer has (a replaced pod) follow in a second
+  section, **resources no longer present**. That is known once the live list has loaded;
+  before, every warning is in the first. Enter opens the resource's dialog on its events
+  only: there is no log, object or console page for it any more.
 - A warning OpenShift has deleted (it keeps events for about 3 hours after they last
   happen) says `(cached)` after its resource, like a Build only the cache has. It is
   cached when its event's uid is missing from its namespace's last list; a list that
@@ -202,8 +212,7 @@ own status.
   deleted it, the new event is a new warning beside the cached one.
 - The resource dialog's events view ends with a section **Cached (no longer in the
   cluster)**: the warnings kept about the resource that the cluster's events no longer
-  have, newest first, in the same columns. A namespace whose events the token may not list is named in a notice
-  under the tab.
+  have, newest first, in the same columns.
 
 ## Required read permissions
 

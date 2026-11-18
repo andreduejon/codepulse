@@ -450,6 +450,13 @@ let followCount = 0;
 /** How many batches of lines a followed log gets in a play before it stops growing. */
 const HEADLESS_FOLLOW_BATCHES = 3;
 
+/** The uid of the object an event is about, while the cluster still has it (an event outlives its pod). */
+const uidOf = (ns: string, kind: string, name: string) => {
+  const item = itemsOf(world, ns, kind).find(entry => (entry.metadata as { name?: string } | undefined)?.name === name);
+  const uid = (item?.metadata as { uid?: string } | undefined)?.uid;
+  return uid ? { uid } : {};
+};
+
 /** An event's uid, the same in the namespace's list and the resource's, as a cluster gives it. */
 const eventUid = (key: string, event: Record<string, unknown>) => `${key}/${event.reason}`;
 
@@ -471,7 +478,7 @@ function openshift(url: URL, signal: AbortSignal | null | undefined): Response {
             .map(event => ({
               ...event,
               metadata: { ...(event.metadata as object), uid: eventUid(key, event) },
-              involvedObject: { kind, name, namespace: ns },
+              involvedObject: { kind, name, namespace: ns, ...uidOf(ns, kind, name) },
             }));
         });
       return json({ kind: "EventList", items });
