@@ -475,6 +475,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
       autoRefreshSeconds: DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS,
     };
     const tokenSource = system.tokenSource(ghCfg.tokenEnvVar);
+    const tokenIsSet = (envVar: string) => system.tokenSource(envVar) === "env";
     const jenkinsCfg = opts.jenkinsConfig?.() ?? {
       enabled: false,
       tokenEnvVar: "JENKINS_TOKEN",
@@ -521,12 +522,14 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         opts.onJenkinsConfigChange,
         newCfg => persistFullConfig({ providers: { jenkins: newCfg } }),
         () => providerRefreshLabel("jenkins"),
+        tokenIsSet,
       ),
       ...buildOpenShiftProviderItems(
         openshiftCfg,
         opts.onOpenShiftConfigChange,
         newCfg => persistFullConfig({ providers: { openshift: newCfg } }),
         () => providerRefreshLabel("openshift"),
+        tokenIsSet,
       ),
       ...buildSnykProviderItems(
         snykCfg,
@@ -534,6 +537,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         opts.onSnykConfigChange,
         newCfg => persistFullConfig({ providers: { snyk: newCfg } }),
         () => providerRefreshLabel("snyk"),
+        tokenIsSet,
       ),
     ];
   });

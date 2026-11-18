@@ -11,6 +11,7 @@ import {
 } from "../../core/cache-store";
 import { useCacheStore } from "../context/cache-store";
 import { useSettings } from "../context/settings";
+import { useSystem } from "../context/system";
 import { useClipboard } from "../hooks/use-clipboard";
 import { useT } from "../hooks/use-t";
 import { useModalKeys } from "../keyboard/dispatcher";
@@ -53,6 +54,7 @@ const headerLabel = (row: CacheRow) => (row.kind === "header" ? row.label : "");
 
 export default function CacheScreen(props: Readonly<CacheScreenProps>) {
   const contextStore = useCacheStore();
+  const system = useSystem();
   const store = props.store ?? contextStore;
   const t = useT();
   const renderer = useRenderer();
@@ -100,6 +102,7 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
     duplicateNameDetails(
       repositories().map(repo => ({ path: repo.repoPath, repo })),
       entry => name(entry.repo),
+      system.homeDirectory(),
     ),
   );
   const rows = createMemo(() => {

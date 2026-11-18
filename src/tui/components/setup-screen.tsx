@@ -1,5 +1,5 @@
-import { homedir } from "node:os";
 import packageJson from "../../../package.json";
+import { useSystem } from "../context/system";
 import { useT } from "../hooks/use-t";
 import { useModalKeys } from "../keyboard/dispatcher";
 import { KeyHint, KeyHintSeparator } from "./key-hint";
@@ -21,6 +21,8 @@ interface SetupScreenProps {
  * Enter dismisses the screen and proceeds to the graph.
  */
 export default function SetupScreen(props: Readonly<SetupScreenProps>) {
+  /** The home folder, shown as `~`. */
+  const system = useSystem();
   const t = useT();
 
   useModalKeys(e => {
@@ -39,7 +41,7 @@ export default function SetupScreen(props: Readonly<SetupScreenProps>) {
   const MAX_PATH_CHARS = LOGO_WIDTH - 2 - 8;
 
   const displayPath = () => {
-    const short = props.repoPath.replace(homedir(), "~");
+    const short = props.repoPath.replace(system.homeDirectory(), "~");
     if (short.length <= MAX_PATH_CHARS) return short;
     return `…${short.slice(-(MAX_PATH_CHARS - 1))}`;
   };

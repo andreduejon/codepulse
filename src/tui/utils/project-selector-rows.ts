@@ -1,4 +1,3 @@
-import { homedir } from "node:os";
 import { basename } from "node:path";
 import type { KnownRepoInfo } from "../../core/settings/config";
 
@@ -15,6 +14,8 @@ export type ProjectSelectorRow =
 export function duplicateNameDetails<T extends { path: string }>(
   repos: readonly T[],
   name: (repo: T) => string,
+  /** The home folder, shown as `~`; none leaves the paths as they are. */
+  home = "",
 ): Map<string, string> {
   const labelCounts = new Map<string, number>();
   const details = new Map<string, string>();
@@ -25,7 +26,7 @@ export function duplicateNameDetails<T extends { path: string }>(
   for (const [label, count] of labelCounts) {
     if (count <= 1) continue;
     const duplicates = repos.filter(repo => name(repo) === label);
-    const paths = duplicates.map(repo => shortPath(repo.path));
+    const paths = duplicates.map(repo => shortPath(repo.path, home));
     const common = commonPathPrefix(paths);
     duplicates.forEach((repo, idx) => {
       details.set(repo.path, uniquePathSuffix(paths[idx], common));
@@ -34,8 +35,12 @@ export function duplicateNameDetails<T extends { path: string }>(
   return details;
 }
 
-export function buildProjectSelectorRows(repos: KnownRepoInfo[], currentRepo?: string): ProjectSelectorRow[] {
-  const parentDetailsByPath = duplicateNameDetails(repos, displayName);
+export function buildProjectSelectorRows(
+  repos: KnownRepoInfo[],
+  currentRepo?: string,
+  home = "",
+): ProjectSelectorRow[] {
+  const parentDetailsByPath = duplicateNameDetails(repos, displayName, home);
 
   const buckets = new Map<string, KnownRepoInfo[]>();
   repos.forEach(repo => {
@@ -92,8 +97,8 @@ function displayName(repo: KnownRepoInfo): string {
   return repo.appName?.trim() || basename(repo.path);
 }
 
-function shortPath(path: string): string {
-  return path.replace(homedir(), "~");
+function shortPath(path: string, home: string): string {
+  return home ? path.replace(home, "~") : path;
 }
 
 function commonPathPrefix(paths: string[]): string {

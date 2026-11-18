@@ -88,6 +88,15 @@
                       "**/adapters"
                     ],
                     "message": "The UI reaches Git, the network, the caches, the settings file and the system through the app's ports (core's ports, src/tui/context). Only the root (src/main.tsx, src/ports.ts) builds the adapters."
+                  },
+                  {
+                    "group": [
+                      "node:fs",
+                      "node:fs/*",
+                      "node:child_process",
+                      "node:os"
+                    ],
+                    "message": "The terminal front end reaches files, processes and the machine through the app's ports (useSystem, useGit, useSettings): adapters do the I/O."
                   }
                 ]
               }

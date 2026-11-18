@@ -1,41 +1,25 @@
-import { expect, mock, spyOn, test } from "bun:test";
-import * as childProcess from "node:child_process";
+import { expect, mock, test } from "bun:test";
 import { reExecWith } from "./project-selector";
 
-test("repository re-exec waits for terminal restoration and propagates child status", async () => {
+test("switching repository waits for the terminal to be restored, then starts again on it", async () => {
   let restore!: () => void;
   const closed = new Promise<void>(resolve => {
     restore = resolve;
   });
   const destroy = mock(() => {});
-  const spawn = spyOn(childProcess, "spawnSync").mockReturnValue({
-    status: 7,
-  } as childProcess.SpawnSyncReturns<string>);
-  const exit = spyOn(process, "exit").mockImplementation(() => undefined as never);
-  try {
-    const pending = reExecWith("repo with spaces", { destroy, closed });
-    expect(destroy).toHaveBeenCalledTimes(1);
-    expect(spawn).not.toHaveBeenCalled();
-    restore();
-    await pending;
-    expect(spawn).toHaveBeenCalledTimes(1);
-    expect(spawn.mock.calls[0]?.[1]?.at(-1)).toBe("repo with spaces");
-    expect(exit).toHaveBeenCalledWith(7);
-  } finally {
-    restore();
-    spawn.mockRestore();
-    exit.mockRestore();
-  }
+  const relaunch = mock(async (_repoPath: string) => {});
+  const pending = reExecWith("repo with spaces", { destroy, closed }, relaunch);
+  expect(destroy).toHaveBeenCalledTimes(1);
+  expect(relaunch).not.toHaveBeenCalled();
+  restore();
+  await pending;
+  expect(relaunch).toHaveBeenCalledWith("repo with spaces");
 });
 
-test("failed terminal restoration never starts replacement process", async () => {
-  const spawn = spyOn(childProcess, "spawnSync");
-  try {
-    await expect(
-      reExecWith("repo", { destroy: () => {}, closed: Promise.reject(new Error("restore failed")) }),
-    ).rejects.toThrow("restore failed");
-    expect(spawn).not.toHaveBeenCalled();
-  } finally {
-    spawn.mockRestore();
-  }
+test("a failed terminal restore never starts the new process", async () => {
+  const relaunch = mock(async (_repoPath: string) => {});
+  await expect(
+    reExecWith("repo", { destroy: () => {}, closed: Promise.reject(new Error("restore failed")) }, relaunch),
+  ).rejects.toThrow("restore failed");
+  expect(relaunch).not.toHaveBeenCalled();
 });

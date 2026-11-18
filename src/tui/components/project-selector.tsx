@@ -1,13 +1,12 @@
-import { spawnSync } from "node:child_process";
-import { homedir } from "node:os";
-import { resolve } from "node:path";
 import { type CliRenderer, MouseButton, type Renderable, type ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
 import packageJson from "../../../package.json";
 import type { KnownRepoInfo } from "../../core/settings/config";
 import { SHIFT_JUMP } from "../constants";
+import { useGit } from "../context/git";
 import { useSettings } from "../context/settings";
+import { useSystem } from "../context/system";
 import { useT } from "../hooks/use-t";
 import { useModalKeys } from "../keyboard/dispatcher";
 import {
@@ -55,6 +54,10 @@ interface ProjectSelectorProps {
 export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
   /** Where the settings are kept (forgetting a project removes its settings there). */
   const savedSettings = useSettings();
+  /** Git, for a path's repository root, and the system, for `~` and starting again elsewhere. */
+  const git = useGit();
+  const system = useSystem();
+  const expandHome = (path: string) => (path.startsWith("~") ? path.replace("~", system.homeDirectory()) : path);
   const t = useT();
   const renderer = useRenderer();
 
@@ -63,7 +66,7 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
   const [savedRepos, setSavedRepos] = createSignal(props.knownRepos);
 
   const repos = () => savedRepos();
-  const rows = createMemo(() => buildProjectSelectorRows(repos(), props.currentRepo));
+  const rows = createMemo(() => buildProjectSelectorRows(repos(), props.currentRepo, system.homeDirectory()));
   const selectableIndexes = createMemo(() =>
     rows().flatMap((row, idx) => (isSelectableProjectSelectorRow(row) ? [idx] : [])),
   );
@@ -94,14 +97,18 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
     if (scrollboxRef && row) scrollElementIntoView(scrollboxRef, row);
   });
 
-  /** Destroy the renderer and re-exec with the given path. */
-  const selectRepo = (repoPath: string) => {
-    const canonical = canonicalRepoPath(repoPath);
+  /** A repository by its top folder (a path inside it opens the whole repository): switch to it, or start on it. */
+  const selectRepo = async (repoPath: string) => {
+    const expanded = expandHome(repoPath);
+    // A folder that isn't a repository (or doesn't exist) opens as typed: the app then says what is wrong with it.
+    const canonical = (await git.getRepoRoot(expanded).catch(() => null)) ?? expanded;
     if (props.onSelectRepo) {
       props.onSelectRepo(canonical);
       return;
     }
-    void reExecWith(canonical, renderer).catch(error => console.error("Unable to switch repository:", error));
+    void reExecWith(canonical, renderer, system.relaunch).catch(error =>
+      console.error("Unable to switch repository:", error),
+    );
   };
 
   /** Handle Esc — go back (in-app) or quit (startup). */
@@ -131,10 +138,10 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
   };
   const openSelected = () => {
     const row = selectedRow();
-    if (row?.kind === "repo" && !row.current) selectRepo(row.repo.path);
+    if (row?.kind === "repo" && !row.current) void selectRepo(row.repo.path);
     else if (row?.kind === "path-input") {
       const value = pathInputValue().trim();
-      if (value) selectRepo(resolve(value.startsWith("~") ? value.replace("~", homedir()) : value));
+      if (value) void selectRepo(system.absolutePath(expandHome(value)));
     }
   };
 
@@ -199,7 +206,7 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
     }
   });
 
-  const shortPath = (p: string) => p.replace(homedir(), "~");
+  const shortPath = (p: string) => p.replace(system.homeDirectory(), "~");
 
   return (
     <box width="100%" height="100%" flexDirection="column" backgroundColor={t().backgroundPanel}>
@@ -262,7 +269,7 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
                       event.preventDefault();
                       event.stopPropagation();
                       setCursor(idx());
-                      if (row.kind === "repo") selectRepo(row.repo.path);
+                      if (row.kind === "repo") void selectRepo(row.repo.path);
                     }}
                     backgroundColor={
                       (cursor() === idx() || hoveredRow() === row) && isSelectableProjectSelectorRow(row)
@@ -369,37 +376,15 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
 }
 
 /**
- * Re-exec codepulse with the given repository path.
- * Replaces the current process — does not return.
- *
- * Uses spawnSync with an array of arguments (not a shell string) to prevent
- * shell interpretation of special characters in the repo path.
- *
- * Wait for terminal restoration before the replacement process uses its streams.
+ * Leaves the screen and starts codepulse again on another repository: the terminal is restored first, so the new
+ * process gets clean streams; when restoring fails, nothing starts.
  */
-function canonicalRepoPath(repoPath: string): string {
-  // Resolve ~ to home directory
-  const resolved = repoPath.startsWith("~") ? repoPath.replace("~", homedir()) : repoPath;
-  const rootResult = spawnSync("git", ["-C", resolved, "rev-parse", "--show-toplevel"], {
-    encoding: "utf-8",
-    stdio: ["ignore", "pipe", "ignore"],
-  });
-  return rootResult.status === 0 && rootResult.stdout.trim() ? rootResult.stdout.trim() : resolved;
-}
-
-export async function reExecWith(repoPath: string, renderer: Pick<CliRenderer, "destroy" | "closed">): Promise<void> {
+export async function reExecWith(
+  repoPath: string,
+  renderer: Pick<CliRenderer, "destroy" | "closed">,
+  relaunch: (repoPath: string) => Promise<void>,
+): Promise<void> {
   renderer.destroy();
   await renderer.closed;
-  // Use spawnSync with an array to avoid shell interpolation of the repo path.
-  // execSync(string) passes through a shell and is vulnerable to injection via
-  // special characters in the path (backticks, $(), etc.).
-  const standalone = Bun.isStandaloneExecutable || Bun.main.startsWith("/$bunfs/");
-  const executable = standalone ? process.execPath : process.argv[0];
-  const args = standalone ? [repoPath] : [process.argv[1], repoPath];
-  const result = spawnSync(executable, args, {
-    stdio: "inherit",
-    env: process.env,
-  });
-  if (result.error) throw result.error;
-  process.exit(result.status ?? 1);
+  await relaunch(repoPath);
 }

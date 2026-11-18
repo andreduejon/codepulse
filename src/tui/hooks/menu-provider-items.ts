@@ -70,7 +70,8 @@ function tokenVariableItem(opts: {
   current: string;
   fallback: string;
   save: (name: string) => void;
-  isSet?: () => boolean;
+  /** Whether the variable is set (the system port answers; the menu never reads the environment itself). */
+  isSet: () => boolean;
 }): SettingItem {
   return {
     kind: "editable",
@@ -78,7 +79,7 @@ function tokenVariableItem(opts: {
     placeholder: "Enter variable name...",
     get: () => opts.current,
     set: value => opts.save(value.trim() || opts.fallback),
-    valid: () => isValidEnvVarName(opts.current) && (opts.isSet?.() ?? !!process.env[opts.current]?.trim()),
+    valid: () => isValidEnvVarName(opts.current) && opts.isSet(),
     isDraftValid: value => isValidEnvVarName(value.trim() || opts.fallback),
   };
 }
@@ -89,6 +90,8 @@ export function buildSnykProviderItems(
   onChange?: (cfg: SnykMenuConfig) => void,
   persist?: (cfg: SnykMenuConfig) => void,
   lastScan: () => string = () => "never",
+  /** Whether a token variable is set. */
+  tokenIsSet: (envVar: string) => boolean = () => false,
 ): SettingItem[] {
   const update = (next: SnykMenuConfig) => {
     onChange?.(next);
@@ -114,6 +117,7 @@ export function buildSnykProviderItems(
     tokenVariableItem({
       current: cfg.tokenEnvVar,
       fallback: "SNYK_TOKEN",
+      isSet: () => tokenIsSet(cfg.tokenEnvVar),
       save: tokenEnvVar => update({ ...cfg, tokenEnvVar }),
     }),
     {
@@ -156,6 +160,8 @@ export function buildOpenShiftProviderItems(
   onChange?: (cfg: OpenShiftMenuConfig) => void,
   persist?: (cfg: OpenShiftMenuConfig) => void,
   lastRefresh: () => string = () => "never",
+  /** Whether a token variable is set. */
+  tokenIsSet: (envVar: string) => boolean = () => false,
 ): SettingItem[] {
   const update = (next: OpenShiftMenuConfig) => {
     onChange?.(next);
@@ -191,6 +197,7 @@ export function buildOpenShiftProviderItems(
     tokenVariableItem({
       current: cfg.tokenEnvVar,
       fallback: "OPENSHIFT_TOKEN",
+      isSet: () => tokenIsSet(cfg.tokenEnvVar),
       save: tokenEnvVar => update({ ...cfg, tokenEnvVar }),
     }),
     {
@@ -349,6 +356,8 @@ export function buildJenkinsProviderItems(
   onChange?: (cfg: JenkinsMenuConfig) => void,
   persist?: (cfg: JenkinsMenuConfig) => void,
   lastRefresh: () => string = () => "never",
+  /** Whether a token variable is set. */
+  tokenIsSet: (envVar: string) => boolean = () => false,
 ): SettingItem[] {
   const sameJob = (url: string) => url.trim().replace(/\/+$/, "");
   const isNewJob = (value: string) =>
@@ -387,6 +396,7 @@ export function buildJenkinsProviderItems(
     tokenVariableItem({
       current: jenkinsCfg.tokenEnvVar,
       fallback: "JENKINS_TOKEN",
+      isSet: () => tokenIsSet(jenkinsCfg.tokenEnvVar),
       save: tokenEnvVar => {
         const newCfg = { ...jenkinsCfg, tokenEnvVar };
         onChange?.(newCfg);
