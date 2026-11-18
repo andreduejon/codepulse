@@ -4,6 +4,7 @@ import { type DashboardSettings, DEFAULT_DASHBOARD_SETTINGS } from "../../core/d
 import type { ProviderDetailView, ProviderView } from "../../core/provider-model";
 import type { CodepulseConfig, ConfigInfo, ProviderSection } from "../../core/settings/config";
 import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL } from "../../core/settings/config";
+import { settingsChanges } from "../../core/settings/provider-section";
 import type { RepoSettings } from "../app/repo-settings";
 import { AUTO_REFRESH_MS, INTERVAL_OPTIONS, MAX_COUNT_OPTIONS, MS_TO_LABEL } from "../constants";
 import { useProviderModules } from "../context/provider-modules";
@@ -135,15 +136,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
       autoFetchSeconds: state.autoFetchInterval() / 1000,
       ...overrides,
     };
-    // Every provider's settings too, unless the change is one provider's own.
-    const repoSettings = opts.providerSettings?.();
-    if (!overrides?.providers && repoSettings)
-      cfg.providers = Object.fromEntries(
-        state.providers.set.definitions.map(definition => [
-          definition.key,
-          repoSettings.of(definition)() as ProviderSection,
-        ]),
-      );
+    // A provider's settings are written only when one of them changes (its own rows), and then only what changed.
     savedSettings.write(cfg, state.repoPath());
     if (overrides && (Object.hasOwn(overrides, "group") || Object.hasOwn(overrides, "appName"))) {
       const nextRepoDisplayConfig = {
@@ -451,8 +444,9 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         return module.menuItems({
           settings: repoSettings.of(definition)(),
           update: next => {
+            const changes = settingsChanges(repoSettings.of(definition)(), next);
             repoSettings.set(definition, next);
-            persistFullConfig({ providers: { [definition.key]: next as ProviderSection } });
+            persistFullConfig({ providers: { [definition.key]: changes as ProviderSection } });
           },
           lastRefresh: () => providerRefreshLabel(definition.id),
           tokenIsSet,

@@ -305,15 +305,15 @@ export function applyConfigFields(target: Record<string, unknown>, config: Codep
     };
   }
   if (config.providers !== undefined) {
-    // Each provider's fields go into its section, keeping the other providers and the fields not given; a field given
-    // as undefined is cleared (Allow host turned off removes the trusted host).
+    // Each provider's fields go into its section, keeping the other providers and the fields not given (or given as
+    // undefined); only a field given as null, cleared in the Menu, is removed (Allow host turned off).
     const existingProviders = isRecord(target.providers) ? { ...target.providers } : {};
     for (const [key, section] of Object.entries(config.providers)) {
       if (section === undefined) continue;
       const existing = isRecord(existingProviders[key]) ? { ...existingProviders[key] } : {};
       for (const [field, value] of Object.entries(section)) {
-        if (value === undefined) delete existing[field];
-        else existing[field] = value;
+        if (value === null) delete existing[field];
+        else if (value !== undefined) existing[field] = value;
       }
       existingProviders[key] = existing;
     }

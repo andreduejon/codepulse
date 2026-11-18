@@ -95,7 +95,23 @@ export function missingSettings<Settings extends SettingsSection>(
   const section: Partial<Settings> = existing ?? {};
   if (definition.missing) return definition.missing(section, definition.defaults);
   const keys = (definition.backfill ?? Object.keys(definition.defaults)) as (keyof Settings & string)[];
-  const lacking = keys.filter(field => section[field] === undefined);
+  // A default without a value (no trusted host) is never written: a field the file has but the app refused stays.
+  const lacking = keys.filter(field => section[field] === undefined && definition.defaults[field] !== undefined);
   if (lacking.length === 0) return null;
   return Object.fromEntries(lacking.map(field => [field, definition.defaults[field]])) as Partial<Settings>;
+}
+
+/**
+ * What a change to a provider's settings writes: the fields that changed, and a field emptied as null so the file
+ * drops it. Fields that didn't change are left as the file has them.
+ */
+export function settingsChanges<Settings extends object>(previous: Settings, next: Settings): Record<string, unknown> {
+  const changes: Record<string, unknown> = {};
+  for (const field of new Set([...Object.keys(previous), ...Object.keys(next)])) {
+    const before = (previous as Record<string, unknown>)[field];
+    const after = (next as Record<string, unknown>)[field];
+    if (JSON.stringify(before) === JSON.stringify(after)) continue;
+    changes[field] = after === undefined ? null : after;
+  }
+  return changes;
 }

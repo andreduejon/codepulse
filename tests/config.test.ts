@@ -876,16 +876,37 @@ describe("writeConfig", () => {
     expect(loadConfig(repoPath, configPath, PROVIDERS).config.providers?.github?.trustedEnterpriseHost).toBe(
       "ghe.example.com",
     );
-    // Allow host turned off: the Menu saves the section without the host.
-    expect(
-      writeConfig({ providers: { github: { ...github, trustedEnterpriseHost: undefined } } }, repoPath, configPath),
-    ).toBe(true);
+    // Allow host turned off: the Menu saves the host as cleared.
+    expect(writeConfig({ providers: { github: { trustedEnterpriseHost: null } } }, repoPath, configPath)).toBe(true);
     const reloaded = loadConfig(repoPath, configPath, PROVIDERS).config.providers?.github;
     expect(reloaded?.trustedEnterpriseHost).toBeUndefined();
     expect(reloaded?.enabled).toBe(true);
-    // A section given without a field keeps the field: only a field given as undefined is cleared.
-    expect(writeConfig({ providers: { github: { enabled: false } } }, repoPath, configPath)).toBe(true);
+    // A field not given, or given as undefined, is kept: only one given as cleared (null) goes.
+    expect(
+      writeConfig({ providers: { github: { enabled: false, tokenEnvVar: undefined } } }, repoPath, configPath),
+    ).toBe(true);
     expect(loadConfig(repoPath, configPath, PROVIDERS).config.providers?.github?.tokenEnvVar).toBe("GITHUB_TOKEN");
+  });
+
+  test("a setting the app ignores as invalid stays in the file: backfill and saves never remove what they didn't set", () => {
+    const dir = makeTempDir("write-keep-invalid");
+    const configPath = join(dir, "config.json");
+    const repoPath = "/tmp/my-repo";
+    const username = "u".repeat(256);
+    const raw = { trustedEnterpriseHost: "https://ghe.example.com" };
+    expect(writeConfig({ providers: { github: raw, jenkins: { username } } } as never, repoPath, configPath)).toBe(
+      true,
+    );
+    // Read: both refused with a warning, so the app resolves them to nothing.
+    const { config, warnings } = loadConfig(repoPath, configPath, PROVIDERS);
+    expect(config.providers?.github?.trustedEnterpriseHost).toBeUndefined();
+    expect(warnings.length).toBeGreaterThan(0);
+    backfillRepoConfig(repoPath, configPath, PROVIDERS);
+    const file = JSON.parse(readFileSync(configPath, "utf-8")).repos[resolve(repoPath)].providers;
+    expect(file.github.trustedEnterpriseHost).toBe("https://ghe.example.com");
+    expect(file.jenkins.username).toBe(username);
+    // Backfill writes no default that has no value: OpenShift's console address stays absent.
+    expect(Object.hasOwn(file.openshift, "consoleUrl")).toBe(false);
   });
 
   test("creates new config file with repo entry", () => {

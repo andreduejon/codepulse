@@ -13,6 +13,7 @@ import {
   withoutRepoSettings,
   withRepoSettings,
 } from "./config";
+import { settingsChanges } from "./provider-section";
 
 const PROVIDERS = [githubProvider, jenkinsProvider, openShiftProvider, snykProvider];
 
@@ -71,4 +72,20 @@ test("the missing defaults never name a setting the repository has", () => {
   expect(missing?.theme).toBe(defaultConfig().theme);
   expect(missing?.providers?.snyk?.enabled).toBeUndefined();
   expect(missing?.providers?.snyk?.tokenEnvVar).toBe(defaultConfig(PROVIDERS).providers.snyk?.tokenEnvVar);
+});
+
+test("a provider's changed settings: what changed, and a field emptied as cleared (null), nothing else", () => {
+  const before: { enabled: boolean; tokenEnvVar: string; trustedEnterpriseHost?: string } = {
+    enabled: true,
+    tokenEnvVar: "GITHUB_TOKEN",
+    trustedEnterpriseHost: "ghe.example.com",
+  };
+  expect(settingsChanges(before, { ...before, trustedEnterpriseHost: undefined })).toEqual({
+    trustedEnterpriseHost: null,
+  });
+  expect(settingsChanges(before, { ...before, enabled: false })).toEqual({ enabled: false });
+  expect(settingsChanges(before, before)).toEqual({});
+  // Arrays and objects compare by content: the same jobs again is no change.
+  const jobs = { jobs: [{ url: "https://ci.example.com/job/a" }] };
+  expect(settingsChanges(jobs, { jobs: [{ url: "https://ci.example.com/job/a" }] })).toEqual({});
 });
