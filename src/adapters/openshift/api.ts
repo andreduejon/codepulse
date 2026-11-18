@@ -527,7 +527,9 @@ function parseOpenShiftEvent(item: unknown): OpenShiftEvent {
   const event = obj(item) ?? {};
   const series = obj(event.series);
   const count = typeof series?.count === "number" ? series.count : typeof event.count === "number" ? event.count : 1;
+  const id = str(metadata(item).uid);
   return {
+    ...(id ? { id } : {}),
     type: str(event.type) ?? "Normal",
     reason: str(event.reason) ?? "",
     message: (str(event.note) ?? str(event.message) ?? "").replace(/\s*\n\s*/g, " ").trim(),

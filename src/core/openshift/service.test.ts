@@ -183,3 +183,30 @@ test("a namespace whose events the token may not list is named, until it may", a
   await h.service.refresh();
   expect(h.service.warningsDenied()).toEqual([]);
 });
+
+test("a warning is cached when its namespace's last list lacks it; a failed list changes nothing", async () => {
+  const h = harness();
+  h.cluster.warnings = { warnings: [buildWarning(), buildWarning({ id: "event-2" })], denied: [], failed: [] };
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  expect(h.service.warningIsCached(buildWarning())).toBe(false);
+  // OpenShift deleted event-1.
+  h.cluster.warnings = { warnings: [buildWarning({ id: "event-2" })], denied: [], failed: [] };
+  await h.service.refresh();
+  expect(h.service.warningIsCached(buildWarning())).toBe(true);
+  expect(h.service.warningIsCached(buildWarning({ id: "event-2" }))).toBe(false);
+  // The namespace's list failed: what it said last still holds.
+  h.cluster.warnings = { warnings: [], denied: [], failed: ["ns"] };
+  await h.service.refresh();
+  expect(h.service.warningIsCached(buildWarning({ id: "event-2" }))).toBe(false);
+  // Every saved warning about a resource, for the resource dialog.
+  expect(h.service.warningsAboutResource(build).map(w => w.id)).toEqual(["event-1", "event-2"]);
+});
+
+test("warnings read from the cache are cached until their namespace is listed", async () => {
+  const h = harness();
+  h.saved.set(SHA, { sha: SHA, builds: [], warnings: [buildWarning()] });
+  h.fail(OPENSHIFT_BANNER.tokenExpired);
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  expect(h.service.getCommitData(SHA)?.warnings?.map(w => w.id)).toEqual(["event-1"]);
+  expect(h.service.warningIsCached(buildWarning())).toBe(true);
+});

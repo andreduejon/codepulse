@@ -1,5 +1,6 @@
 import { openShiftStatusRows } from "../../../core/openshift/resources";
 import type { OpenShiftEvent, OpenShiftResourceKind } from "../../../core/openshift/types";
+import type { OpenShiftWarning } from "../../../core/openshift/warnings";
 import { formatRelativeDate } from "../../utils/date";
 
 /** Kinds whose events say something about a failure. An ImageStreamTag has hardly any. */
@@ -51,6 +52,35 @@ export function formatOpenShiftEvents(events: readonly OpenShiftEvent[]): OpenSh
       text: line(row.age, row.type, row.reason, row.count, row.message),
       kind: row.type === "Warning" ? ("warning" as const) : ("normal" as const),
     })),
+  ];
+}
+
+export const OPENSHIFT_CACHED_WARNINGS = "Cached (no longer in the cluster)";
+
+/**
+ * Below the events: the warnings codepulse kept that the cluster's events no longer have (OpenShift deleted them), in
+ * the same columns, newest first. Nothing when there are none.
+ */
+export function formatCachedWarnings(
+  saved: readonly OpenShiftWarning[],
+  live: readonly OpenShiftEvent[],
+): OpenShiftEventLine[] {
+  const listed = new Set(live.flatMap(event => (event.id ? [event.id] : [])));
+  const cached = saved
+    .filter(warning => !listed.has(warning.id))
+    .sort((a, b) => (b.lastSeen ?? "").localeCompare(a.lastSeen ?? ""));
+  if (cached.length === 0) return [];
+  const events = cached.map(warning => ({
+    type: "Warning",
+    reason: warning.reason,
+    message: warning.message,
+    count: warning.count,
+    lastSeen: warning.lastSeen,
+  }));
+  return [
+    { text: "", kind: "normal" },
+    { text: OPENSHIFT_CACHED_WARNINGS, kind: "header" },
+    ...formatOpenShiftEvents(events),
   ];
 }
 

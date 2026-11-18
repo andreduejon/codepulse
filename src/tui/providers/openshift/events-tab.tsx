@@ -31,6 +31,8 @@ export interface OpenShiftEventsTabProps {
   setDetailCursorShortcut?: (shortcut: RowShortcut | null) => void;
   /** Web console URL from the settings; `o` opens the warning's resource there when it is set. */
   consoleUrl?: () => string;
+  /** Whether only the cache has the warning (OpenShift deleted it): its row says `(cached)`. */
+  isCached?: (warning: OpenShiftWarning) => boolean;
   /** Enter on a warning: its resource, with its events shown. */
   onOpenResource?: (resource: OpenShiftResource) => void;
 }
@@ -169,7 +171,7 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
         <ScrollingLabel
           selectable={!props.mouseEnabled}
           text={warning.reason}
-          tail={`  ${warning.kind} ${warning.name}`}
+          tail={`  ${warning.kind} ${warning.name}${props.isCached?.(warning) ? " (cached)" : ""}`}
           tailFg={t().foregroundMuted}
           active={isCursored()}
           fg={isCursored() ? t().accent : t().foreground}

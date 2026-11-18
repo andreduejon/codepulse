@@ -73,6 +73,20 @@ export const GOLDEN_PLAYS: readonly GoldenPlay[] = [
     ],
   },
   {
+    name: "openshift-cached",
+    covers: "a warning OpenShift deleted: (cached) in the Events tab, the Cached section of its resource's events",
+    args: [
+      ...WIDE,
+      "--play",
+      [
+        // The next phase has no BuildFailed event any more: only the cache keeps it.
+        'click:OpenShift wait:"64ddc8a" advance type::reload enter',
+        'click:64ddc8a enter right wait:"shop-api-41 (cached)" shot:events',
+        'click:BuildFailed enter wait:"Cached (no longer" shot:dialog',
+      ].join("\n"),
+    ],
+  },
+  {
     name: "logs",
     covers: "the CI job log dialog: views, search, Esc back to the details",
     args: [

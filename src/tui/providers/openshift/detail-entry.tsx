@@ -1,5 +1,5 @@
 import type { OpenShiftCommitData, OpenShiftResource } from "../../../core/openshift/types";
-import { warningsAbout } from "../../../core/openshift/warnings";
+import { type OpenShiftWarning, warningsAbout } from "../../../core/openshift/warnings";
 import { scopedMemory } from "../../components/detail-memory";
 import { detailEntry, type ProviderDetailSource } from "../shared/detail-entry";
 import { OpenShiftDetailTab } from "./detail-tab";
@@ -17,6 +17,8 @@ export interface OpenShiftDetailSource extends ProviderDetailSource<OpenShiftCom
   isFrozen?: () => boolean;
   /** Web console URL from the settings, for `o`. */
   consoleUrl?: () => string;
+  /** Whether only the cache has a warning: OpenShift deleted it. */
+  warningIsCached?: (warning: OpenShiftWarning) => boolean;
   /** Enter on a resource: its log, object and events; or, from the Events tab, its events. */
   onOpenResource?: (resource: OpenShiftResource, view?: "events") => void;
 }
@@ -73,6 +75,7 @@ export const openshiftEventsDetail = detailEntry<OpenShiftDetailSource>({
       getCommitData={props.source.getCommitData}
       consoleUrl={props.source.consoleUrl}
       memory={scopedMemory(props.context.memory, "openshift")}
+      isCached={props.source.warningIsCached}
       onOpenResource={resource => props.source.onOpenResource?.(resource, "events")}
       {...props.context.cursor}
     />

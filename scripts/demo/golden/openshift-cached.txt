@@ -1,0 +1,94 @@
+=== shot 1: events (200x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                        Live           Cache                    Resources            Events             Info
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+    █                           bf08113   dev   origin/dev   shop-dev  feat(api): export request metrics     2   1   2      1                 total warnings                                         5
+    │                                                                                                                                         ├─ ▾ shop-dev                                          1
+    █                           e6209dd  feat(api): add a health endpoint                                   ·······        ·······            │  └─ BuildFailed  Build shop-api-41 (cached)     2h ago
+    │                                                                                                                                         └─ ▾ shop-test                                         4
+    █                           3447db9   v0.42.0   main   origin/…   shop-pr…   +2  docs: rewrite the RE…   4              1                    ├─ BackOff  Pod shop-api-7d9f8-x2k4q         just now
+    │                                                                                                                                            ├─ Unhealthy  Pod shop-api-7d9f8-x2k4q         1m ago
+    │ █                         6adc455   feature/payments-r…   origin/feature/pay…  wip(payments): retry…  ·······        ·······               ├─ OOMKilling  Pod shop-api-7d9f8-oom7k       18m ago
+    │ │                                                                                                                                          └─ ProgressDeadlineExceeded  Deployment sho…  40m ago
+    █─╯                         64ddc8a   shop-test  feat(payments): retry failed payments with exponentia   4   1   5      1   1
+    │
+    █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······
+    │
+    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······
+    │ │
+    │ █                         0166f71  feat(i18n): add French                                             ·······        ·······
+    │ │
+    │ █─╮                       5245790  Merge branch 'main' into feature/i18n                              ·······        ·······
+    │ │ │
+    │ █ │                       484821c  feat(i18n): add German                                             ·······        ·······
+    │ │ │
+    │ █ │                       3ad11a2  feat(i18n): extract the checkout strings                           ·······        ·······
+    │ │ │
+    █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                     ·······        ·······
+    │ │ │ │
+    │ │ │ █                     9d1b361  fix(search): ignore accents                                        ·······        ·······
+    │ │ │ │
+    │ │ │ █                     cce93f9  feat(search): search as you type                                   ·······        ·······
+    │ │ │ │
+    │ │ │ █─╮                   ae57e03  Merge branch 'main' into feature/search                            ·······        ·······
+    │ │ │ │ │
+    │ │ │ █ │                   a89a18f  feat(search): highlight matching words                             ·······        ·······
+    │ │ │ │ │
+    │ │ │ █ │                   52defc5  feat(search): rank results by popularity                           ·······        ·······
+
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                           normal   search   path   ancestry
+  │
+  │   customer-notification-service   shop   shop-web                                                                 main   86 commits       │
+  │                                                                                                                                           │     No permission to list events in shop-prod   ✕
+                                                                                                                                              │     The token needs list on events.
+                                                             tab Snyk · enter collapse · o open · esc back · ←/→ switch tab · ↑/↓ navigate    │
+
+
+=== shot 2: dialog (200x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                        Live           Cache                    Resources            Events             Info
+  ──────────────────                                                                                                                                                                ──────────────────
+    █                    OpenShift · Build · shop-dev · shop-api-41 · events                                                                                          esc close                      5
+    │                                                                                                                                                                                                1
+    █                    1  STATUS  REASON             MESSAGE                                                                                                                      cached)     2h ago
+    │                    2  Failed  DockerBuildFailed  Docker build strategy has failed.                                                                                                             4
+    █                    3                                                                                                                                                          q         just now
+    │                    4  LAST SEEN  TYPE    REASON        COUNT  MESSAGE                                                                                                         k4q         1m ago
+    │ █                  5  2h ago     Normal  BuildStarted      1  Build shop-dev/shop-api-41 is now running                                                                       om7k       18m ago
+    │ │                  6                                                                                                                                                          ment sho…  40m ago
+    █─╯                  7  Cached (no longer in the cluster)
+    │                    8  LAST SEEN  TYPE     REASON       COUNT  MESSAGE
+    █                    9  2h ago     Warning  BuildFailed      1  Build shop-dev/shop-api-41 failed
+    │
+    █─╮
+    │ │
+    │ █
+    │ │
+    │ █─╮
+    │ │ │
+    │ █ │
+    │ │ │
+    │ █ │
+    │ │ │
+    █─┼─┼─╮
+    │ │ │ │
+    │ │ │ █
+    │ │ │ │
+    │ │ │ █
+    │ │ │ │
+    │ │ │ █─╮
+    │ │ │ │ │
+    │ │ │ █ │
+    │ │ │ │ │
+    │ │ │ █ │
+
+  │
+  │   Dashboard   Gi                                                                                                            / search · c view · w wrap · r refresh · o open
+  │
+  │   customer-notification-service   shop   shop-web                                                                 main   86 commits       │
+  │                                                                                                                                           │     No permission to list events in shop-prod   ✕
+                                                                                                                                              │     The token needs list on events.
+                                                               tab Snyk · enter events · o open · esc back · ←/→ switch tab · ↑/↓ navigate    │
+
+

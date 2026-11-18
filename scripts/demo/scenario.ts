@@ -1207,7 +1207,8 @@ export function openShiftWorld(state: DemoState, phase: Phase): OpenShiftWorld {
       "shop-dev/Build/shop-api-41",
       [
         event("Normal", "BuildStarted", "Build shop-dev/shop-api-41 is now running", 1, 170),
-        event("Warning", "BuildFailed", "Build shop-dev/shop-api-41 failed", 1, 165),
+        // By the next phase OpenShift has deleted it: only codepulse's cache has it, as (cached).
+        ...(failed ? [] : [event("Warning", "BuildFailed", "Build shop-dev/shop-api-41 failed", 1, 165)]),
       ],
     ],
   ]);

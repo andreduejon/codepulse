@@ -23,7 +23,7 @@ const warning = (overrides: Partial<OpenShiftWarning>): OpenShiftWarning => ({
   ...overrides,
 });
 
-async function renderEventsTab(warnings: OpenShiftWarning[]) {
+async function renderEventsTab(warnings: OpenShiftWarning[], cached: readonly string[] = []) {
   const data: OpenShiftCommitData = { sha: SHA, liveFetched: true, namespaces: [], warnings };
   const [cursor, setCursor] = createSignal(0);
   const action = mock((_action: string | null) => {});
@@ -50,6 +50,7 @@ async function renderEventsTab(warnings: OpenShiftWarning[]) {
             setDetailCursorAction={action}
             setDetailCursorIndex={setCursor}
             onOpenResource={opened}
+            isCached={warning => cached.includes(warning.id)}
           />
         </box>
       </ThemeContext.Provider>
@@ -156,6 +157,24 @@ test("no warnings says so", async () => {
   const t = await renderEventsTab([]);
   try {
     expect(t.frame()).toContain("No warnings about this commit's resources.");
+  } finally {
+    t.renderer.destroy();
+  }
+});
+
+test("a warning only the cache has says (cached) after its resource, muted", async () => {
+  const t = await renderEventsTab(
+    [warning({ id: "event-1" }), warning({ id: "event-2", reason: "OOMKilling", lastSeen: minutesAgo(300) })],
+    ["event-2"],
+  );
+  try {
+    const row = (text: string) =>
+      t
+        .frame()
+        .split("\n")
+        .find(line => line.includes(text)) ?? "";
+    expect(row("OOMKilling")).toContain("Pod shop-api-7d9f8-x2k4q (cached)");
+    expect(row("BackOff")).not.toContain("(cached)");
   } finally {
     t.renderer.destroy();
   }

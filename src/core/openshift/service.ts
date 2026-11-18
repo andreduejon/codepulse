@@ -52,6 +52,7 @@ import {
   type OpenShiftWarning,
   type OpenShiftWarningList,
   sameWarnings,
+  warningsAbout,
 } from "./warnings";
 import type { OpenShiftWatchEvent } from "./watch";
 import { appendOpenShiftLogFollow } from "./watch";
@@ -214,6 +215,11 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
   let listedWarnings: OpenShiftWarning[] = [];
   /** Namespaces whose events the token may not list, for the Events tab's notice. */
   let warningsDenied: string[] = [];
+  /**
+   * The event uids each namespace's last list had. A saved warning missing from it is one OpenShift deleted: only the
+   * cache has it. A list that failed leaves its namespace's entry as it was.
+   */
+  const listedIds = new Map<string, Set<string>>();
 
   /** Links the listed warnings to the commits now held, attaches each commit's, and saves what is new. */
   function attachWarnings(): void {
@@ -461,6 +467,14 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
       if (list.failure === "auth") return;
       listedWarnings = list.warnings;
       warningsDenied = list.denied;
+      const unanswered = new Set([...list.denied, ...list.failed]);
+      for (const namespace of config.namespaces) {
+        if (unanswered.has(namespace)) continue;
+        listedIds.set(
+          namespace,
+          new Set(list.warnings.filter(entry => entry.namespace === namespace).map(entry => entry.id)),
+        );
+      }
     } catch (err) {
       if (signal?.aborted) throw err;
       debugError("OpenShift", err);
@@ -624,6 +638,7 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
     warningsBySha.clear();
     listedWarnings = [];
     warningsDenied = [];
+    listedIds.clear();
     ports.onLiveState("idle");
     ports.restartLive();
     queriedSHAs.clear();
@@ -645,6 +660,11 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
           .filter(build => build !== null),
       })),
     queriedSHAs,
+    /** Whether only the cache has this warning: its namespace's last list didn't (or none was read yet). */
+    warningIsCached: (warning: OpenShiftWarning) => !(listedIds.get(warning.namespace)?.has(warning.id) ?? false),
+    /** Every warning kept about a resource, newest first: the resource dialog shows the ones OpenShift deleted. */
+    warningsAboutResource: (resource: OpenShiftResource): OpenShiftWarning[] =>
+      mergeWarnings([], [...warningsBySha.values()].flatMap(list => warningsAbout(resource, list))),
     /** The namespaces whose warnings the token may not read: the Events tab says so. */
     warningsDenied: (): readonly string[] => warningsDenied,
     /** Frozen after a 401: no live session starts until a Reload. */

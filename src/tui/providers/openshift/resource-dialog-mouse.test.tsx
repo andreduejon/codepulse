@@ -6,6 +6,7 @@ import { createSignal, Show } from "solid-js";
 import * as browser from "../../../adapters/system/open-url";
 import { OPENSHIFT_BANNER } from "../../../core/openshift/banner";
 import type { OpenShiftEvent, OpenShiftResource } from "../../../core/openshift/types";
+import type { OpenShiftWarning } from "../../../core/openshift/warnings";
 import { createThemeState, ThemeContext } from "../../context/theme";
 import OpenShiftResourceDialog from "./resource-dialog";
 
@@ -22,6 +23,7 @@ async function renderResource(
   loadEvents?: (resource: OpenShiftResource) => Promise<OpenShiftEvent[]>,
   object: unknown = { objectMarker: "fake-object" },
   initialView?: "events",
+  savedWarnings: OpenShiftWarning[] = [],
 ) {
   const resource: OpenShiftResource = {
     id: `${kind}/resource`,
@@ -54,6 +56,7 @@ async function renderResource(
             consoleUrl={consoleUrl}
             loadEvents={loadEvents}
             initialView={initialView}
+            savedWarnings={() => savedWarnings}
             onClose={close}
           />
         </Show>
@@ -517,6 +520,57 @@ test("opened from the Events tab, the dialog starts on the events; c still cycle
     expect(d.frame()).toMatch(/test-resource · log/);
   } finally {
     d.renderer.destroy();
+  }
+});
+
+test("the events view ends with the warnings only the cache has, newest first, never one the cluster lists", async () => {
+  const saved = (id: string, reason: string, lastSeen: string): OpenShiftWarning => ({
+    id,
+    namespace: "test-ns",
+    kind: "Pod",
+    name: "test-resource",
+    reason,
+    message: `${reason} message`,
+    count: 2,
+    firstSeen: lastSeen,
+    lastSeen,
+  });
+  const live = mock(
+    async (): Promise<OpenShiftEvent[]> => [
+      { id: "live-1", type: "Warning", reason: "BackOff", message: "BackOff message", count: 3, lastSeen: null },
+    ],
+  );
+  const warnings = [
+    saved("live-1", "BackOff", "2026-01-01T03:00:00Z"),
+    saved("old-1", "OOMKilling", "2026-01-01T01:00:00Z"),
+    saved("old-2", "Unhealthy", "2026-01-01T02:00:00Z"),
+  ];
+  const d = await renderResource("Pod", false, true, undefined, live, undefined, "events", warnings);
+  try {
+    await Bun.sleep(0);
+    await d.flush();
+    const rows = d.frame().split("\n");
+    const title = rows.findIndex(row => row.includes("Cached (no longer in the cluster)"));
+    expect(title).toBeGreaterThan(rows.findIndex(row => row.includes("BackOff message")));
+    expect(rows.findIndex(row => row.includes("Unhealthy message"))).toBeGreaterThan(title);
+    expect(rows.findIndex(row => row.includes("OOMKilling message"))).toBeGreaterThan(
+      rows.findIndex(row => row.includes("Unhealthy message")),
+    );
+    expect(rows.filter(row => row.includes("BackOff message"))).toHaveLength(1);
+  } finally {
+    d.renderer.destroy();
+  }
+  // No live events: the cluster says so, and the cached ones still show.
+  const none = mock(async (): Promise<OpenShiftEvent[]> => []);
+  const gone = await renderResource("Pod", false, true, undefined, none, undefined, "events", warnings.slice(1));
+  try {
+    await Bun.sleep(0);
+    await gone.flush();
+    expect(gone.frame()).toContain("No recent events.");
+    expect(gone.frame()).toContain("Cached (no longer in the cluster)");
+    expect(gone.frame()).toContain("OOMKilling message");
+  } finally {
+    gone.renderer.destroy();
   }
 });
 

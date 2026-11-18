@@ -80,6 +80,8 @@ export interface OpenShiftResource {
 
 /** One Kubernetes event about a resource, as the events view lists it. */
 export interface OpenShiftEvent {
+  /** The event's uid, when the cluster sent one: the same as a kept warning's id. */
+  id?: string;
   /** `Normal` or `Warning`. */
   type: string;
   reason: string;

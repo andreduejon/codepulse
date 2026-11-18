@@ -37,6 +37,7 @@ export const openShiftModule = providerModule({
         <OpenShiftResourceDialog
           resource={resource}
           initialView={view}
+          savedWarnings={() => openShift.warningsAboutResource(resource)}
           loadLog={async (item, force) =>
             item.kind === "Pod" ? openShift.loadPodLog(item) : openShift.loadBuildLog(item, force)
           }
@@ -57,6 +58,7 @@ export const openShiftModule = providerModule({
       get status() {
         return state.providerStatusFor(openShiftProvider.id);
       },
+      warningIsCached: openShift.warningIsCached,
       onOpenResource: openResource,
     };
     return {

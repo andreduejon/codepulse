@@ -144,7 +144,8 @@ that produced them.
   Build's failure. The status comes with the object, so it stays after OpenShift
   deletes the events and where events are forbidden. Below it, the events newest
   first: `LAST SEEN  TYPE  REASON  COUNT  MESSAGE`, warnings in the warning colour.
-  Events are read when the dialog opens and are not stored; the title counts the
+  Events are read when the dialog opens (the warnings only the cache has follow them,
+  see Warnings); the title counts the
   warnings (`2 warnings`). OpenShift keeps events for 3 hours by default (plain
   Kubernetes for 1), so an older resource says *No recent events*. Without
   permission to list events the view says so.
@@ -191,7 +192,17 @@ own status.
 - In **Resources**, a resource OpenShift warned about shows `!` before its status mark.
 - The **Events** tab lists the commit's warnings by namespace, newest first: reason,
   resource and when, one line each. Enter (or a click) opens its resource's dialog on the
-  events view, where the whole message is; `o` opens it in the web console. A namespace whose events the token may not list is named in a notice
+  events view, where the whole message is; `o` opens it in the web console.
+- A warning OpenShift has deleted (it keeps events for about 3 hours after they last
+  happen) says `(cached)` after its resource, like a Build only the cache has. It is
+  cached when its event's uid is missing from its namespace's last list; a list that
+  failed changes nothing, and right after start every warning is cached until the first
+  list arrives. While a problem keeps happening Kubernetes updates the same event (its
+  count and last time), so it stays one warning. When it starts again after OpenShift
+  deleted it, the new event is a new warning beside the cached one.
+- The resource dialog's events view ends with a section **Cached (no longer in the
+  cluster)**: the warnings kept about the resource that the cluster's events no longer
+  have, newest first, in the same columns. A namespace whose events the token may not list is named in a notice
   under the tab.
 
 ## Required read permissions

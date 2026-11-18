@@ -450,6 +450,9 @@ let followCount = 0;
 /** How many batches of lines a followed log gets in a play before it stops growing. */
 const HEADLESS_FOLLOW_BATCHES = 3;
 
+/** An event's uid, the same in the namespace's list and the resource's, as a cluster gives it. */
+const eventUid = (key: string, event: Record<string, unknown>) => `${key}/${event.reason}`;
+
 function openshift(url: URL, signal: AbortSignal | null | undefined): Response {
   const match = url.pathname.match(/^\/apis?\/(?:[^/]+\/)?v1\/namespaces\/([^/]+)\/([^/]+)(?:\/([^/]+))?(?:\/(log))?$/);
   if (!match) return notFound();
@@ -467,7 +470,7 @@ function openshift(url: URL, signal: AbortSignal | null | undefined): Response {
             .filter(event => event.type === "Warning")
             .map(event => ({
               ...event,
-              metadata: { ...(event.metadata as object), uid: `${key}/${event.reason}` },
+              metadata: { ...(event.metadata as object), uid: eventUid(key, event) },
               involvedObject: { kind, name, namespace: ns },
             }));
         });
@@ -475,7 +478,12 @@ function openshift(url: URL, signal: AbortSignal | null | undefined): Response {
     }
     const kind = selector.match(/involvedObject\.kind=([^,]+)/)?.[1];
     const object = selector.match(/involvedObject\.name=([^,]+)/)?.[1];
-    return json({ kind: "EventList", items: world.events.get(`${ns}/${kind}/${object}`) ?? [] });
+    const key = `${ns}/${kind}/${object}`;
+    const items = (world.events.get(key) ?? []).map(event => ({
+      ...event,
+      metadata: { ...(event.metadata as object), uid: eventUid(key, event) },
+    }));
+    return json({ kind: "EventList", items });
   }
   const kind = PLURALS[plural];
   if (!kind) return notFound();

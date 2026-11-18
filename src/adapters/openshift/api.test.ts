@@ -1127,6 +1127,7 @@ describe("fetchOpenShiftEvents", () => {
         lastTimestamp: "2026-01-01T00:00:00Z",
       },
       {
+        metadata: { uid: "event-backoff" },
         type: "Warning",
         reason: "BackOff",
         message: "Back-off restarting",
@@ -1148,6 +1149,8 @@ describe("fetchOpenShiftEvents", () => {
           "involvedObject.kind=Pod,involvedObject.name=api-7f9c",
         )}`,
       );
+      // The uid: the resource dialog leaves out a cached warning the cluster still lists.
+      expect(events[0]?.id).toBe("event-backoff");
       expect(events.map(event => [event.reason, event.count, event.lastSeen])).toEqual([
         ["BackOff", 31, "2026-01-01T00:10:00Z"],
         ["Unhealthy", 6, "2026-01-01T00:05:00Z"],

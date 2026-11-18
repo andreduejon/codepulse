@@ -1,5 +1,6 @@
 import { createEffect, createMemo, createSignal, onCleanup, untrack } from "solid-js";
 import type { OpenShiftEvent, OpenShiftResource } from "../../../core/openshift/types";
+import type { OpenShiftWarning } from "../../../core/openshift/warnings";
 import { shouldFollowOpenShiftLog } from "../../../core/openshift/watch";
 import type { LogViewState } from "../../components/dialogs/log-view";
 import { LogViewer, type LogViewerLine } from "../../components/dialogs/log-viewer";
@@ -8,6 +9,7 @@ import { BUSY } from "../../utils/busy-text";
 import { stripTerminalControls } from "../../utils/terminal-text";
 import { openShiftConsoleUrl } from "./console";
 import {
+  formatCachedWarnings,
   formatOpenShiftEvents,
   formatOpenShiftStatus,
   OPENSHIFT_EVENT_KINDS,
@@ -27,6 +29,8 @@ interface OpenShiftResourceDialogProps {
   loadEvents?: (resource: OpenShiftResource) => Promise<OpenShiftEvent[]>;
   /** The view it opens on (the Events tab opens the events); the log, or the object without one, by default. */
   initialView?: "events";
+  /** The warnings codepulse kept about the resource: the events view adds the ones the cluster no longer has. */
+  savedWarnings?: () => readonly OpenShiftWarning[];
 }
 
 type ViewMode = "log" | "json" | "events";
@@ -172,20 +176,30 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
 
   const statusLines = createMemo(() => formatOpenShiftStatus(props.resource.kind, objectValue()));
   /**
-   * What the status says is wrong, then the events. With a status to show, events that failed to load or are gone
-   * become a muted line below it instead of replacing the view.
+   * The kept warnings the cluster's events no longer have: once the events loaded, so none shows twice, or failed, when
+   * they are all that is left.
    */
+  const cachedLines = createMemo(() =>
+    events() === null && !eventsError() ? [] : formatCachedWarnings(props.savedWarnings?.() ?? [], events() ?? []),
+  );
+  /** The view has more than the live events: with them failed or gone, a muted line says so instead of replacing it. */
+  const hasMoreThanEvents = () => statusLines().length > 0 || cachedLines().length > 0;
+  /** What the status says is wrong, then the events, then the cached warnings. */
   const eventLines = createMemo((): OpenShiftEventLine[] => {
     const list = formatOpenShiftEvents(events() ?? []);
     const status = statusLines();
-    if (status.length === 0) return list;
+    if (!hasMoreThanEvents()) return list;
     const error = eventsError();
-    const below: OpenShiftEventLine[] = error
+    const live: OpenShiftEventLine[] = error
       ? [{ text: error, kind: "header" }]
       : (events() ?? []).length === 0
         ? [{ text: OPENSHIFT_NO_EVENTS, kind: "header" }]
         : list;
-    return [...status, { text: "", kind: "normal" }, ...below];
+    return [
+      ...(status.length > 0 ? [...status, { text: "", kind: "normal" as const }] : []),
+      ...live,
+      ...cachedLines(),
+    ];
   });
   const warningCount = () => (events() ?? []).filter(event => event.type === "Warning").length;
   /** Events show warnings in the warning color and the header muted; log and object lines are plain. */
@@ -211,7 +225,7 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
     }
     if (viewMode() === "events") {
       if (eventsLoading() || objectLoading()) return { kind: "loading", text: BUSY.fetchingEvents };
-      if (statusLines().length > 0) return null;
+      if (hasMoreThanEvents()) return null;
       const error = eventsError();
       if (error) return { kind: "error", title: "Failed to load events", message: error };
       if ((events() ?? []).length === 0) return { kind: "empty", text: OPENSHIFT_NO_EVENTS };
