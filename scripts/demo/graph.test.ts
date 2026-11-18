@@ -7,11 +7,12 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildGraph } from "../../src/git/graph-build";
-import { type GraphChar, renderConnectorRow, renderFanOutRow, renderGraphRow } from "../../src/git/graph-render";
-import { getMaxGraphColumns, MAX_GRAPH_COLUMNS } from "../../src/git/graph-viewport";
-import { getCommits } from "../../src/git/repo";
-import type { Commit, GraphRow } from "../../src/git/types";
+import { getCommits } from "../../src/adapters/git/repo";
+import { buildGraph } from "../../src/core/git/graph-build";
+import { getMaxGraphColumns } from "../../src/core/git/graph-viewport";
+import type { Commit, GraphRow } from "../../src/core/git/types";
+import { type GraphChar, renderConnectorRow, renderFanOutRow, renderGraphRow } from "../../src/tui/graph/render";
+import { MAX_GRAPH_COLUMNS } from "../../src/tui/graph/viewport";
 import { type GitRunner, importHistory } from "./history";
 import { shopHistory } from "./repositories";
 

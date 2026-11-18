@@ -5,16 +5,10 @@
  * getMaxGraphColumns, edgeMarks.
  */
 import { describe, expect, test } from "bun:test";
-import type { GraphChar, RenderOptions } from "../src/git/graph";
-import {
-  buildGraph,
-  computeSingleViewportOffset,
-  edgeMarks,
-  getMaxGraphColumns,
-  renderConnectorRow,
-  renderGraphRow,
-  sliceGraphToViewport,
-} from "../src/git/graph";
+import { buildGraph, computeSingleViewportOffset, getMaxGraphColumns } from "../src/core/git/graph";
+import type { GraphChar, RenderOptions } from "../src/tui/graph/render";
+import { renderConnectorRow, renderGraphRow } from "../src/tui/graph/render";
+import { edgeMarks, sliceGraphToViewport } from "../src/tui/graph/viewport";
 import { makeCommit, printGraph } from "./test-helpers";
 
 describe("Viewport", () => {

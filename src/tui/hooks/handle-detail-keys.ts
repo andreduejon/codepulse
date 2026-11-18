@@ -1,0 +1,176 @@
+/**
+ * handleDetailKeys — processes key events when the detail panel is focused.
+ *
+ * Handles tab navigation (←/→), cursor movement (↑/↓/j/k/g/G),
+ * enter activation, and page scrolling within the detail panel.
+ *
+ * Returns true when the key was consumed.
+ */
+import type { KeyEvent, ScrollBoxRenderable } from "@opentui/core";
+import { batch } from "solid-js";
+import type { DialogId } from "../app/ui-state";
+import type { DetailNavRef } from "../components/detail-types";
+import { SHIFT_JUMP } from "../constants";
+import type { AppActions, AppState, DetailTab } from "../context/state";
+import { allowRepeatNav } from "../keyboard/repeat";
+import { scheduleScrollIntoView, scrollElementIntoView } from "../utils/scroll";
+import { getAvailableTabs } from "../utils/tab-utils";
+
+export interface DetailKeyOptions {
+  state: AppState;
+  actions: AppActions;
+  dialog: () => DialogId;
+  getDetailScrollboxRef: () => ScrollBoxRenderable | undefined;
+  detailNavRef: DetailNavRef;
+  /** CI data getter — used to keep getAvailableTabs in sync with the detail panel. */
+  getCommitData?: (sha: string) => unknown;
+  /** Returns true while the initial CI fetch is in-flight. */
+  getProviderLoading?: () => boolean;
+  /**
+   * The tabs ←/→ move between, when they are not the selected commit's in the graph (the dashboard: the selected
+   * event's provider tabs).
+   */
+  tabs?: () => DetailTab[];
+}
+
+/**
+ * Handle a key event while the detail panel is focused (or the detail dialog is open).
+ * Returns true if the event was consumed (caller should stop processing).
+ */
+export function handleDetailKey(e: KeyEvent, opts: DetailKeyOptions): boolean {
+  const { state, actions, dialog, getDetailScrollboxRef, detailNavRef, getCommitData, getProviderLoading } = opts;
+
+  // Only active when detail is focused or the detail dialog is open
+  if (!state.detailFocused() && dialog() !== "detail") return false;
+  if (detailNavRef.handleFilterKey?.(e)) return true;
+  if (detailNavRef.handleKey?.(e)) {
+    e.preventDefault();
+    return true;
+  }
+
+  const scrollbox = getDetailScrollboxRef();
+  const availableTabs = () =>
+    opts.tabs?.() ??
+    getAvailableTabs({
+      providers: state.providers.set,
+      commit: state.selectedCommit(),
+      uncommittedDetail: state.uncommittedDetail(),
+      commitDetail: state.commitDetail(),
+      stashByParent: state.stashByParent(),
+      activeProviderView: state.activeProviderView(),
+      getCommitData,
+      providerLoading: getProviderLoading?.(),
+    });
+
+  const scrollCursorIntoView = (direction: -1 | 0 | 1 = 0) => {
+    scheduleScrollIntoView(detailNavRef, () => {
+      const currentScrollbox = getDetailScrollboxRef();
+      const el = detailNavRef.itemRefs[state.detailCursorIndex()];
+      if (!currentScrollbox || !el) return false;
+      return scrollElementIntoView(currentScrollbox, el, 1, direction);
+    });
+  };
+
+  /**
+   * The cursored item is taller than the viewport (a long commit body) and part of it is still hidden in `direction`:
+   * scroll the viewport through it instead of moving the cursor past it. Returns true when it scrolled.
+   */
+  const scrollWithinTallItem = (direction: -1 | 1, rows: number): boolean => {
+    const box = getDetailScrollboxRef();
+    const el = detailNavRef.itemRefs[state.detailCursorIndex()];
+    if (!box || !el || !Number.isFinite(box.viewport.height) || el.height <= box.viewport.height) return false;
+    const top = el.screenY;
+    const bottom = top + el.height;
+    const viewTop = box.viewport.screenY;
+    const viewBottom = viewTop + box.viewport.height;
+    if (direction > 0 && bottom > viewBottom) {
+      box.scrollBy(Math.min(rows, bottom - viewBottom), "absolute");
+      return true;
+    }
+    if (direction < 0 && top < viewTop) {
+      box.scrollBy(-Math.min(rows, viewTop - top), "absolute");
+      return true;
+    }
+    return false;
+  };
+
+  switch (e.name) {
+    case "left":
+    case "h": {
+      e.preventDefault();
+      const tabs = availableTabs();
+      const currentIdx = tabs.indexOf(state.detailActiveTab());
+      if (currentIdx <= 0) {
+        // In normal mode, left on first tab exits detail focus.
+        // In dialog mode, only esc can close — left does nothing.
+        if (dialog() !== "detail") {
+          actions.setDetailFocused(false);
+        }
+      } else {
+        // Batched like the tab click: the new tab mounts after the reset and may restore its own cursor.
+        batch(() => {
+          actions.setDetailCursorAction(null);
+          actions.setDetailActiveTab(tabs[currentIdx - 1]);
+          actions.setDetailCursorIndex(0);
+        });
+        scrollbox?.scrollTo(0);
+      }
+      return true;
+    }
+    case "right":
+    case "l": {
+      e.preventDefault();
+      const tabs = availableTabs();
+      const currentIdx = tabs.indexOf(state.detailActiveTab());
+      if (currentIdx < tabs.length - 1) {
+        // Batched like the tab click: the new tab mounts after the reset and may restore its own cursor.
+        batch(() => {
+          actions.setDetailCursorAction(null);
+          actions.setDetailActiveTab(tabs[currentIdx + 1]);
+          actions.setDetailCursorIndex(0);
+        });
+        scrollbox?.scrollTo(0);
+      }
+      return true;
+    }
+    case "up":
+    case "k": {
+      e.preventDefault();
+      if (!allowRepeatNav()) return true;
+      const delta = e.shift ? -SHIFT_JUMP : -1;
+      if (scrollWithinTallItem(-1, -delta)) return true;
+      actions.moveDetailCursor(delta, detailNavRef.itemCount);
+      scrollCursorIntoView(-1);
+      return true;
+    }
+    case "down":
+    case "j": {
+      e.preventDefault();
+      if (!allowRepeatNav()) return true;
+      const delta = e.shift ? SHIFT_JUMP : 1;
+      if (scrollWithinTallItem(1, delta)) return true;
+      actions.moveDetailCursor(delta, detailNavRef.itemCount);
+      scrollCursorIntoView(1);
+      return true;
+    }
+    case "return":
+      e.preventDefault();
+      detailNavRef.activateCurrentItem();
+      scrollCursorIntoView();
+      return true;
+    case "g":
+      e.preventDefault();
+      if (!e.shift) {
+        actions.setDetailCursorIndex(0);
+        scrollbox?.scrollTo(0);
+      } else {
+        const lastIdx = detailNavRef.itemCount - 1;
+        actions.setDetailCursorIndex(Math.max(0, lastIdx));
+        scrollbox?.scrollTo(Infinity);
+      }
+      return true;
+    default:
+      // Swallow all other keys when detail is focused
+      return true;
+  }
+}

@@ -3,10 +3,11 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createRoot } from "solid-js";
-import { createAppState } from "../src/context/state";
-import { clearDebugEvents, getDebugEvents } from "../src/debug/events";
-import { useGitHubCI } from "../src/providers/github-actions/use-github-ci";
-import { closeProviderCaches } from "../src/providers/shared/sha-sqlite-cache";
+import { closeProviderCaches } from "../src/adapters/cache/sha-sqlite-cache";
+import { githubAdapters } from "../src/adapters/github/adapters";
+import { clearDebugEvents, getDebugEvents } from "../src/core/debug-events";
+import { createAppState } from "../src/tui/context/state";
+import { useGitHubCI } from "../src/tui/providers/github-actions/use-github-ci";
 
 test("unsupported GraphQL jobs stay disabled while runs and REST expansion still work", async () => {
   const approvedTemp = join(tmpdir(), "opencode");
@@ -74,7 +75,7 @@ test("unsupported GraphQL jobs stay disabled while runs and REST expansion still
         state,
         actions,
         config: { enabled: true, tokenEnvVar, autoRefreshSeconds: 0 },
-        cacheRoot,
+        adapters: githubAdapters(cacheRoot),
       });
       return { ci, state };
     });

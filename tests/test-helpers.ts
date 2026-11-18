@@ -2,15 +2,16 @@
  * Shared test helpers for graph engine tests.
  */
 import { expect } from "bun:test";
+import { getMaxGraphColumns } from "../src/core/git/graph";
+import type { Commit, Connector, GraphRow, RefInfo } from "../src/core/git/types";
+import { builtInProviders, modulesOf, providerSetOf } from "../src/providers";
 import {
   type GraphChar,
-  getMaxGraphColumns,
   type RenderOptions,
   renderConnectorRow,
   renderFanOutRow,
   renderGraphRow,
-} from "../src/git/graph";
-import type { Commit, Connector, GraphRow, RefInfo } from "../src/git/types";
+} from "../src/tui/graph/render";
 
 /**
  * Assert that a value is defined (not `undefined` and not `null`), narrowing
@@ -137,3 +138,7 @@ export function printGraph(rows: GraphRow[], themeColors: string[] = THEME_COLOR
     }
   }
 }
+
+/** The built-in providers' set (their definitions and adapters) and their terminal modules, as the app starts with. */
+export const BUILT_IN_PROVIDERS = providerSetOf(builtInProviders);
+export const BUILT_IN_MODULES = modulesOf(builtInProviders);

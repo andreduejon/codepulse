@@ -11,7 +11,7 @@ import { PLAY_ENV } from "./scenario";
 plugin({
   name: "codepulse-demo-still-text",
   setup(build) {
-    build.onLoad({ filter: /[/\\]src[/\\]hooks[/\\]use-banner-scroll\.ts$/ }, () => ({
+    build.onLoad({ filter: /[/\\]src[/\\]tui[/\\]hooks[/\\]use-banner-scroll\.ts$/ }, () => ({
       contents: "export function useBannerScroll() { return () => 0; }",
       loader: "ts",
     }));

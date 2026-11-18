@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { getLastFetchTime, runGit } from "../src/git/repo";
+import { getLastFetchTime, runGit } from "../src/adapters/git/repo";
 
 test("last fetch time handles absolute linked-worktree Git directory and spaces", async () => {
   const root = await mkdtemp(join(tmpdir(), "codepulse git paths "));

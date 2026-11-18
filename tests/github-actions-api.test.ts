@@ -1,27 +1,27 @@
 import { afterEach, describe, expect, it, mock } from "bun:test";
-import { BANNER } from "../src/debug/banner";
-import { clearDebugEvents, getDebugEvents } from "../src/debug/events";
 import {
-  aggregateRunsToGraphBadge,
-  buildCommitDataMap,
-  buildGraphBadges,
   fetchCIDataForSHAs,
   fetchJobAnnotations,
   fetchJobLog,
   fetchRunJobs,
-  GQL_BATCH_SIZE,
   getGitHubToken,
-  getTokenSource,
   isGitHubJobsFieldSchemaError,
-  isTrustedGitHubHost,
   MAX_CHECK_SUITE_PAGES,
   MAX_JOB_PAGES,
-  mapRunToBadge,
   nextGithubLink,
-  normalizeGitHubHost,
-  parseGitHubRemote,
-} from "../src/providers/github-actions/api";
-import type { GitHubApiJob } from "../src/providers/github-actions/types";
+} from "../src/adapters/github/api";
+import { getTokenSource } from "../src/adapters/system/token-env";
+import { clearDebugEvents, getDebugEvents } from "../src/core/debug-events";
+import { GITHUB_BANNER } from "../src/core/github/banner";
+import {
+  aggregateRunsToGraphBadge,
+  buildCommitDataMap,
+  buildGraphBadges,
+  GQL_BATCH_SIZE,
+  mapRunToBadge,
+} from "../src/core/github/commit-data";
+import { isTrustedGitHubHost, normalizeGitHubHost, parseGitHubRemote } from "../src/core/github/host";
+import type { GitHubApiJob } from "../src/core/github/types";
 
 // ── parseGitHubRemote ─────────────────────────────────────────────────────
 
@@ -344,6 +344,9 @@ describe("buildCommitDataMap", () => {
 const TEST_REPO = { hostname: "github.com", owner: "owner", repo: "repo" };
 const TEST_TOKEN = "ghp_test";
 
+/** The real fetch, kept before any test replaces it: `globalThis.fetch = fetch` in a cleanup would put back the mock. */
+const realFetch = globalThis.fetch;
+
 /** Helper to assign a mock function as globalThis.fetch without TS complaining
  *  about the `preconnect` property that Bun adds to its native fetch. */
 // biome-ignore lint/suspicious/noExplicitAny: intentional test helper cast
@@ -352,7 +355,10 @@ function mockFetch(fn: (...args: any[]) => Promise<Response>): void {
   globalThis.fetch = fn as any;
 }
 
-afterEach(() => clearDebugEvents());
+afterEach(() => {
+  clearDebugEvents();
+  globalThis.fetch = realFetch;
+});
 
 // ── fetchRunJobs (mocked fetch) ───────────────────────────────────────────
 
@@ -388,7 +394,7 @@ function makeApiJob(overrides: Partial<GitHubApiJob> = {}): GitHubApiJob {
 
 describe("fetchRunJobs", () => {
   afterEach(() => {
-    globalThis.fetch = fetch;
+    globalThis.fetch = realFetch;
   });
 
   it("returns mapped jobs with steps", async () => {
@@ -421,7 +427,7 @@ describe("fetchRunJobs", () => {
   it("returns explicit error (no throw) on 404", async () => {
     mockFetch(mock(async () => new Response(null, { status: 404 })));
     const { jobs, error } = await fetchRunJobs(TEST_REPO, TEST_TOKEN, 999);
-    expect(error).toBe(BANNER.github.jobsFailed);
+    expect(error).toBe(GITHUB_BANNER.jobsFailed);
     expect(jobs).toHaveLength(0);
     expect(getDebugEvents().some(event => event.source === "GitHub" && event.message.includes("404"))).toBe(true);
   });
@@ -433,7 +439,7 @@ describe("fetchRunJobs", () => {
       }),
     );
     const { jobs, error } = await fetchRunJobs(TEST_REPO, TEST_TOKEN, 123);
-    expect(error).toBe(BANNER.github.jobsFailed);
+    expect(error).toBe(GITHUB_BANNER.jobsFailed);
     expect(jobs).toHaveLength(0);
     expect(getDebugEvents().some(event => event.message.includes("Network failure"))).toBe(true);
   });
@@ -476,7 +482,7 @@ describe("fetchRunJobs", () => {
       }),
     );
     const { jobs, error } = await fetchRunJobs(TEST_REPO, TEST_TOKEN, 123);
-    expect(error).toBe(BANNER.github.incomplete);
+    expect(error).toBe(GITHUB_BANNER.incomplete);
     expect(jobs).toHaveLength(MAX_JOB_PAGES);
     expect(n).toBe(MAX_JOB_PAGES);
   });
@@ -565,7 +571,7 @@ function makeBatchResponse(
 
 describe("fetchCIDataForSHAs", () => {
   afterEach(() => {
-    globalThis.fetch = fetch;
+    globalThis.fetch = realFetch;
   });
 
   it("returns runs for two commits on different branches", async () => {
@@ -677,14 +683,14 @@ describe("fetchCIDataForSHAs", () => {
     mockFetch(mock(async () => new Response(null, { status: 401 })));
     const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
     expect(result.data).toHaveLength(0);
-    expect(result.error).toBe(BANNER.github.tokenExpired);
+    expect(result.error).toBe(GITHUB_BANNER.tokenExpired);
   });
 
   it("returns empty result on HTTP error (graceful degradation)", async () => {
     mockFetch(mock(async () => new Response(null, { status: 403 })));
     const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
     expect(result.data).toHaveLength(0);
-    expect(result.error).toBe(BANNER.github.fetchFailed);
+    expect(result.error).toBe(GITHUB_BANNER.fetchFailed);
     expect(getDebugEvents().some(event => event.source === "GitHub" && event.message.includes("403"))).toBe(true);
   });
 
@@ -693,7 +699,7 @@ describe("fetchCIDataForSHAs", () => {
     mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
     const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
     expect(result.data).toHaveLength(0);
-    expect(result.error).toBe(BANNER.github.fetchFailed);
+    expect(result.error).toBe(GITHUB_BANNER.fetchFailed);
     expect(getDebugEvents().some(event => event.message.includes("Not Found"))).toBe(true);
   });
 
@@ -864,7 +870,7 @@ describe("fetchCIDataForSHAs", () => {
       }),
     );
     const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
-    expect(result.error).toBe(BANNER.github.fetchFailed);
+    expect(result.error).toBe(GITHUB_BANNER.fetchFailed);
     expect(result.jobsUnsupported).not.toBe(true);
     expect(calls).toBe(1);
     const errors = getDebugEvents().filter(event => event.status === "error");
@@ -881,7 +887,7 @@ describe("fetchCIDataForSHAs", () => {
     );
     const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
     expect(result.data).toHaveLength(0);
-    expect(result.error).toBe(BANNER.github.fetchFailed);
+    expect(result.error).toBe(GITHUB_BANNER.fetchFailed);
     expect(getDebugEvents().some(event => event.message.includes("Network failure"))).toBe(true);
   });
 
@@ -1098,7 +1104,7 @@ describe("fetchCIDataForSHAs", () => {
 
 describe("fetchJobLog", () => {
   afterEach(() => {
-    globalThis.fetch = fetch;
+    globalThis.fetch = realFetch;
   });
 
   it("returns the log text, and an empty string for a job without output", async () => {
@@ -1110,17 +1116,17 @@ describe("fetchJobLog", () => {
 
   it("throws the reason for a failed request instead of looking empty", async () => {
     mockFetch(mock(async () => new Response(null, { status: 401 })));
-    await expect(fetchJobLog(TEST_REPO, TEST_TOKEN, 7)).rejects.toThrow(BANNER.github.tokenExpired);
+    await expect(fetchJobLog(TEST_REPO, TEST_TOKEN, 7)).rejects.toThrow(GITHUB_BANNER.tokenExpired);
     mockFetch(mock(async () => new Response(null, { status: 403, headers: { "x-ratelimit-remaining": "0" } })));
-    await expect(fetchJobLog(TEST_REPO, TEST_TOKEN, 7)).rejects.toThrow(BANNER.github.rateLimit);
+    await expect(fetchJobLog(TEST_REPO, TEST_TOKEN, 7)).rejects.toThrow(GITHUB_BANNER.rateLimit);
     mockFetch(mock(async () => new Response(null, { status: 404 })));
-    await expect(fetchJobLog(TEST_REPO, TEST_TOKEN, 7)).rejects.toThrow(BANNER.github.logFailed);
+    await expect(fetchJobLog(TEST_REPO, TEST_TOKEN, 7)).rejects.toThrow(GITHUB_BANNER.logFailed);
     mockFetch(
       mock(async () => {
         throw new Error("socket hang up");
       }),
     );
-    await expect(fetchJobLog(TEST_REPO, TEST_TOKEN, 7)).rejects.toThrow(BANNER.github.logFailed);
+    await expect(fetchJobLog(TEST_REPO, TEST_TOKEN, 7)).rejects.toThrow(GITHUB_BANNER.logFailed);
   });
 });
 
@@ -1128,7 +1134,7 @@ describe("fetchJobLog", () => {
 
 describe("fetchJobAnnotations", () => {
   afterEach(() => {
-    globalThis.fetch = fetch;
+    globalThis.fetch = realFetch;
   });
 
   it("reads the job's check run annotations: level, place and message", async () => {

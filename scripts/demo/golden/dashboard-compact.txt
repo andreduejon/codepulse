@@ -1,0 +1,141 @@
+=== shot 1: dialog (160x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   Graph  Commit   Branch                Time   Event
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   │      ────────────────────────────── Today · Mon, Mar 2 ──────────────────────────────────────────────────────────────────────────────────────────────────
+   █      3447db9  main                  09:
+   █      bf08113  dev                   09:     Details                                              esc close
+   █      bf08113  dev                   09:
+   █      bf08113  dev                   09:     ──────────────────────────────────────────────────────────────
+   █      bf08113  dev                   09:                 Actions                          Info
+   █      bf08113  dev                   09:     ──────────────────────────────────────────────────────────────
+   █      3447db9  main                  09:     Show in GitHub
+   █      3447db9  main                  09:     Reload commit
+   │                                             total workflow runs                                          2
+   █      3447db9  main                  08:     ├─ ▾ Deploy preview #78                             just now ●
+   █      e6209dd  dev                   08:     │  └─ deploy                                                 ●
+   █      e6209dd  dev                   08:     └─ ▸ CI #814                                        just now ●
+   █      3447db9  main                  08:
+   █      64ddc8a  main                  08:
+   █      3447db9  main                  08:                                                                        scounts are rounded
+   │
+   █      64ddc8a  main                  06:
+   │
+   █      6adc455  feature/payments-re…  04:
+   │
+   █      6adc455  feature/payments-re…  03:
+   █      64ddc8a  main                  03:
+   │
+   █      64ddc8a  main                  02:
+   █      64ddc8a  main                  02:                                                                        a subject long enough to need cutting
+   │
+   │      ────────────────────────────── Yes                                                                        ──────────────────────────────────────────
+   █      917f7b3  main                  13:
+   │
+   │      ────────────────────────────── Sat                                                                        ──────────────────────────────────────────
+   █      1bb16fb  main                  01:
+   │
+
+  │                                                       ✓ passed  ● running  ✗ failed  – skipped  ○ cancelled
+  │   Dashboard   Git   GitHub   Jenkins   O                                                                        t   GitHub   Jenkins   OpenShift   Snyk
+  │                                                                    s show in GitHub · o open · ↑/↓ navigate
+  │   customer-notification-service   shop                                                                                                        33 events
+  │
+
+                                                                                  tab Git · enter view log · o open · esc back · ←/→ switch tab · ↑/↓ navigate
+
+
+=== shot 2: closed (160x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   Graph  Commit   Branch                Time   Event
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   │      ────────────────────────────── Today · Mon, Mar 2 ──────────────────────────────────────────────────────────────────────────────────────────────────
+   █      3447db9  main                  09:30  ▲ scan · 4 vulnerabilities · 1 critical · 3 high · 0 medium · 0 low
+   █      bf08113  dev                   09:30  ▲ scan · 4 vulnerabilities · 1 critical · 3 high · 0 medium · 0 low
+   █      bf08113  dev                   09:30  ● Deploy preview #78 running
+   █      bf08113  dev                   09:30  ● CI #814 running
+   █      bf08113  dev                   09:28  ● dev #7 running
+   █      bf08113  dev                   09:27  ✓ build shop-api-44 complete in shop-dev
+   █      3447db9  main                  09:01  ✓ Deploy to shop-prod with a long workflow name #77 passed
+   █      3447db9  main                  09:00  ✓ main #42 passed
+   │
+   █      3447db9  main                  08:55  ✓ CI #813 passed
+   █      e6209dd  dev                   08:44  ○ CI #811 cancelled
+   █      e6209dd  dev                   08:43  ○ dev #6 aborted
+   █      3447db9  main                  08:40  ✓ build shop-api-43 complete in shop-dev
+   █      64ddc8a  main                  08:38  ✗ CI #812 failed
+   █      3447db9  main                  08:30  docs: rewrite the README for the new cart flow 🚀 and explain how discounts are rounded
+   │
+   █      64ddc8a  main                  06:45  ✗ main #41 failed
+   │
+   █      6adc455  feature/payments-re…  04:31  ✗ CI #815 failed
+   │
+   █      6adc455  feature/payments-re…  03:54  ✗ feature/payments-retry-with-a-really-long-branch-name #3 failed
+   █      64ddc8a  main                  03:10  ✓ build shop-api-42 complete in shop-dev
+   │
+   █      64ddc8a  main                  02:54  ✗ build shop-api-41 failed in shop-dev
+   █      64ddc8a  main                  02:30  feat(payments): retry failed payments with exponential backoff, and a subject long enough to need cutting
+   │
+   │      ────────────────────────────── Yesterday · Sun, Mar 1 ──────────────────────────────────────────────────────────────────────────────────────────────
+   █      917f7b3  main                  13:30  perf(cart): cache price lookups
+   │
+   │      ────────────────────────────── Sat, Feb 28 ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+   █      1bb16fb  main                  01:30  Merge pull request #23 from demo/feature/i18n
+   │
+
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                                       Git   GitHub   Jenkins   OpenShift   Snyk
+  │
+  │   customer-notification-service   shop   shop-web                                                                                             33 events
+  │
+
+                                                                                                   tab Git · enter details · o open · r refresh · ↑/↓ navigate
+
+
+=== shot 3: shown-in-provider (160x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                                            Status         Last Run
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+    █                           bf08113   dev   origin/dev  feat(api): export request metrics                                    2             running
+    │
+    █                           e6209dd  fea     Details                                              esc close                  1             45m ago
+    │
+    █                           3447db9   v0     ──────────────────────────────────────────────────────────────     README fo…   2             28m ago
+    │                                                        Actions                          Info
+    │ █                         6adc455   fe     ──────────────────────────────────────────────────────────────     s): retry…   1             4h ago
+    │ │                                          Reload commit
+    █─╯                         64ddc8a  fea     total workflow runs                                          2     ct long e…   1             51m ago
+    │                                            ├─ ▾ Deploy preview #78                             just now ●
+    █                           917f7b3  per     │  └─ deploy                                                 ●                 ·······        ·······
+    │                                            └─ ▾ CI #814                                        just now ●
+    █─╮                         1bb16fb  Mer        └─ test                                                   ●                 ·······        ·······
+    │ │                                                ├─ Set up job                                          ✓
+    │ █                         0166f71  fea           ├─ Checkout                                            ✓                 ·······        ·······
+    │ │                                                ├─ Install dependencies                                ●
+    │ █─╮                       5245790  Mer           └─ Run tests                                           ●                 ·······        ·······
+    │ │ │
+    │ █ │                       484821c  fea                                                                                    ·······        ·······
+    │ │ │
+    │ █ │                       3ad11a2  fea                                                                                    ·······        ·······
+    │ │ │
+    █─┼─┼─╮                     fe7db4d  Mer                                                                                    ·······        ·······
+    │ │ │ │
+    │ │ │ █                     9d1b361  fix                                                                                    ·······        ·······
+    │ │ │ │
+    │ │ │ █                     cce93f9  fea                                                                                    ·······        ·······
+    │ │ │ │
+    │ │ │ █─╮                   ae57e03  Mer                                                                                    ·······        ·······
+    │ │ │ │ │
+    │ │ │ █ │                   a89a18f  fea                                                                                    ·······        ·······
+    │ │ │ │ │
+    │ │ │ █ │                   52defc5  fea                                                                                    ·······        ·······
+
+  │                                                       ✓ passed  ● running  ✗ failed  – skipped  ○ cancelled
+  │   Dashboard   Git   GitHub   Jenkins   O                                                                              normal   search   path   ancestry
+  │                                                                enter reload · ←/→ switch tab · ↑/↓ navigate
+  │   customer-notification-service   shop                                                                                                main   86 commits
+  │
+
+                                                                                         tab Jenkins · enter reload · esc back · ←/→ switch tab · ↑/↓ navigate
+
+

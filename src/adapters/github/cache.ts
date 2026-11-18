@@ -1,0 +1,31 @@
+import { type GitHubCacheEntry, isGitHubCacheEntry } from "../../core/github/merge";
+import { DEFAULT_PROVIDER_CACHE_LIMIT, type ProviderCacheLimit } from "../../core/provider-settings";
+import { type CacheLocation, DEFAULT_PROVIDER_CACHE_ROOT, ShaSqliteCache } from "../cache/sha-sqlite-cache";
+
+export const DEFAULT_GITHUB_CACHE_ROOT = DEFAULT_PROVIDER_CACHE_ROOT;
+
+export {
+  type GitHubCacheEntry,
+  isGitHubCacheEntry,
+  isTerminalGitHubRun,
+  jobsMapFromGitHubCache,
+  mergeGitHubEntry,
+  mergeGitHubJobs,
+  mergeGitHubRuns,
+} from "../../core/github/merge";
+
+import { githubProvider } from "../../core/github/definition";
+
+export class GitHubCache extends ShaSqliteCache<GitHubCacheEntry> {
+  constructor(options: CacheLocation & { maxEntries?: ProviderCacheLimit } = {}) {
+    super({
+      // Its rows are its provider's: the cache screen and evictions group them by its id.
+      provider: githubProvider.id,
+      root: options.root ?? DEFAULT_GITHUB_CACHE_ROOT,
+      maxEntries: options.maxEntries ?? DEFAULT_PROVIDER_CACHE_LIMIT,
+      isEntry: isGitHubCacheEntry,
+      invalidMessage: "Cannot cache an invalid GitHub Actions run snapshot.",
+      registry: options.registry,
+    });
+  }
+}

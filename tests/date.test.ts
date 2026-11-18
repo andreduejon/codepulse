@@ -5,7 +5,7 @@
  * days, same-year absolute, different-year absolute), and empty string guard.
  */
 import { describe, expect, spyOn, test } from "bun:test";
-import { formatClock, formatDayLabel, formatGraphDate, formatRelativeDate } from "../src/utils/date";
+import { formatClock, formatDayLabel, formatGraphDate, formatRelativeDate } from "../src/tui/utils/date";
 
 /** Create an ISO date string offset from now by the given milliseconds. */
 const ago = (ms: number): string => new Date(Date.now() - ms).toISOString();

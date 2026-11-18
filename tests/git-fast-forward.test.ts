@@ -3,9 +3,11 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createRoot, createSignal } from "solid-js";
-import { createAppState } from "../src/context/state";
-import { type FastForwardResult, fastForwardBranches, runGit } from "../src/git/repo";
-import { useDataLoader } from "../src/hooks/use-data-loader";
+import { gitCli } from "../src/adapters/git/git-cli";
+import { fastForwardBranches, runGit } from "../src/adapters/git/repo";
+import type { FastForwardResult } from "../src/core/git/log";
+import { createAppState } from "../src/tui/context/state";
+import { useDataLoader } from "../src/tui/hooks/use-data-loader";
 
 /** Each test runs dozens of Git processes, which start slowly on Windows (over 5 s on its ARM64 runner). */
 const GIT_TIMEOUT = 30_000;
@@ -198,6 +200,7 @@ function mount(repoPath: string, fastForward: boolean) {
     const [enabled, setEnabled] = createSignal(fastForward);
     const loader = useDataLoader({
       repoPath: () => repoPath,
+      git: gitCli(),
       state,
       actions,
       autoFastForward: enabled,

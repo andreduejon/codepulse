@@ -1,0 +1,188 @@
+=== shot 1: github (200x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                        Status         Last Run                      Actions                       Info
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+    █                           bf08113   dev   origin/dev  feat(api): export request metrics                2             running            Reload commit
+    │                                                                                                                                         total workflow runs                                    1
+    █                           e6209dd  feat(api): add a health endpoint                                    1             45m ago            └─ ▾ CI #812  attempt 2                        51m ago ✗
+    │                                                                                                                                            ├─ build                                            ✓
+    █                           3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…   2             28m ago               ├─ test                                             ✗
+    │                                                                                                                                            │  ├─ Set up job                                    ✓
+    │ █                         6adc455   feature/payments-r…   origin/feature/pay…  wip(payments): retry…   1             4h ago                │  ├─ Checkout                                      ✓
+    │ │                                                                                                                                          │  ├─ Install dependencies                          ✓
+    █─╯                         64ddc8a  feat(payments): retry failed payments with exponential backoff, a   1             51m ago               │  ├─ Run tests                                     ✗
+    │                                                                                                                                            │  ├─ Upload coverage                               –
+    █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······               │  └─ Annotations
+    │                                                                                                                                            │     ├─ ✗ src/payments/retry.test.ts:40  Expected…
+    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······               │     ├─ ✗ src/payments/gateway-client-with-a-long…
+    │ │                                                                                                                                          │     ├─ ! src/payments/retry.ts:19  'delay' is as…
+    │ █                         0166f71  feat(i18n): add French                                             ·······        ·······               │     └─ ✗ Process completed with exit code 1.
+    │ │                                                                                                                                          ├─ deploy                                           –
+    │ █─╮                       5245790  Merge branch 'main' into feature/i18n                              ·······        ·······               └─ ▸ attempt 1                               2h ago ✗
+    │ │ │
+    │ █ │                       484821c  feat(i18n): add German                                             ·······        ·······
+    │ │ │
+    │ █ │                       3ad11a2  feat(i18n): extract the checkout strings                           ·······        ·······
+    │ │ │
+    █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                     ·······        ·······
+    │ │ │ │
+    │ │ │ █                     9d1b361  fix(search): ignore accents                                        ·······        ·······
+    │ │ │ │
+    │ │ │ █                     cce93f9  feat(search): search as you type                                   ·······        ·······
+    │ │ │ │
+    │ │ │ █─╮                   ae57e03  Merge branch 'main' into feature/search                            ·······        ·······
+    │ │ │ │ │
+    │ │ │ █ │                   a89a18f  feat(search): highlight matching words                             ·······        ·······
+    │ │ │ │ │
+    │ │ │ █ │                   52defc5  feat(search): rank results by popularity                           ·······        ·······
+
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                           normal   search   path   ancestry
+  │
+  │   customer-notification-service   shop   shop-web                                                                 main   86 commits
+  │
+
+                                                          tab Jenkins · enter view log · o open · esc back · ←/→ switch tab · ↑/↓ navigate       ✓ passed  ● running  ✗ failed  – skipped  ○ cancelled
+
+
+=== shot 2: jenkins (200x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                        Status         Last Run                      Builds                       Info
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+    █                           bf08113   dev   origin/dev  feat(api): export request metrics                1             running            Reload commit
+    │                                                                                                                                         total builds                                           1
+    █                           e6209dd  feat(api): add a health endpoint                                    1             46m ago            └─ ▾ main #41                                   2h ago ✗
+    │                                                                                                                                            ├─ Checkout                                         ✓
+    █                           3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…   1             29m ago               ├─ Build                                            ✓
+    │                                                                                                                                            ├─ Unit tests                                       ✗
+    │ █                         6adc455   feature/payments-r…   origin/feature/pay…  wip(payments): retry…   1             5h ago                ├─ Publish image to the internal registry           –
+    │ │                                                                                                                                          └─ Tests                                            ✗
+    █─╯                         64ddc8a  feat(payments): retry failed payments with exponential backoff, a   1             2h ago                   ├─ PaymentServiceTest › refundsTwice
+    │                                                                                                                                               ├─ RetryPolicyTest › givesUpAfterThreeRetriesWh…
+    █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······                  └─ CartTest › roundsDiscountsToCents
+    │
+    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······
+    │ │
+    │ █                         0166f71  feat(i18n): add French                                             ·······        ·······
+    │ │
+    │ █─╮                       5245790  Merge branch 'main' into feature/i18n                              ·······        ·······
+    │ │ │
+    │ █ │                       484821c  feat(i18n): add German                                             ·······        ·······
+    │ │ │
+    │ █ │                       3ad11a2  feat(i18n): extract the checkout strings                           ·······        ·······
+    │ │ │
+    █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                     ·······        ·······
+    │ │ │ │
+    │ │ │ █                     9d1b361  fix(search): ignore accents                                        ·······        ·······
+    │ │ │ │
+    │ │ │ █                     cce93f9  feat(search): search as you type                                   ·······        ·······
+    │ │ │ │
+    │ │ │ █─╮                   ae57e03  Merge branch 'main' into feature/search                            ·······        ·······
+    │ │ │ │ │
+    │ │ │ █ │                   a89a18f  feat(search): highlight matching words                             ·······        ·······
+    │ │ │ │ │
+    │ │ │ █ │                   52defc5  feat(search): rank results by popularity                           ·······        ·······
+
+  │                                                                                                                                           │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                           normal   search   path   ancestry       │     Branch jobs · 25 of 30 read                 ✕
+  │                                                                                                                                           │     Branches in the graph come first. Builds on
+  │   customer-notification-service   shop   shop-web                                                                 main   86 commits       │     the other 5 do not show.
+  │                                                                                                                                           │
+
+                                                        tab OpenShift · enter view log · o open · esc back · ←/→ switch tab · ↑/↓ navigate         ✓ passed  ● running  ✗ failed  – skipped  ○ aborted
+
+
+=== shot 3: openshift (200x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                        Live           Cache                        Resources                      Info
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+    █                           bf08113   dev   origin/dev   shop-dev  feat(api): export request metrics     2   1          1                 Reload commit                                       live
+    │                                                                                                                                         total resources                                        4
+    █                           e6209dd  feat(api): add a health endpoint                                   ·······        ·······            └─ ▾ shop-dev                                          4
+    │                                                                                                                                            ├─ Deployments
+    █                           3447db9   v0.42.0   main   origin/…   shop-pr…   +2  docs: rewrite the RE…   4              1                    │  └─ shop-api                                      ●
+    │                                                                                                                                            ├─ Pods
+    │ █                         6adc455   feature/payments-r…   origin/feature/pay…  wip(payments): retry…  ·······        ·······               │  ├─ shop-api-7d9f8-r2m4p                          ✓
+    │ │                                                                                                                                          │  └─ shop-api-7d9f8-pull9                          ●
+    █─╯                         64ddc8a   shop-test  feat(payments): retry failed payments with exponenti…   4   1          1   1                └─ Builds
+    │                                                                                                                                               └─ shop-api-44                                   ✓
+    █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······
+    │
+    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······
+    │ │
+    │ █                         0166f71  feat(i18n): add French                                             ·······        ·······
+    │ │
+    │ █─╮                       5245790  Merge branch 'main' into feature/i18n                              ·······        ·······
+    │ │ │
+    │ █ │                       484821c  feat(i18n): add German                                             ·······        ·······
+    │ │ │
+    │ █ │                       3ad11a2  feat(i18n): extract the checkout strings                           ·······        ·······
+    │ │ │
+    █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                     ·······        ·······
+    │ │ │ │
+    │ │ │ █                     9d1b361  fix(search): ignore accents                                        ·······        ·······
+    │ │ │ │
+    │ │ │ █                     cce93f9  feat(search): search as you type                                   ·······        ·······
+    │ │ │ │
+    │ │ │ █─╮                   ae57e03  Merge branch 'main' into feature/search                            ·······        ·······
+    │ │ │ │ │
+    │ │ │ █ │                   a89a18f  feat(search): highlight matching words                             ·······        ·······
+    │ │ │ │ │
+    │ │ │ █ │                   52defc5  feat(search): rank results by popularity                           ·······        ·······
+
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                           normal   search   path   ancestry
+  │
+  │   customer-notification-service   shop   shop-web                                                                 main   86 commits
+  │
+
+                                                                        tab Snyk · enter reload · esc back · ←/→ switch tab · ↑/↓ navigate                              ✓ ok  ● in progress  ✗ failing
+
+
+=== shot 4: snyk (200x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                  Severity             Last Scan              Vulnerabilities        Dependencies         Info
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+    █                           bf08113   dev   origin/dev  feat(api): export request metrics          C1   H3   M0   L0   just now           Rescan commit
+    │                                                                                                                                         Copy scan as JSON
+    █                           e6209dd  feat(api): add a health endpoint                             ·······              ·······
+    │                                                                                                                                         Group by                                      [severity]
+    █                           3447db9   v0.42.0   main   origin/main   +2  docs: rewrite the READ…   C1   H3   M0   L0   just now           Enter vulnerability filter...                          4
+    │
+    │ █                         6adc455   feature/payment…   origin/feature/…  wip(payments): retry…  ·······              ·······            ▾ CRITICAL                                             1
+    │ │                                                                                                                                       └─ ▸ CVE-2022-23540                                9.1 ●
+    █─╯                         64ddc8a  feat(payments): retry failed payments with exponential bac…  ·······              ·······            ▾ HIGH                                                 3
+    │                                                                                                                                         ├─ ▸ CVE-2026-10001                                8.2 ●
+    █                           917f7b3  perf(cart): cache price lookups                              ·······              ·······            ├─ ▸ CVE-2020-8203                                 7.5 ●
+    │                                                                                                                                         └─ ▸ CVE-2024-4068                                 7.5 ●
+    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                ·······              ·······            · MEDIUM                                               0
+    │ │                                                                                                                                       · LOW                                                  0
+    │ █                         0166f71  feat(i18n): add French                                       ·······              ·······
+    │ │                                                                                                                                       · NEW  vs 3447db9, 2 commits back                      0
+    │ █─╮                       5245790  Merge branch 'main' into feature/i18n                        ·······              ·······            · FIXED  vs 3447db9, 2 commits back                    0
+    │ │ │
+    │ █ │                       484821c  feat(i18n): add German                                       ·······              ·······
+    │ │ │
+    │ █ │                       3ad11a2  feat(i18n): extract the checkout strings                     ·······              ·······
+    │ │ │
+    █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search               ·······              ·······
+    │ │ │ │
+    │ │ │ █                     9d1b361  fix(search): ignore accents                                  ·······              ·······
+    │ │ │ │
+    │ │ │ █                     cce93f9  feat(search): search as you type                             ·······              ·······
+    │ │ │ │
+    │ │ │ █─╮                   ae57e03  Merge branch 'main' into feature/search                      ·······              ·······
+    │ │ │ │ │
+    │ │ │ █ │                   a89a18f  feat(search): highlight matching words                       ·······              ·······
+    │ │ │ │ │
+    │ │ │ █ │                   52defc5  feat(search): rank results by popularity                     ·······              ·······
+
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                           normal   search   path   ancestry
+  │
+  │   customer-notification-service   shop   shop-web                                                                 main   86 commits
+  │
+
+                                                            tab Dashboard · enter/→ show details · shift ←/→ switch project · ↑/↓ navigate           ● upgrade  ● override  ● no fix  ! mature exploit
+
+

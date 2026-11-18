@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { snykFailureReason } from "../src/providers/snyk/failure-reason";
+import { snykFailureReason } from "../src/core/snyk/failure-reason";
 
 describe("snykFailureReason", () => {
   test("joins Snyk's lines into one sentence without worktree paths or debug hints", () => {

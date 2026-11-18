@@ -36,7 +36,7 @@ jobs:
         run: bun run check
 
       - name: Run tests
-        run: bun test
+        run: bun run test
 
   build:
     needs: verify
@@ -91,7 +91,7 @@ jobs:
 
       - name: Native tests
         timeout-minutes: 6
-        run: bun test
+        run: bun run test
 
       - name: Installer regression checks
         run: bun scripts/test-install.ts

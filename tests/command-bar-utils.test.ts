@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { UNCOMMITTED_HASH } from "../src/constants";
+import { UNCOMMITTED_HASH } from "../src/core/git/types";
 import {
   commandBarPlaceholder,
   commitCountText,
   filterBadgeLabel,
   realCommitCount,
-} from "../src/utils/command-bar-utils";
+} from "../src/tui/utils/command-bar-utils";
 
 describe("filterBadgeLabel", () => {
   test("omits empty and unapplied terms", () => {

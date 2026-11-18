@@ -2,262 +2,409 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+## [0.19.0] - 2026-11-18
+
+### Changed
+
+- The Dashboard and the graph keep details of their own: coming back to one, its
+  tab, cursor and focus are where you left them, whatever you did in the other.
+- Moving through the Dashboard redraws only the row the cursor leaves and the
+  row it reaches: with 1,000 events a key takes 4 ms instead of 38 ms.
+- GitHub, Jenkins and OpenShift save a fetch's runs and builds to the cache in
+  one go instead of commit by commit, which on Windows took seconds for a large
+  fetch. A refresh that brings nothing new writes nothing, so the Dashboard no
+  longer reads every cache again after it.
+- The last 10 apps you left keep their graph and Dashboard events, so coming
+  back shows them at once. Older ones are read again, so a long session through
+  a large group no longer keeps every app in memory.
+- The graph draws only the commits near the screen, however much history is
+  loaded. After five pages of older commits codepulse takes about 170 MB instead
+  of 590 MB, a page loads in a third of the time, and a key takes as long with
+  1,200 commits as with 200.
+- A CI log opens at once, however long it is: one of 20,000 lines takes 20 ms
+  instead of 650 ms, and codepulse takes about 110 MB with it open instead of
+  930 MB. With wrap on, a long log still takes as long as before.
+- The Dashboard draws only the events near the screen: with 1,000 events it
+  opens in 50 ms instead of 170 ms and takes 5 MB instead of 66 MB, and a
+  reload redraws only the events that changed.
+- The Dashboard's side panel reads an event's commit once the cursor stops on
+  it, and only for Info: moving through the events starts no Git.
+- A refresh with nothing new starts 7 Git processes instead of 9.
+- A finished Jenkins build's console log is kept in the cache instead of in
+  memory, and its stages share one read of it while its log is open.
+- A custom theme without a `base` may leave out the providers' colors: each
+  provider's badge then takes the theme's accent, with its background for the
+  text.
+
+### Fixed
+
+- In the compact layout, the graph's details no longer stay over the Dashboard.
+  Back in the graph they open again as you left them, with the keyboard in them;
+  before, they showed while the keys moved the graph behind them.
+- OpenShift waits longer between automatic requests after failures, as GitHub
+  and Jenkins do. On the Dashboard, a cluster that fails is no longer asked
+  again on every visit.
+- A request to GitHub, Jenkins or OpenShift whose server sends its headers and
+  then stalls times out, and a repository switch stops it. Before, it could wait
+  forever once the headers had come. A long log that keeps coming is still read
+  whole.
+- Closing a GitHub or Jenkins log stops its download. Before, a long log kept
+  loading after it was closed.
+- Auto refresh shows a changed remote, a tag's new message and a stash replaced
+  by another, also when no commit or branch moved. A selected Uncommitted
+  changes row shows the files as they are now on each refresh.
+- Turning off Allow host for a GitHub Enterprise host is saved. Before, the host
+  stayed in the settings file and was trusted again after a reload.
+
 ## [0.18.0] - 2026-11-17
 
 ### Added
 
-- **Dashboard**, a new first view in the tab row (Tab from the last provider, or a click). The open app gets a straight
-  line, a "rope", and everything that happened is a knot on it in its provider's color: commits on the main branch,
-  GitHub Actions runs, Jenkins builds, OpenShift builds and Snyk scans, newest first, in the columns Commit, Branch,
-  Time and Event. The branch is the one the provider names (a GitHub run's, a Jenkins multibranch job's, an OpenShift
-  build's Git ref), else the one the commit was made on: the main branch for its own first-parent line, else the branch
-  whose tip reaches it in the fewest first-parent steps, so a commit merged from develop stays develop's. Local branches
-  count for commits not pushed yet. A knot is the events within an hour; a line from the Commit column to the end starts
-  each day, with the weekday and date where the times are. The project row keeps the group's badges, so another app's
-  dashboard is a click away, and the event count is where the graph's commit count is. Where the graph's modes are, each
-  provider is a badge in its knot color: a click, or `:hide NAME` and `:show NAME` (`:show` alone shows all), hides its
-  events (the badge goes grey and the count reads `26 / 30 events`), another shows them again. From 180 columns a side
-  panel shows the selected event in its provider's own tab for the event's commit, with the event's run, build or
-  resource open and its name in the Dashboard's color, the one that provider's view shows (GitHub's runs with their
-  jobs, steps and annotations, Jenkins' builds with stages and tests, OpenShift's resources, Snyk's Vulnerabilities and
-  Dependencies), with its legend, and **Info**, the commit as the graph's Info tab shows it (branches, tags, author,
-  date, subject, body, children and parents). `→` gives the tab the keyboard: `↑`/`↓`, Enter (open a run, a log) and
-  `←`/`→` between Snyk's two tabs work as in the provider's view, and `←` on the first tab gives it back. A commit has
-  Info only. Below 180 columns, Enter opens the same as a dialog. Each event's mark and legend are the ones its
-  provider's detail tab shows: a scan with findings gets Snyk's `▲` in its worst finding's severity color, then its
-  total and every severity in order (`scan · 4 vulnerabilities · 1 critical · 3 high · 0 medium · 0 low`), each count in
-  its severity's color and muted at zero. A scan without findings lists every severity at zero, like Snyk's `C0 H0 M0
-  L0`, and a partial scan ends in Snyk's `?` in the warning color. Enter, or **Show in GitHub** (the event's provider)
-  at the top of the details, shows the event's commit in that provider's view with its details focused (`s` in the
-  compact dialog, where Enter acts on the tab's rows). A click on a row only selects it, and `o` opens a run's or
-  build's page. While the dashboard is shown, each provider fetches and auto refreshes as if its tab were open, without
-  a loading status, and Snyk scans the tips of its Auto scan branches, so the events are fresh without visiting each
-  tab. A failed fetch or scan shows in the message box, worded as on the provider's tab; several share one box (`Errors
-  from GitHub and Jenkins`) with a line each. Closing it with `✕` or `:clear` keeps it closed until an error changes. A
-  build or run that is still running shows as running (`● CI #814 running`), from what the providers hold, and turns
-  into how it ended in the same row. The selected row is bold and in the Dashboard's color, as a provider view's is in
-  its own. The dashboard reads Git and the provider caches, and reads them again whenever a provider finishes a fetch or
-  the graph is read again. A provider turned off has no events there, also none it cached before, and asks nothing. `r`,
-  `f` and `:reload` fetch every provider that is turned on again, as they do for one
-  provider on its tab, so a build that just finished shows at once. **Menu → Providers → Dashboard** turns it off
-  (Enabled, on by default: without it there is no Dashboard tab and a repository set to start in it starts in Git) and
-  sets how far back it reads (Time window, 1 to 30 days, 7 by default) and how long a knot is (Knot size, 15 minutes to
-  4 hours, 1 hour by default). The Dashboard tab has its own color in every theme; custom themes set it with
-  `dashboardFg` and `dashboardBg`, which a standalone theme (one without `base`) must have: one without them is skipped,
-  and Debug names the missing colors. The graph's search (`/`), path filter and ancestry don't work on the dashboard, an
-  open search bar closes when it shows, and Esc there leaves the graph's highlights and branch view alone.
-- **Menu → Repository → Preferences → Start in** chooses the view a repository opens in: Git (the default), the
-  Dashboard or a provider that is turned on. Saved per repository as `startView`. Another repository of the group opens
-  in its own start view the first time it's shown, and where you left it after that. A provider turned off since starts
-  in Git.
-- **`ctrl+f`** and **`:pull`** fetch, then fast-forward each local branch that is only behind its remote branch, like
-  `git pull --ff-only`, and say what moved. So a pull request merged on GitHub reaches your local `main`. The
-  checked-out branch moves with its files only while no tracked file has changes. A branch with commits of its own, or
-  one checked out in another worktree, stays where it is, and the message says why. **Menu → Repository → Preferences
-  → Auto fast-forward** (off by default, saved per repository as `autoFastForward`) makes `f` and Auto fetch
-  fast-forward too. They only report a branch that stayed behind. **Menu → Repository → Actions → Fast-forward** does
-  what `ctrl+f` does.
-- Snyk Dependencies: a Maven `managed` pin is also marked `removable` when every dependency that brings the package
-  already asks for the pinned version or later, so Maven would pick at least that version without the pin. Their POMs
-  are read from the local Maven repository (`~/.m2/repository`, or where `settings.xml`, `.mvn/maven.config` or
-  `MAVEN_OPTS` put it), where Maven saved them while Snyk resolved the tree. Nothing is downloaded: a POM that is not
-  there, a version range or an unknown property keeps the pin. A direct dependency keeps its pin too. Scans made before
-  this version show it after **Rescan commit**. Only plain version numbers (`1.86`, `2.13.4`) are compared: a version
-  with a qualifier or a `-` (`1.0-rc`, `1.0-1`) keeps its pin, since Maven orders those in ways this check doesn't, and
-  so does a number part longer than 15 digits. A dependency that asks for a variant of the package (a test jar, a
-  classifier) keeps the pin as well.
-- `bun run demo`: a third app with a long name (`customer-notification-service`), shop-web with a `main` behind its
-  remote while a file has changes and a `dev` with commits on both sides (for `ctrl+f`'s warnings), GitHub runs and
-  OpenShift builds that name their branch, and the last fetch dated by the demo's clock. `--colors` names each color in
-  the shots by its theme key (`«severityHigh:3 high»`), so a play can check colors too.
+- **Dashboard**, a new first view in the tab row (Tab from the last provider, or
+  a click). The open app gets a straight line, a "rope", and everything that
+  happened is a knot on it in its provider's color: commits on the main branch,
+  GitHub Actions runs, Jenkins builds, OpenShift builds and Snyk scans, newest
+  first, in the columns Commit, Branch, Time and Event. The branch is the one
+  the provider names (a GitHub run's, a Jenkins multibranch job's, an OpenShift
+  build's Git ref), else the one the commit was made on: the main branch for its
+  own first-parent line, else the branch whose tip reaches it in the fewest
+  first-parent steps, so a commit merged from develop stays develop's. Local
+  branches count for commits not pushed yet. A knot is the events within an
+  hour; a line from the Commit column to the end starts each day, with the
+  weekday and date where the times are. The project row keeps the group's
+  badges, so another app's dashboard is a click away, and the event count is
+  where the graph's commit count is. Where the graph's modes are, each provider
+  is a badge in its knot color: a click, or `:hide NAME` and `:show NAME`
+  (`:show` alone shows all), hides its events (the badge goes grey and the count
+  reads `26 / 30 events`), another shows them again. From 180 columns a side
+  panel shows the selected event in its provider's own tab for the event's
+  commit, with the event's run, build or resource open and its name in the
+  Dashboard's color, the one that provider's view shows (GitHub's runs with
+  their jobs, steps and annotations, Jenkins' builds with stages and tests,
+  OpenShift's resources, Snyk's Vulnerabilities and Dependencies), with its
+  legend, and **Info**, the commit as the graph's Info tab shows it (branches,
+  tags, author, date, subject, body, children and parents). `→` gives the tab
+  the keyboard: `↑`/`↓`, Enter (open a run, a log) and `←`/`→` between Snyk's
+  two tabs work as in the provider's view, and `←` on the first tab gives it
+  back. A commit has Info only. Below 180 columns, Enter opens the same as a
+  dialog. Each event's mark and legend are the ones its provider's detail tab
+  shows: a scan with findings gets Snyk's `▲` in its worst finding's severity
+  color, then its total and every severity in order
+  (`scan · 4 vulnerabilities · 1 critical · 3 high · 0 medium · 0 low`), each
+  count in its severity's color and muted at zero. A scan without findings lists
+  every severity at zero, like Snyk's `C0 H0 M0 L0`, and a partial scan ends in
+  Snyk's `?` in the warning color. Enter, or **Show in GitHub** (the event's
+  provider) at the top of the details, shows the event's commit in that
+  provider's view with its details focused (`s` in the compact dialog, where
+  Enter acts on the tab's rows). A click on a row only selects it, and `o` opens
+  a run's or build's page. While the dashboard is shown, each provider fetches
+  and auto refreshes as if its tab were open, without a loading status, and Snyk
+  scans the tips of its Auto scan branches, so the events are fresh without
+  visiting each tab. A failed fetch or scan shows in the message box, worded as
+  on the provider's tab; several share one box
+  (`Errors from GitHub and Jenkins`) with a line each. Closing it with `✕` or
+  `:clear` keeps it closed until an error changes. A build or run that is still
+  running shows as running (`● CI #814 running`), from what the providers hold,
+  and turns into how it ended in the same row. The selected row is bold and in
+  the Dashboard's color, as a provider view's is in its own. The dashboard reads
+  Git and the provider caches, and reads them again whenever a provider finishes
+  a fetch or the graph is read again. A provider turned off has no events there,
+  also none it cached before, and asks nothing. `r`, `f` and `:reload` fetch
+  every provider that is turned on again, as they do for one provider on its
+  tab, so a build that just finished shows at once. **Menu → Providers →
+  Dashboard** turns it off (Enabled, on by default: without it there is no
+  Dashboard tab and a repository set to start in it starts in Git) and sets how
+  far back it reads (Time window, 1 to 30 days, 7 by default) and how long a
+  knot is (Knot size, 15 minutes to 4 hours, 1 hour by default). The Dashboard
+  tab has its own color in every theme; custom themes set it with `dashboardFg`
+  and `dashboardBg`, which a standalone theme (one without `base`) must have:
+  one without them is skipped, and Debug names the missing colors. The graph's
+  search (`/`), path filter and ancestry don't work on the dashboard, an open
+  search bar closes when it shows, and Esc there leaves the graph's highlights
+  and branch view alone.
+- **Menu → Repository → Preferences → Start in** chooses the view a repository
+  opens in: Git (the default), the Dashboard or a provider that is turned on.
+  Saved per repository as `startView`. Another repository of the group opens in
+  its own start view the first time it's shown, and where you left it after
+  that. A provider turned off since starts in Git.
+- **`ctrl+f`** and **`:pull`** fetch, then fast-forward each local branch that
+  is only behind its remote branch, like `git pull --ff-only`, and say what
+  moved. So a pull request merged on GitHub reaches your local `main`. The
+  checked-out branch moves with its files only while no tracked file has
+  changes. A branch with commits of its own, or one checked out in another
+  worktree, stays where it is, and the message says why. **Menu → Repository →
+  Preferences → Auto fast-forward** (off by default, saved per repository as
+  `autoFastForward`) makes `f` and Auto fetch fast-forward too. They only report
+  a branch that stayed behind. **Menu → Repository → Actions → Fast-forward**
+  does what `ctrl+f` does.
+- Snyk Dependencies: a Maven `managed` pin is also marked `removable` when every
+  dependency that brings the package already asks for the pinned version or
+  later, so Maven would pick at least that version without the pin. Their POMs
+  are read from the local Maven repository (`~/.m2/repository`, or where
+  `settings.xml`, `.mvn/maven.config` or `MAVEN_OPTS` put it), where Maven saved
+  them while Snyk resolved the tree. Nothing is downloaded: a POM that is not
+  there, a version range or an unknown property keeps the pin. A direct
+  dependency keeps its pin too. Scans made before this version show it after
+  **Rescan commit**. Only plain version numbers (`1.86`, `2.13.4`) are compared:
+  a version with a qualifier or a `-` (`1.0-rc`, `1.0-1`) keeps its pin, since
+  Maven orders those in ways this check doesn't, and so does a number part
+  longer than 15 digits. A dependency that asks for a variant of the package (a
+  test jar, a classifier) keeps the pin as well.
+- `bun run demo`: a third app with a long name
+  (`customer-notification-service`), shop-web with a `main` behind its remote
+  while a file has changes and a `dev` with commits on both sides (for
+  `ctrl+f`'s warnings), GitHub runs and OpenShift builds that name their branch,
+  and the last fetch dated by the demo's clock. `--colors` names each color in
+  the shots by its theme key (`«severityHigh:3 high»`), so a play can check
+  colors too.
 
 ### Changed
 
-- The footer's spinner and its label (`GitHub fetching`, `Snyk scanning`) show once work has run for half a second, so
-  quick background refreshes no longer make the footer blink. The Dashboard says `Dashboard reading` only while it reads
-  an app for the first time; reading it again keeps its events and stays quiet.
-- Snyk's severity legend, below the Snyk tab and in the Dashboard's details, names each level beside its triangle (`▲
-  critical  ▲ high  ▲ medium  ▲ low`) instead of four triangles and `severity`.
-- OpenShift lists its builds once when a repository loads, like GitHub and Jenkins already fetch their runs, and Snyk
-  scans the tips of its Auto scan branches on every view, once per new tip. So the graph and the Dashboard show them
-  before their tabs are opened. Auto refresh still runs only on a provider's tab and the Dashboard.
-- The GitHub Actions provider is called **GitHub** in the app: its tab, the dashboard's provider badge, the footer's
-  `tab` hint, **Menu → Providers**, the help, a job log's title and the theme dialog. Its detail tab is still
-  **Actions**. The config (`providers.github`) and the theme colors (`githubActionsFg`, `githubActionsBg`) keep their
-  names.
-- The Jenkins and OpenShift detail tabs are called **Builds** and **Resources**: each detail tab names what it lists,
-  like Actions, Vulnerabilities and Dependencies.
+- The footer's spinner and its label (`GitHub fetching`, `Snyk scanning`) show
+  once work has run for half a second, so quick background refreshes no longer
+  make the footer blink. The Dashboard says `Dashboard reading` only while it
+  reads an app for the first time; reading it again keeps its events and stays
+  quiet.
+- Snyk's severity legend, below the Snyk tab and in the Dashboard's details,
+  names each level beside its triangle (`▲ critical ▲ high ▲ medium ▲ low`)
+  instead of four triangles and `severity`.
+- OpenShift lists its builds once when a repository loads, like GitHub and
+  Jenkins already fetch their runs, and Snyk scans the tips of its Auto scan
+  branches on every view, once per new tip. So the graph and the Dashboard show
+  them before their tabs are opened. Auto refresh still runs only on a
+  provider's tab and the Dashboard.
+- The GitHub Actions provider is called **GitHub** in the app: its tab, the
+  dashboard's provider badge, the footer's `tab` hint, **Menu → Providers**, the
+  help, a job log's title and the theme dialog. Its detail tab is still
+  **Actions**. The config (`providers.github`) and the theme colors
+  (`githubActionsFg`, `githubActionsBg`) keep their names.
+- The Jenkins and OpenShift detail tabs are called **Builds** and **Resources**:
+  each detail tab names what it lists, like Actions, Vulnerabilities and
+  Dependencies.
 
 ### Fixed
 
-- Jenkins: a build that started after codepulse had read its job now shows without a restart. A build still checking out
-  (no commit yet) or one for a commit the graph got later no longer makes Jenkins skip its job from then on, a branch
-  pushed since is found (each fetch lists the multibranch project's branch jobs again), and Auto refresh looks for new
-  builds too, not only at the ones already running. It asks each job for its last build and lists only the jobs with a
-  new one.
-- Menu → Providers → OpenShift: an empty **Server** or **Console** reads `Enter server URL...` / `Enter console URL...`,
-  like the other fields, instead of nothing or `optional, for o`.
-- A config value Codepulse ignores (`"dashboard.enabled" must be a boolean, ignoring`) now shows in Debug, once per run.
-  Before, the warning was dropped and the value silently ignored.
-- Switching to another app of the group no longer lets Snyk scan the previous app's branch tips in the new one (`Unable
-  to resolve commit SHA`): the switch changes the repository and its branches in one update.
-- **Menu → Repository → Actions → Fetch remote** says `just now` instead of a negative age when the last fetch time is
-  ahead of the clock.
-- Another repository, opened with a group badge or **Switch repository**, uses its own Auto fetch, Auto refresh, Page
-  size and Show all branches. Before, it kept the first repository's, so it might never fetch, and the menu showed
-  and saved the first repository's values.
-- The details keep what you opened when you switch tabs or when the terminal width crosses into or out of the side
-  panel: open runs and attempts (GitHub, Jenkins), closed namespaces (OpenShift), the Snyk view, collapsed
-  folders and the Info sections. Before, a resize or a tab switch closed them and the cursor landed on another row.
-  The footer also keeps offering `o open` after such a resize.
-- Clicking `enter` in the footer of the compact details works the first time they open after startup. It stayed
-  unclickable until the details had been opened once before.
-- `codepulse xyz` without a folder `xyz` opens the project selector with "Hmm, that directory doesn't exist" instead
-  of stopping with a fatal error about Git. Without Git installed, the startup now says so the same way.
-- Jenkins with more than 25 branch jobs in a multibranch project caches the finished builds it read, like GitHub
-  and OpenShift. Before, it cached nothing, so its builds never showed on the dashboard or below the fetch
-  depth.
+- Jenkins: a build that started after codepulse had read its job now shows
+  without a restart. A build still checking out (no commit yet) or one for a
+  commit the graph got later no longer makes Jenkins skip its job from then on,
+  a branch pushed since is found (each fetch lists the multibranch project's
+  branch jobs again), and Auto refresh looks for new builds too, not only at the
+  ones already running. It asks each job for its last build and lists only the
+  jobs with a new one.
+- Menu → Providers → OpenShift: an empty **Server** or **Console** reads
+  `Enter server URL...` / `Enter console URL...`, like the other fields, instead
+  of nothing or `optional, for o`.
+- A config value Codepulse ignores
+  (`"dashboard.enabled" must be a boolean, ignoring`) now shows in Debug, once
+  per run. Before, the warning was dropped and the value silently ignored.
+- Switching to another app of the group no longer lets Snyk scan the previous
+  app's branch tips in the new one (`Unable to resolve commit SHA`): the switch
+  changes the repository and its branches in one update.
+- **Menu → Repository → Actions → Fetch remote** says `just now` instead of a
+  negative age when the last fetch time is ahead of the clock.
+- Another repository, opened with a group badge or **Switch repository**, uses
+  its own Auto fetch, Auto refresh, Page size and Show all branches. Before, it
+  kept the first repository's, so it might never fetch, and the menu showed and
+  saved the first repository's values.
+- The details keep what you opened when you switch tabs or when the terminal
+  width crosses into or out of the side panel: open runs and attempts (GitHub,
+  Jenkins), closed namespaces (OpenShift), the Snyk view, collapsed folders and
+  the Info sections. Before, a resize or a tab switch closed them and the cursor
+  landed on another row. The footer also keeps offering `o open` after such a
+  resize.
+- Clicking `enter` in the footer of the compact details works the first time
+  they open after startup. It stayed unclickable until the details had been
+  opened once before.
+- `codepulse xyz` without a folder `xyz` opens the project selector with "Hmm,
+  that directory doesn't exist" instead of stopping with a fatal error about
+  Git. Without Git installed, the startup now says so the same way.
+- Jenkins with more than 25 branch jobs in a multibranch project caches the
+  finished builds it read, like GitHub and OpenShift. Before, it cached nothing,
+  so its builds never showed on the dashboard or below the fetch depth.
 
 ## [0.17.0] - 2026-11-11
 
 ### Added
 
-- `o` opens the selected row in the browser from the detail panel: a GitHub run or job, a Jenkins build, an
-  OpenShift namespace or resource, or a Snyk finding (its security.snyk.io page). The footer offers `o` only on
-  rows that have a page.
-- OpenShift **Console** setting (optional): the web console URL that `o` uses for namespaces and resources, in the
-  detail panel and the resource dialog. It cannot be worked out from the API server URL.
-- OpenShift resource dialog: an events view. `c` cycles log, JSON and events for Pods, Builds, Deployments and
-  DeploymentConfigs. It starts with what the status says is wrong (a container waiting on `CrashLoopBackOff`, its
-  last run's exit code and restarts, failing conditions with their messages), which stays after OpenShift deletes the events
-  and where they are forbidden. Then the events, newest first (`LAST SEEN  TYPE  REASON  COUNT  MESSAGE`),
-  warnings in the warning colour, searchable, and `r` refetches them. The dialog title counts the warnings. It
-  needs `list` on `events`; without it the view says so.
-- OpenShift view: each namespace that runs a commit shows as a badge next to its refs, also below the fetch size.
-  The badge only names the namespace; the Live counts and the details show whether it is ready, rolling out or
-  failing, and a legend below the tree explains the row marks. A namespace running a commit the graph does not
-  show is named at the end of the graph.
+- `o` opens the selected row in the browser from the detail panel: a GitHub run
+  or job, a Jenkins build, an OpenShift namespace or resource, or a Snyk finding
+  (its security.snyk.io page). The footer offers `o` only on rows that have a
+  page.
+- OpenShift **Console** setting (optional): the web console URL that `o` uses
+  for namespaces and resources, in the detail panel and the resource dialog. It
+  cannot be worked out from the API server URL.
+- OpenShift resource dialog: an events view. `c` cycles log, JSON and events for
+  Pods, Builds, Deployments and DeploymentConfigs. It starts with what the
+  status says is wrong (a container waiting on `CrashLoopBackOff`, its last
+  run's exit code and restarts, failing conditions with their messages), which
+  stays after OpenShift deletes the events and where they are forbidden. Then
+  the events, newest first (`LAST SEEN TYPE REASON COUNT MESSAGE`), warnings in
+  the warning colour, searchable, and `r` refetches them. The dialog title
+  counts the warnings. It needs `list` on `events`; without it the view says so.
+- OpenShift view: each namespace that runs a commit shows as a badge next to its
+  refs, also below the fetch size. The badge only names the namespace; the Live
+  counts and the details show whether it is ready, rolling out or failing, and a
+  legend below the tree explains the row marks. A namespace running a commit the
+  graph does not show is named at the end of the graph.
 
-- GitHub Actions: a failed job lists its annotations after its steps (failures and warnings, with file and line).
-  Enter opens the job log with the message searched; they are read once per failed job and cached.
+- GitHub Actions: a failed job lists its annotations after its steps (failures
+  and warnings, with file and line). Enter opens the job log with the message
+  searched; they are read once per failed job and cached.
 
-- GitHub Actions re-runs: the run row names its attempt (`attempt 2`), and earlier attempts are folded rows at the
-  end of the run that expand to their jobs and logs.
+- GitHub Actions re-runs: the run row names its attempt (`attempt 2`), and
+  earlier attempts are folded rows at the end of the run that expand to their
+  jobs and logs.
 
-- Jenkins stages are selectable: Enter opens only that stage's part of the console log, titled with the stage and
-  its time, and `←` / `→` move between stages. `←` from the first stage shows the full log: a summary (each stage
-  with its mark and time, the test counts), then the whole console. It is cut from the cached console log, so no
-  extra requests. A stage in a parallel branch opens the full log with a line that says so: the branches write to
-  the console at the same time.
-- Jenkins: a finished build with a JUnit report shows a **Tests** row with its failed tests. Enter opens a
-  failure's error and stack trace in the log viewer, titled with the test, `←` / `→` move between failed tests.
-- Jenkins: a legend below the tree explains the marks (`✓ passed  ● running  ✗ failed  – skipped  ○ aborted`).
-- GitHub Actions: the job log's title gives the job's time, and the log starts with its steps (marks and times).
-  A legend below the tree explains the marks (`✓ passed  ● running  ✗ failed  – skipped  ○ cancelled`).
+- Jenkins stages are selectable: Enter opens only that stage's part of the
+  console log, titled with the stage and its time, and `←` / `→` move between
+  stages. `←` from the first stage shows the full log: a summary (each stage
+  with its mark and time, the test counts), then the whole console. It is cut
+  from the cached console log, so no extra requests. A stage in a parallel
+  branch opens the full log with a line that says so: the branches write to the
+  console at the same time.
+- Jenkins: a finished build with a JUnit report shows a **Tests** row with its
+  failed tests. Enter opens a failure's error and stack trace in the log viewer,
+  titled with the test, `←` / `→` move between failed tests.
+- Jenkins: a legend below the tree explains the marks
+  (`✓ passed ● running ✗ failed – skipped ○ aborted`).
+- GitHub Actions: the job log's title gives the job's time, and the log starts
+  with its steps (marks and times). A legend below the tree explains the marks
+  (`✓ passed ● running ✗ failed – skipped ○ cancelled`).
 
-- Snyk Vulnerabilities compare with an earlier scan: folded NEW and FIXED trees at the end, their muted headings
-  naming the scan (`vs parent 4c5d6e7`, or `vs 1a2b3c4, 3 commits back` when the parent has no scan and the
-  nearest scanned commit stands in). Added findings also keep a muted `new` under their severity. `new` and
-  `fixed` work as filter words. A project that either scan could not resolve is left out of both trees, and a
-  partial scan that does not name its failed projects is not compared at all.
+- Snyk Vulnerabilities compare with an earlier scan: folded NEW and FIXED trees
+  at the end, their muted headings naming the scan (`vs parent 4c5d6e7`, or
+  `vs 1a2b3c4, 3 commits back` when the parent has no scan and the nearest
+  scanned commit stands in). Added findings also keep a muted `new` under their
+  severity. `new` and `fixed` work as filter words. A project that either scan
+  could not resolve is left out of both trees, and a partial scan that does not
+  name its failed projects is not compared at all.
 
-- `bun run demo` (from a source checkout): codepulse on two made-up repositories with GitHub Actions, Jenkins,
-  OpenShift and Snyk data, offline and without touching your config or cache, on macOS, Linux and Windows. The
-  main one has 86 commits with every shape the graph draws (octopus and criss-cross merges, stacked branches,
-  three roots, more lanes than fit, so it scrolls sideways), commits that edit a small TypeScript shop, and CI and
-  cluster logs as long as real ones. Every
-  provider can start normal, empty, off or failing (`--github error:rate-limit`), `--live` moves the world on
-  (runs finish, a rollout fails, a new commit arrives), and `--play "STEPS"` runs it headless and prints the
-  screens as text, the same every run. See [docs/demo.md](docs/demo.md).
+- `bun run demo` (from a source checkout): codepulse on two made-up repositories
+  with GitHub Actions, Jenkins, OpenShift and Snyk data, offline and without
+  touching your config or cache, on macOS, Linux and Windows. The main one has
+  86 commits with every shape the graph draws (octopus and criss-cross merges,
+  stacked branches, three roots, more lanes than fit, so it scrolls sideways),
+  commits that edit a small TypeScript shop, and CI and cluster logs as long as
+  real ones. Every provider can start normal, empty, off or failing
+  (`--github error:rate-limit`), `--live` moves the world on (runs finish, a
+  rollout fails, a new commit arrives), and `--play "STEPS"` runs it headless
+  and prints the screens as text, the same every run. See
+  [docs/demo.md](docs/demo.md).
 
 ### Changed
 
-- Graph: while it scrolls sideways (more than 12 lanes), both edges are marked. A triangle in the commit's color
-  means the row's commit is off-screen on that side (`◀` was drawn on the right for both sides, always gray); a line
-  that runs past an edge fades into a dashed end (`╌─`, `─╌`), or into the triangle when it leads to that commit.
-  Cut lines no longer seem to start from nothing.
-- Graph: a commit that starts several branches is one block. The rows above it show the branches joining its line
-  (`├─┼─╯`); they drew the block on every row, a tall bar.
-- Graph: a branch no longer starts directly below a root commit (the first commit of an orphan branch like
-  `gh-pages`, or of an unrelated history), where the two read as one branch. It takes the next column.
-- Jenkins rows are as quiet as the OpenShift tree: a build lists its stages straight under it (no **Pipeline**
-  row) with their marks only. Times and test counts moved to the log viewer, so the build's age no longer shifts
-  when its stages load. A build without stages has one **Console** row.
-- GitHub Actions rows are as quiet as the Jenkins and OpenShift trees: names, marks and the run's age, without
-  step counts, times or the annotation count. A job that passed is one row; a failed or running job lists its
-  steps.
-- Jenkins logs show `[Pipeline] { (Unit tests)` as the heading `▸ Unit tests` and mute the rest of the Pipeline
-  markup, a parallel branch's opening too.
-- Log and diff footers say where the arrows go, without abbreviations: `← previous stage · → next stage`,
-  `← full log`, `→ first stage`, `previous test`, `previous job`, `previous file`. The arrow that goes nowhere is
-  left out of a log footer. Search reads `n/N next/previous`.
-- Jenkins multibranch: over the 25 branch-job limit, the branches in the graph are read first, then the most
-  recently built. The notice gives the counts and what they mean (`Branch jobs · 25 of 61 read`, then
+- Graph: while it scrolls sideways (more than 12 lanes), both edges are marked.
+  A triangle in the commit's color means the row's commit is off-screen on that
+  side (`◀` was drawn on the right for both sides, always gray); a line that
+  runs past an edge fades into a dashed end (`╌─`, `─╌`), or into the triangle
+  when it leads to that commit. Cut lines no longer seem to start from nothing.
+- Graph: a commit that starts several branches is one block. The rows above it
+  show the branches joining its line (`├─┼─╯`); they drew the block on every
+  row, a tall bar.
+- Graph: a branch no longer starts directly below a root commit (the first
+  commit of an orphan branch like `gh-pages`, or of an unrelated history), where
+  the two read as one branch. It takes the next column.
+- Jenkins rows are as quiet as the OpenShift tree: a build lists its stages
+  straight under it (no **Pipeline** row) with their marks only. Times and test
+  counts moved to the log viewer, so the build's age no longer shifts when its
+  stages load. A build without stages has one **Console** row.
+- GitHub Actions rows are as quiet as the Jenkins and OpenShift trees: names,
+  marks and the run's age, without step counts, times or the annotation count. A
+  job that passed is one row; a failed or running job lists its steps.
+- Jenkins logs show `[Pipeline] { (Unit tests)` as the heading `▸ Unit tests`
+  and mute the rest of the Pipeline markup, a parallel branch's opening too.
+- Log and diff footers say where the arrows go, without abbreviations:
+  `← previous stage · → next stage`, `← full log`, `→ first stage`,
+  `previous test`, `previous job`, `previous file`. The arrow that goes nowhere
+  is left out of a log footer. Search reads `n/N next/previous`.
+- Jenkins multibranch: over the 25 branch-job limit, the branches in the graph
+  are read first, then the most recently built. The notice gives the counts and
+  what they mean (`Branch jobs · 25 of 61 read`, then
   `Builds on the other 36 do not show.`).
-- Graph ref badges take only their own width, so short names (`main`, `dev`) are no longer folded into `+N` for
-  the room a long name would need.
-- A selected Snyk severity, NEW or FIXED heading keeps its colour on the arrow too. The row shade marks the
-  cursor.
+- Graph ref badges take only their own width, so short names (`main`, `dev`) are
+  no longer folded into `+N` for the room a long name would need.
+- A selected Snyk severity, NEW or FIXED heading keeps its colour on the arrow
+  too. The row shade marks the cursor.
 
 ### Fixed
 
-- CI logs: the first line of a GitHub job log no longer shows its timestamp (GitHub's logs start with a byte order
-  mark), and `issues only` and `errors only` no longer list passing tests whose names say failed
-  (`(pass) checkout > keeps a failed payment`, `✓ …`, `… PASSED`), nor drop failed ones whose names say warning.
-- GitHub Actions: a re-run no longer shows the jobs of its earlier attempt. Jobs were kept by run, and a re-run
-  keeps its run's id.
-- GitHub Actions: a fetch that fails in the background (a rate limit, offline) shows its error like Jenkins does.
-  The runs looked as if they were still loading until a Reload.
-- A terminal made smaller keeps the selected commit on screen, and a diff or log open from the details stays open
-  when the terminal becomes too narrow for the side panel (the details came over it).
-- In a narrow terminal (details as a dialog), `Esc` in a CI log or an OpenShift resource goes back to the details,
-  like it does from a diff. It closed the details too and left the keys going to them, so Enter reopened the log.
-  The details also come back as they were (open runs, attempts, cursor), not rebuilt with the first failure open.
-- OpenShift: when the cluster lists but does not allow watching, the **Watch denied** notice no longer disappears
-  as soon as the next build list arrives. The data can go stale while the watches are stopped, so the notice stays
-  until a Reload.
-- Log views `issues only` and `errors only` keep test failures: a line ending in `FAILED`, an error or exception
-  with its message (`AssertionFailedError: expected …`), Bun's `(fail)`, Jest's `✕`, Vitest's `×` and `FAIL src/…`.
-  `0 failed` is not an error.
-- A GitHub run no longer shows its first job's time as the run's time (`CI #812` read `2m 17s` while `test` took
-  `5m 17s`), and a skipped step no longer shows `0s`. Times are in the job log now, each job's and step's own.
-- OpenShift `(cached)` marks only a Build the cluster no longer lists. A Build it still lists is fresh, also once
-  it is saved.
-- A Deployment scaled to 0 no longer marks its commit as running in a namespace. Details list it with
-  `0 replicas`.
-- OpenShift Live counts show for every running commit at once. When the live list came before the Build list,
-  a commit only got them once selected.
-- A long OpenShift resource name no longer pushes its status mark out of a narrow detail panel.
-- Log search with wrap off: a hit past the right edge moves the lines sideways (they start with `…`) so it shows.
-- A followed OpenShift log that drops its oldest lines keeps the selected search hit (`2/2` stays `2/2`).
-- A narrow footer leaves out whole key hints, least needed first, instead of cutting the last one mid-word. Log
-  and resource dialogs too: at 90 columns `o open` was cut off behind a dangling `·`.
-- Graph subjects that do not fit end in `…` (opentui cut them in the middle with `...`), counted in terminal
-  columns so wide characters (CJK, emoji) no longer shift columns; ref badges too. Run tree, OpenShift group and
-  stash rows end in `…` the same way.
-- A selected Snyk package row (Vulnerabilities grouped by dependency) shows its full coordinate and scrolls.
-- The footer's `tab` hint says `Actions` for the GitHub view, like its detail tab.
+- CI logs: the first line of a GitHub job log no longer shows its timestamp
+  (GitHub's logs start with a byte order mark), and `issues only` and
+  `errors only` no longer list passing tests whose names say failed
+  (`(pass) checkout > keeps a failed payment`, `✓ …`, `… PASSED`), nor drop
+  failed ones whose names say warning.
+- GitHub Actions: a re-run no longer shows the jobs of its earlier attempt. Jobs
+  were kept by run, and a re-run keeps its run's id.
+- GitHub Actions: a fetch that fails in the background (a rate limit, offline)
+  shows its error like Jenkins does. The runs looked as if they were still
+  loading until a Reload.
+- A terminal made smaller keeps the selected commit on screen, and a diff or log
+  open from the details stays open when the terminal becomes too narrow for the
+  side panel (the details came over it).
+- In a narrow terminal (details as a dialog), `Esc` in a CI log or an OpenShift
+  resource goes back to the details, like it does from a diff. It closed the
+  details too and left the keys going to them, so Enter reopened the log. The
+  details also come back as they were (open runs, attempts, cursor), not rebuilt
+  with the first failure open.
+- OpenShift: when the cluster lists but does not allow watching, the **Watch
+  denied** notice no longer disappears as soon as the next build list arrives.
+  The data can go stale while the watches are stopped, so the notice stays until
+  a Reload.
+- Log views `issues only` and `errors only` keep test failures: a line ending in
+  `FAILED`, an error or exception with its message
+  (`AssertionFailedError: expected …`), Bun's `(fail)`, Jest's `✕`, Vitest's `×`
+  and `FAIL src/…`. `0 failed` is not an error.
+- A GitHub run no longer shows its first job's time as the run's time (`CI #812`
+  read `2m 17s` while `test` took `5m 17s`), and a skipped step no longer shows
+  `0s`. Times are in the job log now, each job's and step's own.
+- OpenShift `(cached)` marks only a Build the cluster no longer lists. A Build
+  it still lists is fresh, also once it is saved.
+- A Deployment scaled to 0 no longer marks its commit as running in a namespace.
+  Details list it with `0 replicas`.
+- OpenShift Live counts show for every running commit at once. When the live
+  list came before the Build list, a commit only got them once selected.
+- A long OpenShift resource name no longer pushes its status mark out of a
+  narrow detail panel.
+- Log search with wrap off: a hit past the right edge moves the lines sideways
+  (they start with `…`) so it shows.
+- A followed OpenShift log that drops its oldest lines keeps the selected search
+  hit (`2/2` stays `2/2`).
+- A narrow footer leaves out whole key hints, least needed first, instead of
+  cutting the last one mid-word. Log and resource dialogs too: at 90 columns
+  `o open` was cut off behind a dangling `·`.
+- Graph subjects that do not fit end in `…` (opentui cut them in the middle with
+  `...`), counted in terminal columns so wide characters (CJK, emoji) no longer
+  shift columns; ref badges too. Run tree, OpenShift group and stash rows end in
+  `…` the same way.
+- A selected Snyk package row (Vulnerabilities grouped by dependency) shows its
+  full coordinate and scrolls.
+- The footer's `tab` hint says `Actions` for the GitHub view, like its detail
+  tab.
 
 ## [0.16.0] - 2026-11-09
 
 ### Added
 
-- Search CI job logs and OpenShift resource logs and JSON with `/`; `n` / `N` move
-  between hits, Esc clears the search before a second Esc closes the dialog. While
-  typing, the search bar is highlighted from `/` to its hit count, and the current
-  hit's line number is shown in the hit color across the number column.
+- Search CI job logs and OpenShift resource logs and JSON with `/`; `n` / `N`
+  move between hits, Esc clears the search before a second Esc closes the
+  dialog. While typing, the search bar is highlighted from `/` to its hit count,
+  and the current hit's line number is shown in the hit color across the number
+  column.
 - `r` reloads a CI job log (newer output of a running job, or a retry after a
-  failure; a finished job's log comes from the cache). In the OpenShift dialog `r`
-  refreshes what is shown: the log, or the object in JSON view.
-- Failure first: entering a commit's Actions or Jenkins tab opens its first failed
-  run and puts the cursor on its first failed job.
-- The footer names every provider's work, including auto refresh: `GitHub Actions
-  fetching`, `Jenkins fetching`, `OpenShift fetching`, `Snyk scanning`.
-- Graph chips show cancelled, skipped, and unknown CI runs as a grey chip; a partial
-  Snyk scan adds a warning `?` after its scan time, and a commit being scanned says
-  `scanning...`.
-- Compact details show why a provider cannot work, since the banner is behind the
-  dialog.
+  failure; a finished job's log comes from the cache). In the OpenShift dialog
+  `r` refreshes what is shown: the log, or the object in JSON view.
+- Failure first: entering a commit's Actions or Jenkins tab opens its first
+  failed run and puts the cursor on its first failed job.
+- The footer names every provider's work, including auto refresh:
+  `GitHub Actions fetching`, `Jenkins fetching`, `OpenShift fetching`,
+  `Snyk scanning`.
+- Graph chips show cancelled, skipped, and unknown CI runs as a grey chip; a
+  partial Snyk scan adds a warning `?` after its scan time, and a commit being
+  scanned says `scanning...`.
+- Compact details show why a provider cannot work, since the banner is behind
+  the dialog.
 - A notice at the end of the graph when an older page of history fails to load.
 - Snyk's menu shows **Last scan**.
 
@@ -266,64 +413,72 @@ All notable changes to this project will be documented in this file.
 - One busy vocabulary: `fetching` (network), `reading` (local Git), `scanning`
   (Snyk). Standalone busy text ends in `...`; truncation uses `…`.
 - Providers share their detail rows: OpenShift says **Load commit** / **Reload
-  commit** like the CI tabs; an unavailable provider's action row (Reload or Scan) is
-  muted and skipped by the cursor, also after its banner is closed.
+  commit** like the CI tabs; an unavailable provider's action row (Reload or
+  Scan) is muted and skipped by the cursor, also after its banner is closed.
 - After an expired token (401), automatic requests stop for every provider until
-  **Reload commit**, `:reload`, or `f` retries; auth banners end in *Reload to retry*.
-- CI and OpenShift log dialogs share loading, empty, and error states (with the real
-  reason), scrolling keys, and footer words (`search · view · wrap · refresh`). The
-  line number column is as wide as the largest number on screen, so it starts at the
-  text inset instead of leaving room for the last line of a long log.
+  **Reload commit**, `:reload`, or `f` retries; auth banners end in *Reload to
+  retry*.
+- CI and OpenShift log dialogs share loading, empty, and error states (with the
+  real reason), scrolling keys, and footer words
+  (`search · view · wrap · refresh`). The line number column is as wide as the
+  largest number on screen, so it starts at the text inset instead of leaving
+  room for the last line of a long log.
 - Provider graph columns widen to fit their counts without squeezing out the
-  subject, dim with search, path, and ancestry, and bold the selected row. In tight
-  rows ref badges shorten and collapse into `+N` (the checked-out branch keeps its
-  badge), and counts go compact before the ones that do not fit give way to `…`.
-- Every provider's **Token** row asks for a variable name, rejects invalid names, and
-  falls back to its default. Duplicate namespaces and job URLs are rejected while
-  typing. Jenkins job rows read **Job #1**.
-- Help merges the CI and OpenShift log sections, lists the missing keys, and uses the
-  menu's names; `shift ↑/↓` jumps 10 rows everywhere and the theme list takes `j/k`.
-  `f` and `:fetch` read "Fetch Git and the open provider", which is what they do.
-- Theme Details mark a changed color with `old → new` and normal text instead of an
-  asterisk, and only colors that differ from the base (one changed graph color no
-  longer marks them all). In a very small terminal they are cut off instead of
-  drawing over the footer.
+  subject, dim with search, path, and ancestry, and bold the selected row. In
+  tight rows ref badges shorten and collapse into `+N` (the checked-out branch
+  keeps its badge), and counts go compact before the ones that do not fit give
+  way to `…`.
+- Every provider's **Token** row asks for a variable name, rejects invalid
+  names, and falls back to its default. Duplicate namespaces and job URLs are
+  rejected while typing. Jenkins job rows read **Job #1**.
+- Help merges the CI and OpenShift log sections, lists the missing keys, and
+  uses the menu's names; `shift ↑/↓` jumps 10 rows everywhere and the theme list
+  takes `j/k`. `f` and `:fetch` read "Fetch Git and the open provider", which is
+  what they do.
+- Theme Details mark a changed color with `old → new` and normal text instead of
+  an asterisk, and only colors that differ from the base (one changed graph
+  color no longer marks them all). In a very small terminal they are cut off
+  instead of drawing over the footer.
 - Dialogs leave one empty row around the footer hints, like the title (was two).
-- Long selected names scroll in Files, CI, and OpenShift rows; a commit body taller
-  than the panel scrolls with `↑/↓` before the cursor moves past it.
+- Long selected names scroll in Files, CI, and OpenShift rows; a commit body
+  taller than the panel scrolls with `↑/↓` before the cursor moves past it.
 - The cache card uses the 1+4 inset, keeps the repository switcher's height (16
-  rows, the rest scrolls), and tells same-named repositories apart. Every reset and
-  eviction asks first in a message box above it (errors show there too), a reset
-  keeps the list where it was scrolled, and `a` resets all timers (was `shift+r`).
+  rows, the rest scrolls), and tells same-named repositories apart. Every reset
+  and eviction asks first in a message box above it (errors show there too), a
+  reset keeps the list where it was scrolled, and `a` resets all timers (was
+  `shift+r`).
 
 ### Fixed
 
-- GitHub Actions, Jenkins, and OpenShift showed cached commits only within the fetch
-  size, so with a larger cache limit older cached commits stayed empty (OpenShift
-  showed builds the cluster had removed nowhere). They now show every cached commit
-  from disk, without extra requests. Showing a cached commit or Snyk scan no longer
-  counts as a use, so eviction still removes the least recently used first.
+- GitHub Actions, Jenkins, and OpenShift showed cached commits only within the
+  fetch size, so with a larger cache limit older cached commits stayed empty
+  (OpenShift showed builds the cluster had removed nowhere). They now show every
+  cached commit from disk, without extra requests. Showing a cached commit or
+  Snyk scan no longer counts as a use, so eviction still removes the least
+  recently used first.
 - Typing `q` in a menu field quit Codepulse; `f` on Fetch remote did nothing.
-- Closing compact details with the mouse left keyboard focus on the hidden panel.
-- Jenkins Reload and Fetch missed new builds on finished commits, per-commit reloads
-  hid their errors, and aborted builds showed as unknown.
+- Closing compact details with the mouse left keyboard focus on the hidden
+  panel.
+- Jenkins Reload and Fetch missed new builds on finished commits, per-commit
+  reloads hid their errors, and aborted builds showed as unknown.
 - OpenShift: a failed live list emptied the workloads, live updates re-expanded
-  namespaces and moved the cursor, a recovered list kept its old warning, and empty
-  namespaces left invisible cursor stops.
-- Reload and auto refresh left expanded jobs and steps of running runs stale, and a
-  job or step still running when its run finished stayed running from the cache.
-- Wrapped CI logs could not scroll to the bottom; CI log failures showed as empty
-  logs.
+  namespaces and moved the cursor, a recovered list kept its old warning, and
+  empty namespaces left invisible cursor stops.
+- Reload and auto refresh left expanded jobs and steps of running runs stale,
+  and a job or step still running when its run finished stayed running from the
+  cache.
+- Wrapped CI logs could not scroll to the bottom; CI log failures showed as
+  empty logs.
 - View-entry provider refreshes were cancelled by their own results, which hid a
-  failed GitHub refresh. A request made while a fetch ran lost what it asked for (its
-  commits, status, retry) and counted as done before it had run, and leaving a view
-  during its first fetch left it loading.
-- The uncommitted node in provider views showed file counts but no files; Info lost
-  the commit body in provider views.
-- A failed history page retried in a loop, and a page still loading during a branch
-  switch merged the old branch's commits into the new graph.
-- Future dates showed as "just now"; the Branches menu said "all branches" when it
-  was not; the commit count included the working-tree node.
+  failed GitHub refresh. A request made while a fetch ran lost what it asked for
+  (its commits, status, retry) and counted as done before it had run, and
+  leaving a view during its first fetch left it loading.
+- The uncommitted node in provider views showed file counts but no files; Info
+  lost the commit body in provider views.
+- A failed history page retried in a loop, and a page still loading during a
+  branch switch merged the old branch's commits into the new graph.
+- Future dates showed as "just now"; the Branches menu said "all branches" when
+  it was not; the commit count included the working-tree node.
 - A custom theme `accent` had no effect in the Git view.
 
 ## [0.15.0] - 2026-11-07
@@ -332,31 +487,32 @@ All notable changes to this project will be documented in this file.
 
 - Mark Snyk dependencies that an override forces with a muted `override` keyword
   in Dependencies: pnpm's from `pnpm-lock.yaml`, npm `overrides`, Yarn
-  `resolutions`, and both for Bun, from `package.json`. The dependency filter also
-  matches the keyword, so `override` lists them with their paths.
-- Flag overrides that could go with a muted `removable` keyword: every parent's own
-  range (from `pnpm view` or `npm view`, cached per repository) would already resolve
-  to a version the override allows.
-- Mark Maven dependencies that `<dependencyManagement>` pins with a muted `managed`
-  keyword, following in-repo parent POMs, imported in-repo BOMs and `${property}`
-  versions. Only packages pulled in through another dependency are marked.
+  `resolutions`, and both for Bun, from `package.json`. The dependency filter
+  also matches the keyword, so `override` lists them with their paths.
+- Flag overrides that could go with a muted `removable` keyword: every parent's
+  own range (from `pnpm view` or `npm view`, cached per repository) would
+  already resolve to a version the override allows.
+- Mark Maven dependencies that `<dependencyManagement>` pins with a muted
+  `managed` keyword, following in-repo parent POMs, imported in-repo BOMs and
+  `${property}` versions. Only packages pulled in through another dependency are
+  marked.
 - The dependency filter word `pinned` lists `override` and `managed` packages
   together.
-- The footer shows **Snyk scanning** (instead of `loading`) while Snyk scans run, in
-  every view; scans keep running in other views, and one that fails there shows its
-  error in the banner.
+- The footer shows **Snyk scanning** (instead of `loading`) while Snyk scans
+  run, in every view; scans keep running in other views, and one that fails
+  there shows its error in the banner.
 
 ### Changed
 
 - Status banners show a bold headline, their source, and muted detail lines
   (`Partial scan · Snyk`, then `Kept last complete snapshot.`).
-- Cache screen confirmations, errors and results use the same layout inside their
-  card: a bold headline in the message colour with muted detail below.
+- Cache screen confirmations, errors and results use the same layout inside
+  their card: a bold headline in the message colour with muted detail below.
 - Results that work but are incomplete show as a notice pinned under the detail
-  tabs instead of the banner over the graph, which now only reports problems that
-  stop a provider. Snyk projects without a dependency graph list each path with its
-  reason under **Dependencies**; partial scans name their failed projects under
-  **Vulnerabilities**. Close a notice with its `✕` or `:clear`.
+  tabs instead of the banner over the graph, which now only reports problems
+  that stop a provider. Snyk projects without a dependency graph list each path
+  with its reason under **Dependencies**; partial scans name their failed
+  projects under **Vulnerabilities**. Close a notice with its `✕` or `:clear`.
 - Failed Snyk projects show the reason Snyk printed (for example an out-of-sync
   lockfile or an unresolvable parent POM) instead of a generic "no dependency
   graph". A missing `node_modules` folder explains that the project needs a
@@ -365,10 +521,10 @@ All notable changes to this project will be documented in this file.
   and Snyk's failure reasons.
 - When Snyk could not resolve any project, the banner names each manifest with
   Snyk's reason instead of a generic "Snyk scan failed."
-- The footer names Git's work instead of `loading`: **Git fetching** (`f`, from the
-  remote) and **Git reading log** (local: start, reload, repository switch, branch
-  views, more history while scrolling). Reading a commit's details only shows the
-  spinner.
+- The footer names Git's work instead of `loading`: **Git fetching** (`f`, from
+  the remote) and **Git reading log** (local: start, reload, repository switch,
+  branch views, more history while scrolling). Reading a commit's details only
+  shows the spinner.
 
 ### Fixed
 
@@ -382,31 +538,36 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Capture normalized Snyk dependency graphs for Bun, npm, pnpm, Yarn (1–4), and
-  Maven projects alongside findings, with per-project failures and safe Bun-to-Yarn conversion
-  in temporary worktrees. Every tracked `pom.xml` is its own project; Maven `test`
-  dependencies are dev, `compile`/`provided`/`runtime`/`system` are prod. Maven projects
-  need Java plus `mvn` on PATH or a committed Maven Wrapper (`mvnw`).
+  Maven projects alongside findings, with per-project failures and safe
+  Bun-to-Yarn conversion in temporary worktrees. Every tracked `pom.xml` is its
+  own project; Maven `test` dependencies are dev,
+  `compile`/`provided`/`runtime`/`system` are prod. Maven projects need Java
+  plus `mvn` on PATH or a committed Maven Wrapper (`mvnw`).
 - Add the Snyk **Dependencies** browser for scanned supported projects, with
   bold project headers showing package counts, expandable dependency groups,
-  short Maven names (full name on the selected row), copyable leaves, muted dev labels,
-  muted `repeated`/`circular` markers, a **Scope** `[all]`/`[prod]`/`[dev]` switch,
-  and persistent failed/skipped-project reasons.
-- Add live filters to both Snyk detail trees (`name@version` matches that package
-  exactly, anything else is a substring), including collapsed/repeated dependency paths; large dependency results open one level with per-row match
+  short Maven names (full name on the selected row), copyable leaves, muted dev
+  labels, muted `repeated`/`circular` markers, a **Scope**
+  `[all]`/`[prod]`/`[dev]` switch, and persistent failed/skipped-project
+  reasons.
+- Add live filters to both Snyk detail trees (`name@version` matches that
+  package exactly, anything else is a substring), including collapsed/repeated
+  dependency paths; large dependency results open one level with per-row match
   counts, and opening past 1,000 rows closes other branches. Add **Group by**
-  `[tree]`/`[package]` and **Copy dependencies as JSON** (with each package's own
-  worst severity and CVE IDs) to Dependencies. Both Snyk tabs keep their view while
-  switching tabs for the same scan.
+  `[tree]`/`[package]` and **Copy dependencies as JSON** (with each package's
+  own worst severity and CVE IDs) to Dependencies. Both Snyk tabs keep their
+  view while switching tabs for the same scan.
 - Mark vulnerable packages in Dependencies with a `▲` in their worst severity
   colour (pinned legend); **v** opens Vulnerabilities filtered to that package.
-- Highlight filter hits in both Snyk tabs in the Snyk colour; mute filter counts.
-- Show a CVSS score, mature-exploit marker, and fix dot (upgrade, override, no fix)
-  on every vulnerability, with a pinned legend; expand to title, package, `via`
-  dependency, manifest, exploit maturity, and fix line, each copyable.
-- Add **Group by** `[severity]` / `[dependency]` to Vulnerabilities: the dependency
-  view groups findings under the direct dependency and package to change.
-- Add **Copy scan as JSON** for handing parsed findings to agent tools; it respects
-  the active filter.
+- Highlight filter hits in both Snyk tabs in the Snyk colour; mute filter
+  counts.
+- Show a CVSS score, mature-exploit marker, and fix dot (upgrade, override, no
+  fix) on every vulnerability, with a pinned legend; expand to title, package,
+  `via` dependency, manifest, exploit maturity, and fix line, each copyable.
+- Add **Group by** `[severity]` / `[dependency]` to Vulnerabilities: the
+  dependency view groups findings under the direct dependency and package to
+  change.
+- Add **Copy scan as JSON** for handing parsed findings to agent tools; it
+  respects the active filter.
 - Status banners have a clickable `✕` to dismiss them.
 
 ### Changed
@@ -417,30 +578,30 @@ All notable changes to this project will be documented in this file.
   graphs (Snyk marks shared runtime packages as dev), and let rows inherit their
   direct dependency's scope. Rescan to correct older snapshots.
 - Include development dependencies in Snyk scans and discard older snapshots
-  without dependency coverage metadata. Retain findings when graph capture fails;
-  missing or incomplete dependency graphs show as a yellow warning banner (one
-  summary for all affected projects), and scan failures stay red.
+  without dependency coverage metadata. Retain findings when graph capture
+  fails; missing or incomplete dependency graphs show as a yellow warning banner
+  (one summary for all affected projects), and scan failures stay red.
 - List one vulnerability per CVE, manifest, and package (graph chips count the
   same unit), and pick the lowest fixed version above the installed one.
-- Hide Snyk license-policy issues. Previously scanned commits need a rescan after
-  updating.
-- Count projects Snyk could not resolve as failed, even when its JSON findings omit
-  them (Snyk only reports them on stderr): such scans are now partial and name the
-  failed manifests.
-- **Rescan commit** stores a partial result over a complete snapshot, so its failed
-  projects stay visible instead of a "Kept last complete snapshot" error.
-- **Show all branches** lists local and remote branches, tags, and HEAD instead of every
-  ref, so commits behind tool-private refs (T3 checkpoints, `git maintenance` prefetches)
-  no longer appear in the graph.
+- Hide Snyk license-policy issues. Previously scanned commits need a rescan
+  after updating.
+- Count projects Snyk could not resolve as failed, even when its JSON findings
+  omit them (Snyk only reports them on stderr): such scans are now partial and
+  name the failed manifests.
+- **Rescan commit** stores a partial result over a complete snapshot, so its
+  failed projects stay visible instead of a "Kept last complete snapshot" error.
+- **Show all branches** lists local and remote branches, tags, and HEAD instead
+  of every ref, so commits behind tool-private refs (T3 checkpoints,
+  `git maintenance` prefetches) no longer appear in the graph.
 
 ### Fixed
 
-- Ignore Snyk upgrade paths that keep every installed version (seen with pnpm), which
-  showed as "Upgrade X 1.0 → 1.0"; these findings now show their override or no fix.
-  Existing snapshots are corrected without a rescan.
+- Ignore Snyk upgrade paths that keep every installed version (seen with pnpm),
+  which showed as "Upgrade X 1.0 → 1.0"; these findings now show their override
+  or no fix. Existing snapshots are corrected without a rescan.
 - Apply each repository's saved theme when switching repositories; the previous
-  repository's theme stayed and was saved into the new one on the next settings change.
-  An unknown theme falls back to the default, as at startup.
+  repository's theme stayed and was saved into the new one on the next settings
+  change. An unknown theme falls back to the default, as at startup.
 
 ## [0.13.0] - 2026-10-14
 
@@ -464,8 +625,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- Preserve non-ASCII and exact untracked paths, list root-commit files and staged
-  renames, and compare merge-commit file diffs against the first parent.
+- Preserve non-ASCII and exact untracked paths, list root-commit files and
+  staged renames, and compare merge-commit file diffs against the first parent.
 - Load HEAD beyond the first history page and cancel Git work on loader cleanup.
 - Bound file-content, diff, and blame reads at 8 MiB.
 - Strip terminal escape sequences from CI and pod logs.
@@ -483,7 +644,8 @@ All notable changes to this project will be documented in this file.
   session, preserving existing entries and the registry value type. Repeated
   installation does not add duplicate entries. System PATH remains unchanged.
 - Expand Windows installer regressions to cover both available PowerShell
-  runtimes, architecture detection failures, and canonical command-discovery paths.
+  runtimes, architecture detection failures, and canonical command-discovery
+  paths.
 
 ## [0.12.0] - 2026-10-12
 
@@ -523,14 +685,14 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- **Mouse navigation** — select whole graph commit blocks, scroll history without
-  changing selection, and load the next page near the viewport bottom.
+- **Mouse navigation** — select whole graph commit blocks, scroll history
+  without changing selection, and load the next page near the viewport bottom.
 - **Clickable detail views** — tabs, copyable metadata, parent/child jumps,
   files, directories, stashes, and GitHub Actions, Jenkins, OpenShift, and Snyk
   detail actions work in both the sidebar and compact dialog.
-- **Dialog and footer controls** — mouse support for menus, repository switching,
-  theme preview/confirmation, help tabs, diff/blame, job logs, resource views,
-  welcome/error actions, and confirm/cancel/back controls.
+- **Dialog and footer controls** — mouse support for menus, repository
+  switching, theme preview/confirmation, help tabs, diff/blame, job logs,
+  resource views, welcome/error actions, and confirm/cancel/back controls.
 - **Olive Garden theme** — a metallic olive accent and muted, alternating graph
   and provider colors, selectable as `olive-garden`.
 
@@ -593,17 +755,17 @@ All notable changes to this project will be documented in this file.
 - Stop repeated requests after GitHub Actions or Jenkins credentials expire and
   apply bounded backoff after provider errors.
 - Isolate provider state by repository. Switching repositories aborts active
-  provider work and clears badges, status, details, and refresh timestamps before
-  loading the next repository.
+  provider work and clears badges, status, details, and refresh timestamps
+  before loading the next repository.
 
 ### Fixed
 
 - Failed GitHub Actions job and Jenkins stage requests no longer remain stuck
   loading. Details show a muted `Unavailable` row; technical errors remain in
   the Debug dialog, cancellation stays silent, and Reload retries failed runs.
-- Provider views no longer treat Snyk, Jenkins, or OpenShift as working-tree file
-  tabs on the synthetic uncommitted-changes node. The view now explains that
-  provider data is unavailable until changes are committed.
+- Provider views no longer treat Snyk, Jenkins, or OpenShift as working-tree
+  file tabs on the synthetic uncommitted-changes node. The view now explains
+  that provider data is unavailable until changes are committed.
 - OpenShift keeps successfully fetched pages when a later page fails and reports
   partial inventory for repeated continuation tokens or safety limits of 100
   pages and 50,000 items per list.
@@ -622,9 +784,10 @@ All notable changes to this project will be documented in this file.
   `50`, same scale as Jenkins).
 - **OpenShift Auto refresh** — poll Builds and ImageStreamTags while the
   OpenShift view is focused (`off` / `2m` / `5m` / `10m`, default `2m`).
-- **OpenShift live watch** — list then watch Deployments, DeploymentConfigs,
-  and Pods in configured namespaces. `live` only while a watch is connected.
-  403 watch shows `OpenShift watch denied. Resource data might be stale. Reload to refresh.`
+- **OpenShift live watch** — list then watch Deployments, DeploymentConfigs, and
+  Pods in configured namespaces. `live` only while a watch is connected. 403
+  watch shows
+  `OpenShift watch denied. Resource data might be stale. Reload to refresh.`
 - **OpenShift logs** — follow running Build and Pod logs (`?follow=true`, last
   1000 lines). Title shows `log ended` when the stream closes. Terminal Build
   logs persist; `c` cycles log / JSON.
@@ -711,8 +874,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- Remove a duplicate `#!/usr/bin/env bun` in the published `dist/index.js`
-  (Bun already preserves the source shebang; the extra banner was a syntax error).
+- Remove a duplicate `#!/usr/bin/env bun` in the published `dist/index.js` (Bun
+  already preserves the source shebang; the extra banner was a syntax error).
 
 ## [0.6.2] - 2026-08-21
 
@@ -772,8 +935,8 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- **Grouped project switching** — repos can define `group` and `appName` metadata
-  and switch related projects with `shift + ←/→`.
+- **Grouped project switching** — repos can define `group` and `appName`
+  metadata and switch related projects with `shift + ←/→`.
 - **Warm repo session cache** — in-process project switches preserve graph data,
   cursor, scroll position, branch state, provider view, and graph badges when
   returning to a repo.
@@ -782,20 +945,20 @@ All notable changes to this project will be documented in this file.
   names with right-aligned path details.
 - **Debug dialog** — `:debug` shows recent git commands, provider HTTP requests,
   statuses, durations, and redacted errors.
-- **Repo label editing** — Repository menu exposes editable `Group` and `App name`
-  fields with config-load hardening for oversized values.
+- **Repo label editing** — Repository menu exposes editable `Group` and
+  `App name` fields with config-load hardening for oversized values.
 
 ### Changed
 
-- Command row now shows provider, mode, compact project badges, and right-aligned
-  branch badges instead of noisy repo path/version text.
+- Command row now shows provider, mode, compact project badges, and
+  right-aligned branch badges instead of noisy repo path/version text.
 - Help dialog title now includes the app version.
-- `shift + ←/→` no longer cycles modes; mode entry is explicit via `:`, `/`, `a`,
-  and `p`.
+- `shift + ←/→` no longer cycles modes; mode entry is explicit via `:`, `/`,
+  `a`, and `p`.
 - Project switching no longer wraps at group ends, matching visible carousel
   affordances.
-- Providers menu shows `Last refresh` as a muted info row rather than overloading
-  section headers.
+- Providers menu shows `Last refresh` as a muted info row rather than
+  overloading section headers.
 - OpenCode Original theme colors were refreshed for stronger badge/readability
   contrast.
 
@@ -822,8 +985,8 @@ All notable changes to this project will be documented in this file.
 
 - **Jenkins provider** — configure Jenkins jobs from the Providers menu and
   switch to Jenkins from the graph view with `tab`.
-- **Jenkins graph badges** — recent Jenkins builds are matched to visible commits
-  by exact Git SHA from `changeSets`, with guarded fallback handling for
+- **Jenkins graph badges** — recent Jenkins builds are matched to visible
+  commits by exact Git SHA from `changeSets`, with guarded fallback handling for
   multi-SCM builds.
 - **Jenkins detail tab** — selected commits show matching Jenkins workflow runs
   in the shared provider detail tree.
@@ -831,8 +994,8 @@ All notable changes to this project will be documented in this file.
   stages from `wfapi/describe` only when needed.
 - **Jenkins build logs** — pressing Enter on the build row opens the shared job
   log dialog using Jenkins `consoleText` output.
-- **Provider run opener** — `o` in the log dialog opens the GitHub Actions run or
-  Jenkins build URL in the system browser.
+- **Provider run opener** — `o` in the log dialog opens the GitHub Actions run
+  or Jenkins build URL in the system browser.
 - **Raw log view** — the log dialog now cycles `all → issues → errors → raw`,
   allowing unclassified output when tests intentionally print error text.
 - **Per-provider freshness display** — Providers menu headers show the last
@@ -845,7 +1008,8 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - GitHub Actions and Jenkins detail tabs now share a single provider run tree
-  component for consistent navigation, status icons, durations, and placeholders.
+  component for consistent navigation, status icons, durations, and
+  placeholders.
 - GitHub Actions and Jenkins logs now share one log dialog with provider-neutral
   run/job navigation and parsing.
 - Log readability improved: normal log lines use foreground text, Jenkins
@@ -867,8 +1031,8 @@ All notable changes to this project will be documented in this file.
 - Jenkins tab availability now stays visible in Jenkins provider mode, including
   loading and empty states.
 - Detail cursor clamping no longer blocks Jenkins tab navigation.
-- Jenkins shallow graph preload includes `changeSets` / `changeSet` data for more
-  reliable SHA matching.
+- Jenkins shallow graph preload includes `changeSets` / `changeSet` data for
+  more reliable SHA matching.
 - Ambiguous multi-SCM Jenkins builds no longer attach the same run to multiple
   commits.
 - Jenkins `wfapi` timing now drives build/stage durations, avoiding mismatched
@@ -909,14 +1073,15 @@ All notable changes to this project will be documented in this file.
 - Remote CI fetch stays manual by default; local repo refresh remains separate
 - GitHub host trust is per-repo and remembers only current enterprise host
 - Startup repo switching now reuses canonical git root paths
-- Dialog layout and error surfaces unified across repo selector, dialogs, and startup
+- Dialog layout and error surfaces unified across repo selector, dialogs, and
+  startup
 - CLI help and branch-push CI now include explicit TypeScript checks
 
 ### Removed
 
 - Startup CLI flags beyond positional repo path, `--help`, and `--version`
-- `gh auth` token fallback for GitHub authentication; provider now uses configured
-  environment variable
+- `gh auth` token fallback for GitHub authentication; provider now uses
+  configured environment variable
 - Automatic remote fetch on startup; remote fetching is manual by default
 - Explicit "Save to config" action; settings now persist automatically
 
@@ -939,7 +1104,8 @@ All notable changes to this project will be documented in this file.
 
 - Provider status moved to typed helpers with shared API result shapes and SHA
   selection helpers
-- Repo selector and dialog UIs now reuse shared message-box and indexed scroll helpers
+- Repo selector and dialog UIs now reuse shared message-box and indexed scroll
+  helpers
 
 ## [0.2.0] - 2026-04-15
 
@@ -976,8 +1142,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- Shell injection in `project-selector.tsx` — replaced `execSync` shell substring
-  with `spawnSync` array args
+- Shell injection in `project-selector.tsx` — replaced `execSync` shell
+  substring with `spawnSync` array args
 - Renderer freeze when toggling command bar input mount/unmount
 - Dialog rendering bugs — command bar execute order and TDZ in diff dialog
 - Ancestry highlighting edge cases — junction replacement, fan-out vertical,
@@ -989,13 +1155,15 @@ All notable changes to this project will be documented in this file.
 - Extracted pure utilities with new tests: `keyboard-nav-utils.ts`,
   `command-bar-utils.ts`, `data-loader-utils.ts`
 - Extracted `useDetailCursor` hook from `detail.tsx`
-- Extracted `useAncestry`, `usePathFilter` hooks and `DetailDialog` from `app.tsx`
+- Extracted `useAncestry`, `usePathFilter` hooks and `DetailDialog` from
+  `app.tsx`
 - Extracted per-mode keyboard handlers from `useKeyboardNavigation`:
   `handle-command-bar-keys.ts`, `handle-detail-keys.ts`, `handle-graph-keys.ts`,
   `handle-cascade-close.ts`
 - Extracted `DiffLineRow` component and `diff-utils` pure helpers with new tests
 - Extracted `CommandBar`, `FileListView`, `LogoBanner` components
-- Extracted ancestry highlight logic into testable pure functions (`graph-highlight.ts`)
+- Extracted ancestry highlight logic into testable pure functions
+  (`graph-highlight.ts`)
 
 ## [0.1.0] - 2026-04-07
 
@@ -1013,7 +1181,8 @@ All notable changes to this project will be documented in this file.
   logo, wrapped messages, and resolution hints
 - **Upstream ahead/behind** — `↑N ↓M` shown inline in the branch section
   and menu dialog
-- **Banner scroll** — long graph commit descriptions scroll horizontally when highlighted
+- **Banner scroll** — long graph commit descriptions scroll horizontally when
+  highlighted
 - **Live debounced search** — results update as you type with cursor position
   preserved on filter clear
 
@@ -1061,7 +1230,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- Global installs now preload the Solid OpenTUI runtime plugin correctly at startup
+- Global installs now preload the Solid OpenTUI runtime plugin correctly at
+  startup
 
 ### Changed
 
@@ -1094,7 +1264,8 @@ All notable changes to this project will be documented in this file.
 - **File tree** — modified files shown as a collapsible tree with directory
   grouping and path compaction
 - **Stash entries** in the git graph with expandable file trees
-- **Uncommitted changes node** at the top of the graph showing staged and unstaged changes
+- **Uncommitted changes node** at the top of the graph showing staged and
+  unstaged changes
 - **Branch perspective** — pressing Enter on a branch ref filters the graph to
   that branch's history
 - **Fetch UI** — `f` triggers `git fetch`; last-fetch timestamp shown in the
@@ -1121,10 +1292,12 @@ All notable changes to this project will be documented in this file.
 - Simplified keybindings — removed Vim aliases, `tab`, and `ctrl` combos; `m`
   opens menu, `q` cascades close/back/quit
 - Detail panel now defaults to Files tab; auto-switches away from empty tabs
-- Diff hunk separators unified to single-row horizontal rules with `·` separators
+- Diff hunk separators unified to single-row horizontal rules with `·`
+  separators
 - Gutter columns sized to actual max line number width (not a fixed minimum)
 - Author names normalized to NFC before truncation to avoid display artifacts
-- `git log` field separator changed from `|` to ASCII RS (`\x1e`) to avoid conflicts
+- `git log` field separator changed from `|` to ASCII RS (`\x1e`) to avoid
+  conflicts
 
 ### Fixed
 

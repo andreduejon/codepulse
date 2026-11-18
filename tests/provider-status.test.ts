@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { catppuccinMocha } from "../src/context/theme-definitions";
-import { statusColor } from "../src/providers/shared/status";
+import { catppuccinMocha } from "../src/tui/context/theme-definitions";
+import { statusColor } from "../src/tui/providers/shared/status";
 
 describe("statusColor", () => {
   test("uses semantic tokens, not accent, for run status", () => {

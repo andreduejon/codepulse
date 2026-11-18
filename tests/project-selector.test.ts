@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildProjectSelectorRows } from "../src/utils/project-selector-rows";
+import { buildProjectSelectorRows } from "../src/tui/utils/project-selector-rows";
 
 describe("buildProjectSelectorRows", () => {
   test("groups and sorts repos by group and appName", () => {

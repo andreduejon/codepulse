@@ -71,11 +71,12 @@ Steps are separated by spaces or new lines. Quote text with spaces: `wait:"full 
 | `click:TEXT` / `click:TEXT#2` / `click:X,Y` | Clicks the middle of the first (or second, up to the 1000th) place the text shows, or a cell (from `0,0`). A `#` inside quotes is part of the text: `click:"CI #812"`. |
 | `hover:TEXT` | Moves the mouse over the text. |
 | `scroll:down*5@TEXT` | Scrolls the wheel over the text, or over the middle of the screen without `@`. |
-| `sleep:MS` | Waits a fixed time, for things on a timer (up to 600000). |
+| `sleep:MS` | Waits a fixed time, for things on a timer (up to 600000), and moves the clock on by that time. |
 
 The same play prints the same screens every run: the commits and the app's clock start at a fixed moment
-(2 March 2026, 09:30 UTC), dates are shown in UTC, and long text in the selected row stays still instead of
-scrolling sideways. So comparing before and after a change shows only what the change did:
+(2 March 2026, 09:30 UTC), and the clock stands still however long the run takes, so a slow machine shows the
+same ages. Only `sleep:` moves it, by exactly its time. Dates are shown in UTC, and long text in the selected row
+stays still instead of scrolling sideways. So comparing before and after a change shows only what the change did:
 
 ```sh
 bun run demo --play "$(cat play.txt)" > before.txt
@@ -83,6 +84,15 @@ bun run demo --play "$(cat play.txt)" > before.txt
 bun run demo --play "$(cat play.txt)" > after.txt
 diff before.txt after.txt
 ```
+
+### Golden plays
+
+`bun run demo:golden` plays a fixed set of plays (`scripts/demo/golden.ts`) covering the graph, the details, the
+provider tabs, logs, the Dashboard, dialogs, highlights, errors, switching repositories and colors, and compares
+their screens with the ones kept in `scripts/demo/golden/`. A changed screen shows line by line, `-` as kept and `+`
+as printed now, and the run exits with 1. A refactoring should leave every screen as it was. After a change to the
+UI, `bun run demo:golden --update` writes the new screens, and their diff in the commit shows what changed.
+`bun run demo:golden dashboard` plays only those whose name contains `dashboard`.
 
 ## The world
 
@@ -181,6 +191,7 @@ Everything lives in `scripts/demo/`:
 | `fake-cli.ts` | The `snyk`, `npm` and `pnpm` on the app's PATH, and the browser and clipboard commands (compiled into one executable on Windows, cached in `node_modules/.cache/codepulse-demo`). |
 | `fake-ssh.ts` | Lets `git fetch` reach the local remotes. |
 | `play.ts`, `player.tsx`, `steps.ts`, `clock.ts` | The headless mode: steps, the test renderer, the fixed clock. |
+| `golden.ts`, `golden/` | The golden plays and the screens they keep. |
 
 To show a new state, add it to `scenario.ts` (or `packages.ts`) on a commit that has room for it, and list it in
 the table above.

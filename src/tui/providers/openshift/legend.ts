@@ -1,0 +1,10 @@
+/** OpenShift's marks, explained below its detail tab and beside its events on the Dashboard. */
+import { statusIcon } from "../../utils/status-icon";
+import type { LegendItem } from "../shared/detail-legend";
+import { statusColor } from "../shared/status";
+
+/** The row marks, explained below the tree (the namespace badges in the graph carry none). */
+export const OPENSHIFT_LEGEND: LegendItem[] = (["pass", "running", "fail"] as const).map(category => [
+  [[statusIcon(category), theme => statusColor(theme, category)]],
+  category === "pass" ? "ok" : category === "running" ? "in progress" : "failing",
+]);

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { parseBlameOutput, parseUnifiedDiff } from "../src/adapters/git/repo";
 import {
   buildDisplayLines,
   buildFileDisplayLines,
@@ -14,8 +15,7 @@ import {
   formatHunkHeader,
   gutterWidth,
   padLineNo,
-} from "../src/components/dialogs/diff-utils";
-import { parseBlameOutput, parseUnifiedDiff } from "../src/git/repo";
+} from "../src/tui/components/dialogs/diff-utils";
 
 describe("parseUnifiedDiff", () => {
   test("parses a simple single-hunk diff", () => {

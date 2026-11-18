@@ -1,0 +1,155 @@
+/**
+ * Pure helper functions extracted from use-keyboard-navigation.ts.
+ *
+ * These functions contain the core navigation logic and are framework-agnostic,
+ * making them unit-testable without SolidJS or opentui dependencies.
+ */
+
+import type { AppActions, AppState } from "./app-state";
+import type { GraphRow } from "./git/types";
+
+/**
+ * When any highlighting is active, find the nearest highlighted row in the
+ * given direction from `from`, stepping `count` highlighted entries.
+ *
+ * Returns the index of the target row, or `from` if no match found.
+ *
+ * @param rows     Full list of graph rows.
+ * @param hSet     Set of highlighted commit hashes (null = no highlight active).
+ * @param from     Starting row index (exclusive — search begins at from+direction).
+ * @param direction  1 = forward (down), -1 = backward (up).
+ * @param count    Number of highlighted entries to step over.
+ */
+export function findHighlightedIndex(
+  rows: GraphRow[],
+  hSet: Set<string> | null,
+  from: number,
+  direction: 1 | -1,
+  count: number,
+): number {
+  if (!hSet) return from;
+  let idx = from;
+  let steps = 0;
+  let next = from + direction;
+  while (next >= 0 && next < rows.length) {
+    if (hSet.has(rows[next].commit.hash)) {
+      idx = next;
+      steps++;
+      if (steps >= count) break;
+    }
+    next += direction;
+  }
+  return steps > 0 ? idx : from;
+}
+
+/**
+ * Count how many highlighted rows exist below `from` (exclusive), up to `limit`.
+ *
+ * @param rows   Full list of graph rows.
+ * @param hSet   Set of highlighted commit hashes (null = no highlight active).
+ * @param from   Starting index (exclusive — count starts at from+1).
+ * @param limit  Maximum count to return (short-circuits early).
+ */
+export function countHighlightedBelow(rows: GraphRow[], hSet: Set<string> | null, from: number, limit: number): number {
+  if (!hSet) return 0;
+  let count = 0;
+  for (let i = from + 1; i < rows.length && count < limit; i++) {
+    if (hSet.has(rows[i].commit.hash)) count++;
+  }
+  return count;
+}
+
+/**
+ * When the cursor is on a dimmed (non-highlighted) row, compute the target
+ * index of the nearest highlighted row. Prefers forward direction, falls back
+ * to backward. Returns the current index if already on a highlighted row or
+ * if no highlighted rows exist.
+ *
+ * @param rows     Full list of graph rows.
+ * @param hSet     Set of highlighted commit hashes.
+ * @param curIdx   Current cursor index.
+ */
+export function computeDisplacedIndex(rows: GraphRow[], hSet: Set<string> | null, curIdx: number): number {
+  if (!hSet || hSet.size === 0) return curIdx;
+  if (curIdx < rows.length && hSet.has(rows[curIdx].commit.hash)) return curIdx;
+
+  let fwd = -1;
+  for (let i = curIdx + 1; i < rows.length; i++) {
+    if (hSet.has(rows[i].commit.hash)) {
+      fwd = i;
+      break;
+    }
+  }
+  let bwd = -1;
+  for (let i = curIdx - 1; i >= 0; i--) {
+    if (hSet.has(rows[i].commit.hash)) {
+      bwd = i;
+      break;
+    }
+  }
+
+  if (fwd >= 0 && bwd >= 0) {
+    // Pick the closer one; on equal distance prefer backward (original behavior)
+    return curIdx - bwd <= fwd - curIdx ? bwd : fwd;
+  }
+  return fwd >= 0 ? fwd : bwd >= 0 ? bwd : curIdx;
+}
+
+/** While a highlight is on, the next page loads once fewer highlighted rows than this remain below the cursor. */
+export const ANCESTRY_PRELOAD_ROWS = 5;
+
+export interface GraphNavigationPorts {
+  state: Pick<AppState, "graphRows" | "highlightSet" | "cursorIndex" | "hasMore">;
+  actions: Pick<AppActions, "setCursorIndex" | "setScrollTargetIndex" | "moveCursor">;
+  /** Loads the next page of history. */
+  loadMore: () => void;
+}
+
+/** Moving through the graph, for keys, the mouse or any other front end. */
+export function createGraphNavigation(ports: GraphNavigationPorts) {
+  const { state, actions, loadMore } = ports;
+  const select = (index: number) => {
+    actions.setCursorIndex(index);
+    actions.setScrollTargetIndex(index);
+  };
+  const highlighted = (from: number, direction: 1 | -1, count: number) =>
+    findHighlightedIndex(state.graphRows(), state.highlightSet(), from, direction, count);
+
+  return {
+    /**
+     * Down (1) or up (-1) by `count` rows; while a highlight is on, by `count` highlighted rows. Going down, the next
+     * page loads before the highlighted rows run out, or when none is left in what is loaded.
+     */
+    step(direction: 1 | -1, count: number): void {
+      if (!state.highlightSet()) {
+        actions.moveCursor(direction * count);
+        return;
+      }
+      const cursor = state.cursorIndex();
+      const target = highlighted(cursor, direction, count);
+      if (target !== cursor) {
+        select(target);
+        const few =
+          countHighlightedBelow(state.graphRows(), state.highlightSet(), target, ANCESTRY_PRELOAD_ROWS) <
+          ANCESTRY_PRELOAD_ROWS;
+        if (direction > 0 && state.hasMore() && few) loadMore();
+      } else if (direction > 0 && state.hasMore()) {
+        loadMore();
+      }
+    },
+    /** The first or the last row; while a highlight is on, the first or last highlighted one (the last loads on). */
+    toEnd(end: "first" | "last"): void {
+      const on = !!state.highlightSet();
+      if (end === "first") {
+        select(on ? highlighted(-1, 1, 1) : 0);
+        return;
+      }
+      if (on) {
+        select(highlighted(state.graphRows().length, -1, 1));
+        if (state.hasMore()) loadMore();
+      } else {
+        select(state.graphRows().length - 1);
+      }
+    },
+  };
+}

@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, mock, test } from "bun:test";
-import { clearDebugEvents, getDebugEvents } from "../src/debug/events";
-import { fetchWithRetry, isAbortError, runLimited } from "../src/providers/shared/http";
+import { afterAll, afterEach, describe, expect, mock, test } from "bun:test";
+import { fetchWithRetry, runLimited } from "../src/adapters/http";
+import { isAbortError } from "../src/core/abort";
+import { clearDebugEvents, getDebugEvents } from "../src/core/debug-events";
 
 const originalFetch = globalThis.fetch;
 
@@ -85,4 +86,87 @@ describe("shared HTTP", () => {
     await expect(pending).rejects.toThrow();
     expect(started).toBe(2);
   });
+});
+
+describe("the response body", () => {
+  /** A local server: `/stall` sends its headers and one chunk, then nothing; `/slow` a chunk every 80 ms, six times. */
+  let cancelled = 0;
+  let calls = 0;
+  const server = Bun.serve({
+    port: 0,
+    fetch(request) {
+      const path = new URL(request.url).pathname;
+      if (path === "/stall")
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode("first chunk "));
+            },
+            cancel() {
+              cancelled++;
+            },
+          }),
+        );
+      if (path === "/slow") {
+        let sent = 0;
+        return new Response(
+          new ReadableStream({
+            async pull(controller) {
+              await Bun.sleep(80);
+              controller.enqueue(new TextEncoder().encode(`chunk ${sent} `));
+              if (++sent === 6) controller.close();
+            },
+          }),
+        );
+      }
+      // `/retry`: busy once (its body never ends), then fine.
+      calls++;
+      if (calls === 1)
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode("busy"));
+            },
+            cancel() {
+              cancelled++;
+            },
+          }),
+          { status: 503 },
+        );
+      return new Response("ok");
+    },
+  });
+  const url = (path: string) => `http://127.0.0.1:${server.port}${path}`;
+  const options = { timeoutMs: 250, attempts: 1, retryDelayMs: 1, timeoutMessage: "Request timed out." };
+
+  test("a server that sends its headers and then stalls times out while the body is read", async () => {
+    const res = await fetchWithRetry(url("/stall"), {}, options);
+    const started = performance.now();
+    await expect(res.text()).rejects.toThrow();
+    expect(performance.now() - started).toBeLessThan(2_000);
+  });
+
+  test("cancelling after the headers stops reading the body", async () => {
+    const ctrl = new AbortController();
+    const res = await fetchWithRetry(url("/stall"), { signal: ctrl.signal }, { ...options, timeoutMs: 60_000 });
+    setTimeout(() => ctrl.abort(), 50);
+    const started = performance.now();
+    await expect(res.text()).rejects.toThrow();
+    expect(performance.now() - started).toBeLessThan(2_000);
+  });
+
+  test("a body that keeps coming slowly is read whole: the timeout is for silence, not for the whole download", async () => {
+    const res = await fetchWithRetry(url("/slow"), {}, options);
+    expect(await res.text()).toBe("chunk 0 chunk 1 chunk 2 chunk 3 chunk 4 chunk 5 ");
+  });
+
+  test("a response retried is closed, not left open", async () => {
+    cancelled = 0;
+    const res = await fetchWithRetry(url("/retry"), {}, { ...options, attempts: 2, timeoutMs: 60_000 });
+    expect(await res.text()).toBe("ok");
+    for (let i = 0; i < 50 && cancelled === 0; i++) await Bun.sleep(10);
+    expect(cancelled).toBe(1);
+  });
+
+  afterAll(() => server.stop(true));
 });

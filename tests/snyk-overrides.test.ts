@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { projectOverrideRules } from "../src/adapters/snyk/overrides";
+import { bunSemver } from "../src/adapters/snyk/semver";
 import {
   applyOverrideRules,
   highestSatisfying,
@@ -11,10 +13,9 @@ import {
   parseNpmOverrides,
   parsePnpmLockfileOverrides,
   parseYarnResolutions,
-  projectOverrideRules,
-} from "../src/providers/snyk/overrides";
-import type { PackageRanges, RegistryLookup } from "../src/providers/snyk/registry";
-import type { SnykDependencyGraph } from "../src/providers/snyk/types";
+} from "../src/core/snyk/overrides";
+import type { PackageRanges, RegistryLookup } from "../src/core/snyk/registry-lookup";
+import type { SnykDependencyGraph } from "../src/core/snyk/types";
 
 describe("overrideTarget", () => {
   test("is the last step of a selector, without its version", () => {
@@ -167,12 +168,16 @@ describe("applyOverrideRules", () => {
 
   test("marks packages by name, within the override's range when it has one", () => {
     const g = graph();
-    applyOverrideRules(g, [
-      { name: "lodash", spec: "4.17.21" },
-      { name: "semver", spec: "^7.5.2" },
-      { name: "alias", spec: "npm:other@1.0.0" },
-      { name: "app", spec: "*" },
-    ]);
+    applyOverrideRules(
+      g,
+      [
+        { name: "lodash", spec: "4.17.21" },
+        { name: "semver", spec: "^7.5.2" },
+        { name: "alias", spec: "npm:other@1.0.0" },
+        { name: "app", spec: "*" },
+      ],
+      bunSemver,
+    );
     expect(Object.fromEntries(g.packages.map(pkg => [pkg.id, pkg.pin ?? null]))).toEqual({
       "app@1.0.0": null,
       "lodash@4.17.21": "override",
@@ -187,16 +192,16 @@ describe("highestSatisfying", () => {
   const versions = ["0.1.7", "0.1.10", "0.1.12", "0.2.0", "1.0.0-beta.1", "1.0.0"];
 
   test("picks the highest version in range, like pnpm and npm", () => {
-    expect(highestSatisfying(versions, "~0.1.7")).toBe("0.1.12");
-    expect(highestSatisfying(versions, "0.1.10")).toBe("0.1.10");
-    expect(highestSatisfying(versions, "^0.2.0")).toBe("0.2.0");
-    expect(highestSatisfying(versions, ">=0.2.0")).toBe("1.0.0");
-    expect(highestSatisfying(versions, "^2.0.0")).toBeNull();
+    expect(highestSatisfying(versions, "~0.1.7", bunSemver)).toBe("0.1.12");
+    expect(highestSatisfying(versions, "0.1.10", bunSemver)).toBe("0.1.10");
+    expect(highestSatisfying(versions, "^0.2.0", bunSemver)).toBe("0.2.0");
+    expect(highestSatisfying(versions, ">=0.2.0", bunSemver)).toBe("1.0.0");
+    expect(highestSatisfying(versions, "^2.0.0", bunSemver)).toBeNull();
   });
 
   test("skips prereleases unless the range names one", () => {
-    expect(highestSatisfying(["1.0.0-beta.1"], ">=0.2.0")).toBeNull();
-    expect(highestSatisfying(versions, "1.0.0-beta.1")).toBe("1.0.0-beta.1");
+    expect(highestSatisfying(["1.0.0-beta.1"], ">=0.2.0", bunSemver)).toBeNull();
+    expect(highestSatisfying(versions, "1.0.0-beta.1", bunSemver)).toBe("1.0.0-beta.1");
   });
 });
 
@@ -244,37 +249,37 @@ describe("markRemovableOverrides", () => {
   test("is removable when the parent's own range already resolves into the override", async () => {
     const g = graph();
     const { registry, calls } = lookup("~0.1.10");
-    await markRemovableOverrides([g], [rule], registry, noRoot);
+    await markRemovableOverrides([g], [rule], registry, noRoot, bunSemver);
     expect(removable(g)).toBe(true);
     expect(calls.sort()).toEqual(["dependencies express@4.21.2", "versions path-to-regexp"]);
   });
 
   test("stays when a parent pins a version outside the override", async () => {
     const g = graph();
-    await markRemovableOverrides([g], [rule], lookup("0.1.10").registry, noRoot);
+    await markRemovableOverrides([g], [rule], lookup("0.1.10").registry, noRoot, bunSemver);
     expect(removable(g)).toBe(false);
   });
 
   test("stays when the registry can't answer", async () => {
     const g = graph();
-    await markRemovableOverrides([g], [rule], lookup(undefined).registry, noRoot);
+    await markRemovableOverrides([g], [rule], lookup(undefined).registry, noRoot, bunSemver);
     expect(removable(g)).toBe(false);
   });
 
   test("checks the project's own range for a direct dependency", async () => {
     const g = graph(true);
     const { registry } = lookup("~0.1.10");
-    await markRemovableOverrides([g], [rule], registry, async () => ({ "path-to-regexp": "0.1.7" }));
+    await markRemovableOverrides([g], [rule], registry, async () => ({ "path-to-regexp": "0.1.7" }), bunSemver);
     expect(removable(g)).toBe(false);
     const again = graph(true);
-    await markRemovableOverrides([again], [rule], registry, async () => ({ "path-to-regexp": "^0.1.10" }));
+    await markRemovableOverrides([again], [rule], registry, async () => ({ "path-to-regexp": "^0.1.10" }), bunSemver);
     expect(removable(again)).toBe(true);
   });
 
   test("a parent selector only asks that parent", async () => {
     const g = graph(true);
     const { registry, calls } = lookup("~0.1.10");
-    await markRemovableOverrides([g], [{ ...rule, parent: "express" }], registry, async () => ({}));
+    await markRemovableOverrides([g], [{ ...rule, parent: "express" }], registry, async () => ({}), bunSemver);
     expect(removable(g)).toBe(true);
     expect(calls).toContain("dependencies express@4.21.2");
   });
@@ -286,6 +291,7 @@ describe("markRemovableOverrides", () => {
       [{ name: "path-to-regexp", spec: "npm:other@1.0.0" }],
       lookup("~0.1.10").registry,
       noRoot,
+      bunSemver,
     );
     expect(removable(g)).toBe(false);
   });
@@ -293,10 +299,16 @@ describe("markRemovableOverrides", () => {
   test("an exact pin is removable only while its parents already resolve to that version", async () => {
     const exact: OverrideRule = { name: "path-to-regexp", spec: "0.1.12" };
     const g = graph();
-    await markRemovableOverrides([g], [exact], lookup("~0.1.10").registry, noRoot);
+    await markRemovableOverrides([g], [exact], lookup("~0.1.10").registry, noRoot, bunSemver);
     expect(removable(g)).toBe(true);
     const newer = graph();
-    await markRemovableOverrides([newer], [exact], lookup("~0.1.10", ["0.1.10", "0.1.12", "0.1.13"]).registry, noRoot);
+    await markRemovableOverrides(
+      [newer],
+      [exact],
+      lookup("~0.1.10", ["0.1.10", "0.1.12", "0.1.13"]).registry,
+      noRoot,
+      bunSemver,
+    );
     expect(removable(newer)).toBe(false);
   });
 
@@ -318,13 +330,13 @@ describe("markRemovableOverrides", () => {
           : { ranges: { "path-to-regexp": "~0.1.10" }, peers: {} },
     });
     const g = withPlugin(true);
-    await markRemovableOverrides([g], [rule], registry("0.1.10"), noRoot);
+    await markRemovableOverrides([g], [rule], registry("0.1.10"), noRoot, bunSemver);
     expect(removable(g)).toBe(true);
     const peersOnly = withPlugin(false);
-    await markRemovableOverrides([peersOnly], [rule], registry("0.1.10"), noRoot);
+    await markRemovableOverrides([peersOnly], [rule], registry("0.1.10"), noRoot, bunSemver);
     expect(removable(peersOnly)).toBe(false);
     const peersOnlyInRange = withPlugin(false);
-    await markRemovableOverrides([peersOnlyInRange], [rule], registry(">=0.1.0"), noRoot);
+    await markRemovableOverrides([peersOnlyInRange], [rule], registry(">=0.1.0"), noRoot, bunSemver);
     expect(removable(peersOnlyInRange)).toBe(true);
   });
 });

@@ -2,21 +2,23 @@ import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { getKnownRepoInfos, loadConfig, resolveConfigInfo } from "../src/adapters/settings/config";
+import { backfillRepoConfig, writeConfig } from "../src/adapters/settings/config-write";
+import { clearDebugEvents, getDebugEvents } from "../src/core/debug-events";
+import { PROVIDER_CACHE_LIMIT_OPTIONS } from "../src/core/provider-settings";
 import {
   type CodepulseConfig,
+  DEFAULT_AUTO_REFRESH_INTERVAL,
+  DEFAULT_MAX_COUNT,
   defaultConfig,
-  getKnownRepoInfos,
-  loadConfig,
   mergeOptions,
   reportConfigWarnings,
-  resolveConfigInfo,
   startViewFor,
-} from "../src/config";
-import { backfillRepoConfig, writeConfig } from "../src/config-write";
-import { DEFAULT_MAX_COUNT } from "../src/constants";
-import { DEFAULT_AUTO_REFRESH_INTERVAL } from "../src/context/state";
-import { clearDebugEvents, getDebugEvents } from "../src/debug/events";
-import { PROVIDER_CACHE_LIMIT_OPTIONS } from "../src/providers/shared/auto-refresh";
+} from "../src/core/settings/config";
+import { BUILT_IN_PROVIDERS } from "./test-helpers";
+
+/** The built-in providers: the settings read and backfill their sections. */
+const PROVIDERS = BUILT_IN_PROVIDERS.definitions;
 
 const TEST_ROOT = join(tmpdir(), `codepulse-config-test-${Date.now()}`);
 
@@ -46,7 +48,7 @@ afterEach(() => {
 
 describe("provider defaults", () => {
   test("disables all remote providers for new configs", () => {
-    const providers = defaultConfig().providers;
+    const providers = defaultConfig(PROVIDERS).providers;
     expect(providers.github?.enabled).toBe(false);
     expect(providers.jenkins?.enabled).toBe(false);
     expect(providers.openshift?.enabled).toBe(false);
@@ -72,9 +74,9 @@ describe("provider defaults", () => {
       },
     });
 
-    backfillRepoConfig(repoPath, configPath);
+    backfillRepoConfig(repoPath, configPath, PROVIDERS);
 
-    const providers = loadConfig(repoPath, configPath).config.providers;
+    const providers = loadConfig(repoPath, configPath, PROVIDERS).config.providers;
     expect(providers?.github?.cacheLimit).toBe(20);
     expect(providers?.jenkins?.cacheLimit).toBe(20);
     expect(providers?.openshift?.cacheLimit).toBe(20);
@@ -102,11 +104,11 @@ describe("loadConfig", () => {
         snyk: { maxCachedScans: limit },
       };
       expect(writeConfig({ providers }, repoPath, configPath)).toBe(true);
-      const { config, warnings } = loadConfig(repoPath, configPath);
+      const { config, warnings } = loadConfig(repoPath, configPath, PROVIDERS);
       expect(config.providers).toEqual(providers);
       expect(warnings).toEqual([]);
-      backfillRepoConfig(repoPath, configPath);
-      const backfilled = loadConfig(repoPath, configPath).config.providers;
+      backfillRepoConfig(repoPath, configPath, PROVIDERS);
+      const backfilled = loadConfig(repoPath, configPath, PROVIDERS).config.providers;
       expect(backfilled?.github?.cacheLimit).toBe(limit);
       expect(backfilled?.jenkins?.cacheLimit).toBe(limit);
       expect(backfilled?.openshift?.cacheLimit).toBe(limit);
@@ -125,7 +127,7 @@ describe("loadConfig", () => {
           snyk: { maxCachedScans: limit },
         },
       });
-      const { config, warnings } = loadConfig(repoPath, configPath);
+      const { config, warnings } = loadConfig(repoPath, configPath, PROVIDERS);
       expect(config.providers).toEqual({
         github: { cacheLimit: limit },
         jenkins: { cacheLimit: limit },
@@ -155,7 +157,7 @@ describe("loadConfig", () => {
           snyk: { maxCachedScans: limit },
         },
       });
-      const { config, warnings } = loadConfig(repoPath, configPath);
+      const { config, warnings } = loadConfig(repoPath, configPath, PROVIDERS);
       expect(config.providers).toEqual({ github: {}, jenkins: {}, openshift: {}, snyk: {} });
       expect(warnings).toHaveLength(4);
       for (const field of ["github.cacheLimit", "jenkins.cacheLimit", "openshift.cacheLimit", "snyk.maxCachedScans"]) {
@@ -168,13 +170,13 @@ describe("loadConfig", () => {
 
   test("returns empty object when config file does not exist", () => {
     const configPath = join(makeTempDir("no-config"), "config.json");
-    const { config: result } = loadConfig("/tmp/repo", configPath);
+    const { config: result } = loadConfig("/tmp/repo", configPath, PROVIDERS);
     expect(result).toEqual({});
   });
 
   test("ignores global top-level fields (repo-only mode)", () => {
     const configPath = makeTempConfig("global-fields", { theme: "gruvbox", pageSize: 100 });
-    const { config: result } = loadConfig("/tmp/repo", configPath);
+    const { config: result } = loadConfig("/tmp/repo", configPath, PROVIDERS);
     // Global top-level fields are ignored — only repos[path] entries are read
     expect(result).toEqual({});
   });
@@ -187,7 +189,7 @@ describe("loadConfig", () => {
       theme: "gruvbox",
       pageSize: 100,
     });
-    const { config: result } = loadConfig(repoPath, configPath);
+    const { config: result } = loadConfig(repoPath, configPath, PROVIDERS);
     expect(result.group).toBe("platform");
     expect(result.appName).toBe("API Gateway");
     expect(result.theme).toBe("gruvbox");
@@ -200,7 +202,7 @@ describe("loadConfig", () => {
       group: "  e-ant  ",
       appName: "  e/ant Frontend  ",
     });
-    const { config: result } = loadConfig(repoPath, configPath);
+    const { config: result } = loadConfig(repoPath, configPath, PROVIDERS);
     expect(result.group).toBe("e-ant");
     expect(result.appName).toBe("e/ant Frontend");
   });
@@ -211,7 +213,7 @@ describe("loadConfig", () => {
       group: "   ",
       appName: "",
     });
-    const { config: result } = loadConfig(repoPath, configPath);
+    const { config: result } = loadConfig(repoPath, configPath, PROVIDERS);
     expect(result.group).toBeUndefined();
     expect(result.appName).toBeUndefined();
   });
@@ -222,7 +224,7 @@ describe("loadConfig", () => {
       group: "g".repeat(65),
       appName: "a".repeat(65),
     });
-    const { config: result, warnings } = loadConfig(repoPath, configPath);
+    const { config: result, warnings } = loadConfig(repoPath, configPath, PROVIDERS);
     expect(result.group).toBeUndefined();
     expect(result.appName).toBeUndefined();
     expect(warnings.some(w => w.includes('"group"'))).toBe(true);
@@ -234,7 +236,7 @@ describe("loadConfig", () => {
     const configPath = makeRepoConfig("github-enterprise-host", repoPath, {
       providers: { github: { trustedEnterpriseHost: "ghe.example.com" } },
     });
-    const { config: result } = loadConfig(repoPath, configPath);
+    const { config: result } = loadConfig(repoPath, configPath, PROVIDERS);
     expect(result.providers?.github?.trustedEnterpriseHost).toBe("ghe.example.com");
   });
 
@@ -250,7 +252,7 @@ describe("loadConfig", () => {
         },
       },
     });
-    const { config: result } = loadConfig(repoPath, configPath);
+    const { config: result } = loadConfig(repoPath, configPath, PROVIDERS);
     expect(result.providers?.jenkins?.jobs).toEqual([
       { url: "https://jenkins.example.com/job/direct" },
       { url: "https://jenkins.example.com/job/service", label: "Service" },
@@ -270,7 +272,7 @@ describe("loadConfig", () => {
         },
       },
     });
-    const { config: result, warnings } = loadConfig(repoPath, configPath);
+    const { config: result, warnings } = loadConfig(repoPath, configPath, PROVIDERS);
     expect(result.providers?.jenkins?.jobs).toEqual([{ url: "https://jenkins.example.com/job/ok" }]);
     expect(warnings.filter(warning => warning.includes("providers.jenkins.jobs"))).toHaveLength(2);
   });
@@ -288,7 +290,7 @@ describe("loadConfig", () => {
         },
       },
     });
-    const { config: result, warnings } = loadConfig(repoPath, configPath);
+    const { config: result, warnings } = loadConfig(repoPath, configPath, PROVIDERS);
     expect(result.providers?.openshift).toEqual({
       serverUrl: "https://api.example.com:6443",
       consoleUrl: "https://console.example.com",
@@ -304,7 +306,7 @@ describe("loadConfig", () => {
     const configPath = makeRepoConfig("openshift-console", repoPath, {
       providers: { openshift: { consoleUrl: "http://console.example.com" } },
     });
-    const { config: result, warnings } = loadConfig(repoPath, configPath);
+    const { config: result, warnings } = loadConfig(repoPath, configPath, PROVIDERS);
     expect(result.providers?.openshift?.consoleUrl).toBeUndefined();
     expect(
       warnings.some(warning => warning.includes('"providers.openshift.consoleUrl" must be a valid HTTPS URL')),
@@ -316,7 +318,7 @@ describe("loadConfig", () => {
     const configPath = makeRepoConfig("openshift-refresh", repoPath, {
       providers: { openshift: { autoRefreshSeconds: 300 } },
     });
-    const { config: result, warnings } = loadConfig(repoPath, configPath);
+    const { config: result, warnings } = loadConfig(repoPath, configPath, PROVIDERS);
     expect(result.providers?.openshift?.autoRefreshSeconds).toBe(300);
     expect(warnings.filter(warning => warning.includes("autoRefreshSeconds"))).toHaveLength(0);
   });
@@ -326,7 +328,7 @@ describe("loadConfig", () => {
     const configPath = makeRepoConfig("openshift-refresh-bad", repoPath, {
       providers: { openshift: { autoRefreshSeconds: 30 } },
     });
-    const { config: result, warnings } = loadConfig(repoPath, configPath);
+    const { config: result, warnings } = loadConfig(repoPath, configPath, PROVIDERS);
     expect(result.providers?.openshift?.autoRefreshSeconds).toBeUndefined();
     expect(warnings.some(warning => warning.includes("providers.openshift.autoRefreshSeconds"))).toBe(true);
   });
@@ -336,7 +338,7 @@ describe("loadConfig", () => {
     const configPath = makeRepoConfig("jenkins-graph-limit", repoPath, {
       providers: { jenkins: { graphBuildLimit: 50 } },
     });
-    const { config: result } = loadConfig(repoPath, configPath);
+    const { config: result } = loadConfig(repoPath, configPath, PROVIDERS);
     expect(result.providers?.jenkins?.graphBuildLimit).toBe(50);
     expect(result.providers?.jenkins?.fetchDepth).toBe(50);
   });
@@ -346,7 +348,7 @@ describe("loadConfig", () => {
     const configPath = makeRepoConfig("jenkins-fetch-wins", repoPath, {
       providers: { jenkins: { graphBuildLimit: 50, fetchDepth: 10 } },
     });
-    const { config: result } = loadConfig(repoPath, configPath);
+    const { config: result } = loadConfig(repoPath, configPath, PROVIDERS);
     expect(result.providers?.jenkins?.fetchDepth).toBe(10);
   });
 
@@ -358,7 +360,7 @@ describe("loadConfig", () => {
         jenkins: { fetchDepth: 10, cacheLimit: 50, autoRefreshSeconds: 0 },
       },
     });
-    const { config: result, warnings } = loadConfig(repoPath, configPath);
+    const { config: result, warnings } = loadConfig(repoPath, configPath, PROVIDERS);
     expect(result.providers?.github).toEqual({
       fetchDepth: 10,
       cacheLimit: 50,
@@ -381,7 +383,7 @@ describe("loadConfig", () => {
         },
       },
     });
-    const { config: result, warnings } = loadConfig(repoPath, configPath);
+    const { config: result, warnings } = loadConfig(repoPath, configPath, PROVIDERS);
     expect(result.providers?.openshift).toEqual({});
     expect(warnings.filter(warning => warning.includes("providers.openshift"))).toHaveLength(3);
   });
@@ -398,7 +400,7 @@ describe("loadConfig", () => {
         },
       },
     });
-    const { config: result, warnings } = loadConfig(repoPath, configPath);
+    const { config: result, warnings } = loadConfig(repoPath, configPath, PROVIDERS);
     expect(result.providers?.snyk).toEqual({
       enabled: true,
       tokenEnvVar: "CUSTOM_SNYK_TOKEN",
@@ -420,7 +422,7 @@ describe("loadConfig", () => {
         },
       },
     });
-    const { config: result, warnings } = loadConfig(repoPath, configPath);
+    const { config: result, warnings } = loadConfig(repoPath, configPath, PROVIDERS);
     expect(result.providers?.snyk).toEqual({});
     expect(warnings.filter(warning => warning.includes("providers.snyk"))).toHaveLength(4);
   });
@@ -430,7 +432,7 @@ describe("loadConfig", () => {
     const configPath = makeRepoConfig("github-enterprise-host-invalid", repoPath, {
       providers: { github: { trustedEnterpriseHost: "https://bad.example.com" } },
     });
-    const { config: result, warnings } = loadConfig(repoPath, configPath);
+    const { config: result, warnings } = loadConfig(repoPath, configPath, PROVIDERS);
     expect(result.providers?.github?.trustedEnterpriseHost).toBeUndefined();
     expect(warnings.some(w => w.includes("providers.github.trustedEnterpriseHost"))).toBe(true);
   });
@@ -449,7 +451,7 @@ describe("loadConfig", () => {
         },
       },
     });
-    const { config: result, warnings } = loadConfig(repoPath, configPath);
+    const { config: result, warnings } = loadConfig(repoPath, configPath, PROVIDERS);
     expect(result.theme).toBeUndefined();
     expect(result.branch).toBeUndefined();
     expect(result.providers?.github?.tokenEnvVar).toBeUndefined();
@@ -461,21 +463,21 @@ describe("loadConfig", () => {
 
   test("returns empty object for invalid JSON", () => {
     const configPath = makeTempConfig("bad-json", "not json!!!");
-    const { config: result, warnings } = loadConfig("/tmp/repo", configPath);
+    const { config: result, warnings } = loadConfig("/tmp/repo", configPath, PROVIDERS);
     expect(result).toEqual({});
     expect(warnings.length).toBeGreaterThan(0);
   });
 
   test("returns empty object when config is an array", () => {
     const configPath = makeTempConfig("array-config", "[1, 2, 3]");
-    const { config: result, warnings } = loadConfig("/tmp/repo", configPath);
+    const { config: result, warnings } = loadConfig("/tmp/repo", configPath, PROVIDERS);
     expect(result).toEqual({});
     expect(warnings.length).toBeGreaterThan(0);
   });
 
   test("returns empty object when config is null", () => {
     const configPath = makeTempConfig("null-config", "null");
-    const { config: result, warnings } = loadConfig("/tmp/repo", configPath);
+    const { config: result, warnings } = loadConfig("/tmp/repo", configPath, PROVIDERS);
     expect(result).toEqual({});
     expect(warnings.length).toBeGreaterThan(0);
   });
@@ -490,7 +492,7 @@ describe("loadConfig", () => {
       autoRefreshSeconds: 10,
       autoFetchSeconds: 60,
     });
-    const { config: result } = loadConfig(repoPath, configPath);
+    const { config: result } = loadConfig(repoPath, configPath, PROVIDERS);
     expect(result).toEqual({
       theme: "catppuccin-latte",
       pageSize: 500,
@@ -529,7 +531,7 @@ describe("loadConfig", () => {
   ])("drops invalid $label", ({ config, field, hasWarning }) => {
     const repoPath = "/tmp/repo";
     const configPath = makeRepoConfig(`bad-${field}`, repoPath, config);
-    const { config: result, warnings } = loadConfig(repoPath, configPath);
+    const { config: result, warnings } = loadConfig(repoPath, configPath, PROVIDERS);
     expect(result[field]).toBeUndefined();
     if (hasWarning) expect(warnings.length).toBeGreaterThan(0);
   });
@@ -537,21 +539,21 @@ describe("loadConfig", () => {
   test("allows autoRefreshSeconds of 0 (off)", () => {
     const repoPath = "/tmp/repo";
     const configPath = makeRepoConfig("refresh-zero", repoPath, { autoRefreshSeconds: 0 });
-    const { config: result } = loadConfig(repoPath, configPath);
+    const { config: result } = loadConfig(repoPath, configPath, PROVIDERS);
     expect(result.autoRefreshSeconds).toBe(0);
   });
 
   test("allows autoFetchSeconds of 0 (off)", () => {
     const repoPath = "/tmp/repo";
     const configPath = makeRepoConfig("fetch-zero", repoPath, { autoFetchSeconds: 0 });
-    const { config: result } = loadConfig(repoPath, configPath);
+    const { config: result } = loadConfig(repoPath, configPath, PROVIDERS);
     expect(result.autoFetchSeconds).toBe(0);
   });
 
   test("ignores unknown keys silently", () => {
     const repoPath = "/tmp/repo";
     const configPath = makeRepoConfig("unknown-keys", repoPath, { theme: "nord", unknownKey: true, foo: "bar" });
-    const { config: result } = loadConfig(repoPath, configPath);
+    const { config: result } = loadConfig(repoPath, configPath, PROVIDERS);
     expect(result).toEqual({ theme: "nord" });
     expect((result as Record<string, unknown>).unknownKey).toBeUndefined();
   });
@@ -564,7 +566,7 @@ describe("loadConfig", () => {
       branch: "main",
       showAllBranches: 42,
     });
-    const { config: result } = loadConfig(repoPath, configPath);
+    const { config: result } = loadConfig(repoPath, configPath, PROVIDERS);
     expect(result.theme).toBe("dracula");
     expect(result.pageSize).toBeUndefined();
     expect(result.branch).toBe("main");
@@ -583,7 +585,7 @@ describe("loadConfig", () => {
         },
       },
     });
-    const { config: result } = loadConfig(repoPath, configPath);
+    const { config: result } = loadConfig(repoPath, configPath, PROVIDERS);
     // Global top-level theme is NOT inherited — only repo entry fields
     expect(result.theme).toBeUndefined();
     expect(result.pageSize).toBe(500);
@@ -597,7 +599,7 @@ describe("loadConfig", () => {
         "/some/other/repo": { pageSize: 999 },
       },
     });
-    const { config: result } = loadConfig("/tmp/my-repo", configPath);
+    const { config: result } = loadConfig("/tmp/my-repo", configPath, PROVIDERS);
     // No entry for this repo — returns empty (global top-level ignored)
     expect(result).toEqual({});
   });
@@ -608,7 +610,7 @@ describe("loadConfig", () => {
       pageSize: -1,
       branch: "main",
     });
-    const { config: result } = loadConfig(repoPath, configPath);
+    const { config: result } = loadConfig(repoPath, configPath, PROVIDERS);
     expect(result.pageSize).toBeUndefined();
     expect(result.branch).toBe("main");
   });
@@ -618,7 +620,7 @@ describe("loadConfig", () => {
       theme: "nord",
       repos: "invalid",
     });
-    const { config: result } = loadConfig("/tmp/repo", configPath);
+    const { config: result } = loadConfig("/tmp/repo", configPath, PROVIDERS);
     expect(result).toEqual({});
   });
 
@@ -630,7 +632,7 @@ describe("loadConfig", () => {
         [resolve(repoPath)]: "not an object",
       },
     });
-    const { config: result } = loadConfig(repoPath, configPath);
+    const { config: result } = loadConfig(repoPath, configPath, PROVIDERS);
     expect(result).toEqual({});
   });
 });
@@ -812,11 +814,11 @@ describe("dashboard settings", () => {
     const configPath = makeRepoConfig("dashboard-roundtrip", repoPath, { providers: { github: { enabled: true } } });
     expect(writeConfig({ dashboard: { windowDays: 10, knotMinutes: 30 } }, repoPath, configPath)).toBe(true);
     expect(writeConfig({ dashboard: { knotMinutes: 120 } }, repoPath, configPath)).toBe(true);
-    const { config, warnings } = loadConfig(repoPath, configPath);
+    const { config, warnings } = loadConfig(repoPath, configPath, PROVIDERS);
     expect(config.dashboard).toEqual({ windowDays: 10, knotMinutes: 120 });
     expect(config.providers?.github?.enabled).toBe(true);
     expect(writeConfig({ dashboard: { enabled: false } }, repoPath, configPath)).toBe(true);
-    expect(loadConfig(repoPath, configPath).config.dashboard).toEqual({
+    expect(loadConfig(repoPath, configPath, PROVIDERS).config.dashboard).toEqual({
       enabled: false,
       windowDays: 10,
       knotMinutes: 120,
@@ -829,7 +831,7 @@ describe("dashboard settings", () => {
     const configPath = makeRepoConfig("dashboard-invalid", repoPath, {
       dashboard: { enabled: "yes", windowDays: 14, knotMinutes: "1h" },
     });
-    const { config, warnings } = loadConfig(repoPath, configPath);
+    const { config, warnings } = loadConfig(repoPath, configPath, PROVIDERS);
     expect(config.dashboard).toEqual({});
     expect(warnings).toHaveLength(3);
     expect(warnings[0]).toContain('"dashboard.enabled" must be a boolean');
@@ -841,26 +843,72 @@ describe("start view", () => {
     const repoPath = "/tmp/repo";
     const configPath = makeRepoConfig("start-view", repoPath, {});
     expect(writeConfig({ startView: "dashboard" }, repoPath, configPath)).toBe(true);
-    expect(loadConfig(repoPath, configPath)).toEqual({ config: { startView: "dashboard" }, warnings: [] });
+    expect(loadConfig(repoPath, configPath, PROVIDERS)).toEqual({ config: { startView: "dashboard" }, warnings: [] });
     const invalid = makeRepoConfig("start-view-invalid", repoPath, { startView: "graph" });
-    const { config, warnings } = loadConfig(repoPath, invalid);
+    const { config, warnings } = loadConfig(repoPath, invalid, PROVIDERS);
     expect(config.startView).toBeUndefined();
     expect(warnings).toHaveLength(1);
   });
 
   test("it starts in the chosen view while that provider is turned on, else in Git", () => {
-    expect(startViewFor({})).toBe("git");
-    expect(startViewFor({ startView: "dashboard" })).toBe("dashboard");
-    expect(startViewFor({ startView: "dashboard", dashboard: { enabled: false } })).toBe("git");
-    expect(startViewFor({ startView: "jenkins", providers: { jenkins: { enabled: true } } })).toBe("jenkins");
-    expect(startViewFor({ startView: "jenkins", providers: { jenkins: { enabled: false } } })).toBe("git");
-    expect(startViewFor({ startView: "github-actions" })).toBe("git");
-    expect(startViewFor({ startView: "snyk", providers: { snyk: { enabled: true } } })).toBe("snyk");
-    expect(startViewFor({ startView: "openshift", providers: { openshift: { enabled: true } } })).toBe("openshift");
+    expect(startViewFor({}, PROVIDERS)).toBe("git");
+    expect(startViewFor({ startView: "dashboard" }, PROVIDERS)).toBe("dashboard");
+    expect(startViewFor({ startView: "dashboard", dashboard: { enabled: false } }, PROVIDERS)).toBe("git");
+    expect(startViewFor({ startView: "jenkins", providers: { jenkins: { enabled: true } } }, PROVIDERS)).toBe(
+      "jenkins",
+    );
+    expect(startViewFor({ startView: "jenkins", providers: { jenkins: { enabled: false } } }, PROVIDERS)).toBe("git");
+    expect(startViewFor({ startView: "github-actions" }, PROVIDERS)).toBe("git");
+    expect(startViewFor({ startView: "snyk", providers: { snyk: { enabled: true } } }, PROVIDERS)).toBe("snyk");
+    expect(startViewFor({ startView: "openshift", providers: { openshift: { enabled: true } } }, PROVIDERS)).toBe(
+      "openshift",
+    );
   });
 });
 
 describe("writeConfig", () => {
+  test("a provider setting cleared is gone from the file: a host no longer trusted stays untrusted after a reload", () => {
+    const dir = makeTempDir("write-clear");
+    const configPath = join(dir, "config.json");
+    const repoPath = "/tmp/my-repo";
+    const github = { enabled: true, tokenEnvVar: "GITHUB_TOKEN", trustedEnterpriseHost: "ghe.example.com" };
+    expect(writeConfig({ providers: { github } }, repoPath, configPath)).toBe(true);
+    expect(loadConfig(repoPath, configPath, PROVIDERS).config.providers?.github?.trustedEnterpriseHost).toBe(
+      "ghe.example.com",
+    );
+    // Allow host turned off: the Menu saves the host as cleared.
+    expect(writeConfig({ providers: { github: { trustedEnterpriseHost: null } } }, repoPath, configPath)).toBe(true);
+    const reloaded = loadConfig(repoPath, configPath, PROVIDERS).config.providers?.github;
+    expect(reloaded?.trustedEnterpriseHost).toBeUndefined();
+    expect(reloaded?.enabled).toBe(true);
+    // A field not given, or given as undefined, is kept: only one given as cleared (null) goes.
+    expect(
+      writeConfig({ providers: { github: { enabled: false, tokenEnvVar: undefined } } }, repoPath, configPath),
+    ).toBe(true);
+    expect(loadConfig(repoPath, configPath, PROVIDERS).config.providers?.github?.tokenEnvVar).toBe("GITHUB_TOKEN");
+  });
+
+  test("a setting the app ignores as invalid stays in the file: backfill and saves never remove what they didn't set", () => {
+    const dir = makeTempDir("write-keep-invalid");
+    const configPath = join(dir, "config.json");
+    const repoPath = "/tmp/my-repo";
+    const username = "u".repeat(256);
+    const raw = { trustedEnterpriseHost: "https://ghe.example.com" };
+    expect(writeConfig({ providers: { github: raw, jenkins: { username } } } as never, repoPath, configPath)).toBe(
+      true,
+    );
+    // Read: both refused with a warning, so the app resolves them to nothing.
+    const { config, warnings } = loadConfig(repoPath, configPath, PROVIDERS);
+    expect(config.providers?.github?.trustedEnterpriseHost).toBeUndefined();
+    expect(warnings.length).toBeGreaterThan(0);
+    backfillRepoConfig(repoPath, configPath, PROVIDERS);
+    const file = JSON.parse(readFileSync(configPath, "utf-8")).repos[resolve(repoPath)].providers;
+    expect(file.github.trustedEnterpriseHost).toBe("https://ghe.example.com");
+    expect(file.jenkins.username).toBe(username);
+    // Backfill writes no default that has no value: OpenShift's console address stays absent.
+    expect(Object.hasOwn(file.openshift, "consoleUrl")).toBe(false);
+  });
+
   test("creates new config file with repo entry", () => {
     const dir = makeTempDir("write-new");
     const configPath = join(dir, "config.json");
@@ -1026,7 +1074,7 @@ describe("writeConfig", () => {
       autoFetchSeconds: 120,
     };
     writeConfig(original, repoPath, configPath);
-    const { config: loaded } = loadConfig(repoPath, configPath);
+    const { config: loaded } = loadConfig(repoPath, configPath, PROVIDERS);
     expect(loaded).toEqual(original);
   });
 
@@ -1042,7 +1090,7 @@ describe("writeConfig", () => {
       },
     };
     writeConfig(original, repoPath, configPath);
-    expect(loadConfig(repoPath, configPath).config).toEqual(original);
+    expect(loadConfig(repoPath, configPath, PROVIDERS).config).toEqual(original);
   });
 
   test("round-trip: Snyk config preserves unknown provider keys", () => {
@@ -1061,7 +1109,7 @@ describe("writeConfig", () => {
       },
     };
     writeConfig(original, repoPath, configPath);
-    expect(loadConfig(repoPath, configPath).config).toEqual(original);
+    expect(loadConfig(repoPath, configPath, PROVIDERS).config).toEqual(original);
     const content = JSON.parse(readFileSync(configPath, "utf-8"));
     expect(content.repos[resolve(repoPath)].providers.snyk.customKey).toBe("preserve-me");
   });
@@ -1073,8 +1121,8 @@ describe("writeConfig", () => {
     const repo2 = "/tmp/repo-b";
     writeConfig({ theme: "nord", pageSize: 200 }, repo1, configPath);
     writeConfig({ pageSize: 500, branch: "develop" }, repo2, configPath);
-    const { config: loaded1 } = loadConfig(repo1, configPath);
-    const { config: loaded2 } = loadConfig(repo2, configPath);
+    const { config: loaded1 } = loadConfig(repo1, configPath, PROVIDERS);
+    const { config: loaded2 } = loadConfig(repo2, configPath, PROVIDERS);
     expect(loaded1.theme).toBe("nord");
     expect(loaded1.pageSize).toBe(200);
     expect(loaded1.branch).toBeUndefined();
@@ -1086,13 +1134,13 @@ describe("writeConfig", () => {
 
 describe("auto fast-forward", () => {
   test("is off by default, round-trips per repository, and a value that is not a boolean is ignored with a warning", () => {
-    expect(defaultConfig().autoFastForward).toBe(false);
+    expect(defaultConfig(PROVIDERS).autoFastForward).toBe(false);
     const repoPath = "/tmp/repo";
     const configPath = makeRepoConfig("auto-fast-forward", repoPath, {});
     expect(writeConfig({ autoFastForward: true }, repoPath, configPath)).toBe(true);
-    expect(loadConfig(repoPath, configPath)).toEqual({ config: { autoFastForward: true }, warnings: [] });
+    expect(loadConfig(repoPath, configPath, PROVIDERS)).toEqual({ config: { autoFastForward: true }, warnings: [] });
     const invalid = makeRepoConfig("auto-fast-forward-invalid", repoPath, { autoFastForward: "yes" });
-    const { config, warnings } = loadConfig(repoPath, invalid);
+    const { config, warnings } = loadConfig(repoPath, invalid, PROVIDERS);
     expect(config.autoFastForward).toBeUndefined();
     expect(warnings).toEqual([expect.stringContaining('"autoFastForward" must be a boolean')]);
   });
@@ -1103,10 +1151,10 @@ describe("config warnings", () => {
     clearDebugEvents();
     const repoPath = "/tmp/repo";
     const configPath = makeRepoConfig("warnings-to-debug", repoPath, { dashboard: { enabled: "yes" } });
-    const { warnings } = loadConfig(repoPath, configPath);
+    const { warnings } = loadConfig(repoPath, configPath, PROVIDERS);
     expect(warnings).toHaveLength(1);
     reportConfigWarnings(warnings);
-    reportConfigWarnings(loadConfig(repoPath, configPath).warnings);
+    reportConfigWarnings(loadConfig(repoPath, configPath, PROVIDERS).warnings);
     expect(getDebugEvents().map(event => event.message)).toEqual(warnings);
     expect(getDebugEvents()[0]?.source).toBe("error");
     clearDebugEvents();

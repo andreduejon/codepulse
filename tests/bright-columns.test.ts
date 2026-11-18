@@ -7,7 +7,7 @@
  * ancestry nodes).
  */
 import { describe, expect, test } from "bun:test";
-import { buildGraph, computeBrightColumns } from "../src/git/graph";
+import { buildGraph, computeBrightColumns } from "../src/core/git/graph";
 import { assertDefined, findRow, makeCommit, printGraph } from "./test-helpers";
 
 describe("computeBrightColumns", () => {

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { join } from "node:path";
-import { storageRoot } from "../src/utils/storage-path";
+import { storageRoot } from "../src/adapters/system/storage-path";
 
 test("Windows storage uses separate roaming config and local cache with home fallbacks", () => {
   const home = "C:\\Users\\Test User";

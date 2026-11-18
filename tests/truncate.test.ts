@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { truncateName } from "../src/utils/truncate";
+import { truncateName } from "../src/tui/utils/truncate";
 
 describe("truncateName", () => {
   it.each([

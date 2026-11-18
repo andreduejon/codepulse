@@ -1,0 +1,50 @@
+/** Column widths for the graph table (character count). */
+export const HASH_COL_WIDTH = 9;
+export const AUTHOR_COL_WIDTH = 15;
+export const DATE_COL_WIDTH = 15;
+
+/** Keyboard navigation jump distance with Shift (number of entries). */
+export const SHIFT_JUMP = 10;
+
+/** Minimum time between held j/k moves so the cursor cannot outrun scroll. */
+export const NAV_REPEAT_MIN_MS = 16;
+
+/** Detail panel width as a fraction of terminal width. */
+export const DETAIL_PANEL_WIDTH_FRACTION = 0.25;
+
+/** Terminal size breakpoints for adaptive layout. */
+export const MIN_TERMINAL_WIDTH = 90;
+export const MIN_TERMINAL_HEIGHT = 30;
+export const COMPACT_THRESHOLD_WIDTH = 180;
+
+/** Placeholder text shown in columns where the uncommitted node has no real value. */
+export const UNCOMMITTED_PLACEHOLDER = "\u00b7".repeat(7);
+
+// ── Settings constants (shared by menu dialog and setup screen) ────────
+/** Available page-size options for the "Page size" setting. */
+export const MAX_COUNT_OPTIONS = [10, 20, 50, 100, 200, 500];
+
+/** Available auto-refresh interval labels. */
+export const INTERVAL_OPTIONS = ["off", "10s", "30s", "60s"];
+
+/** Maps an auto-refresh label to its millisecond value. */
+export const AUTO_REFRESH_MS: Record<string, number> = {
+  off: 0,
+  "10s": 10000,
+  "30s": 30000,
+  "60s": 60000,
+};
+
+/** Maps a millisecond value to its display label. */
+export const MS_TO_LABEL: Record<number, string> = {
+  0: "off",
+  10000: "10s",
+  30000: "30s",
+  60000: "60s",
+};
+
+/**
+ * How many apps keep what was read for them once you leave them (their graph and their Dashboard events), so coming
+ * back shows them at once. An older one reads again.
+ */
+export const RECENT_APPS = 10;

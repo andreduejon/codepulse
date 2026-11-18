@@ -111,10 +111,11 @@ configuration examples.
 ```sh
 bun install
 bun run demo    # codepulse on made-up data: no accounts, no network
-bun test
+bun run test
 ```
 
 The [demo guide](docs/demo.md) covers its options and the headless mode for checking UI changes.
+`bun run bench` measures speed and memory on large generated repositories ([bench guide](docs/bench.md)).
 
 ## Roadmap
 

@@ -1,0 +1,428 @@
+import type { KeyEvent, Renderable } from "@opentui/core";
+import { useTerminalDimensions } from "@opentui/solid";
+import { createEffect, createMemo, createSignal, For, onCleanup, Show, untrack } from "solid-js";
+import { SNYK_BANNER } from "../../../core/snyk/banner";
+import { DETAIL_PANEL_WIDTH_FRACTION } from "../../constants";
+import { useBannerScroll } from "../../hooks/use-banner-scroll";
+import { useClipboard } from "../../hooks/use-clipboard";
+import { useT } from "../../hooks/use-t";
+import { BUSY } from "../../utils/busy-text";
+import { useDetailTree } from "../shared/detail-tree";
+import {
+  type DependencyGroupBy,
+  type DependencyScopeFilter,
+  type DependencyTreeRow,
+  dependencyVulnerabilities,
+} from "./deps-model";
+import { dependencyPackageList } from "./deps-packages";
+import { DependencyRow, dependencyLabelWidth, isEmptyHeader, parentKey } from "./deps-row";
+import { buildDependencyTree, defaultDependencyExpansion } from "./deps-tree";
+import { highlightMatch, SnykFilterRow, useSnykFilter } from "./filter";
+import { SnykControlRow, type SnykDetailTabProps, snykScanIdentity, useSnykRows } from "./tab-shared";
+import { useSnykTabMemory } from "./view-memory";
+
+export type SnykDependenciesTabProps = SnykDetailTabProps & {
+  /** `v` on a vulnerable package: open Vulnerabilities filtered to `name@version`. */
+  onShowVulnerabilities: (query: string) => void;
+  setDetailCursorShortcut: (shortcut: { key: string; desc: string } | null) => void;
+};
+
+const VULNERABILITY_SHORTCUT = { key: "v", desc: "vulnerabilities" };
+
+const GROUP_BY_OPTIONS: DependencyGroupBy[] = ["tree", "package"];
+const SCOPE_OPTIONS: DependencyScopeFilter[] = ["all", "prod", "dev"];
+
+export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
+  const t = useT();
+  const dimensions = useTerminalDimensions();
+  // Cursor order: Scan (left out while Snyk is unavailable), Copy, Group by, Scope, filter, then the tree rows.
+  const scanIndex = () => (props.unavailable ? -1 : 0);
+  const base = () => (props.unavailable ? 0 : 1);
+  const copyIndex = () => base();
+  const groupByIndex = () => base() + 1;
+  const scopeIndex = () => base() + 2;
+  const filterIndex = () => base() + 3;
+  /** Cursor index of the first tree row (after the controls). */
+  const rowBase = () => base() + 4;
+  const filter = useSnykFilter(props, filterIndex);
+  const [scope, setScope] = createSignal<DependencyScopeFilter>("all");
+  /** Each package's own findings (manifest + `name@version`): triangles and the JSON copy. */
+  const vulnerabilities = createMemo(() => dependencyVulnerabilities(props.scan?.findings ?? []));
+  const [groupBy, setGroupBy] = createSignal<DependencyGroupBy>("tree");
+  const projects = createMemo(() => props.scan?.dependencyProjects ?? []);
+  const scanIdentity = createMemo(() => snykScanIdentity(props.scan));
+  const [expanded, setExpanded] = createSignal(defaultDependencyExpansion(projects()));
+  const tree = createMemo(() =>
+    buildDependencyTree(projects(), expanded(), filter.query(), scope(), groupBy(), vulnerabilities()),
+  );
+  // <For> keys by identity; reuse unchanged rows so typing does not re-render thousands of them.
+  let rowCache = new Map<string, { json: string; row: DependencyTreeRow }>();
+  const rows = createMemo(() => {
+    const next = new Map<string, { json: string; row: DependencyTreeRow }>();
+    const list = tree().rows.map(row => {
+      const json = JSON.stringify(row);
+      const previous = rowCache.get(row.key);
+      const kept = previous?.json === json ? previous : { json, row };
+      next.set(row.key, kept);
+      return kept.row;
+    });
+    rowCache = next;
+    return list;
+  });
+  const filtering = () => !!filter.query().trim();
+  const navRows = createMemo(() => rows().filter(row => !isEmptyHeader(row)));
+  const navIndexes = createMemo(() => new Map(navRows().map((row, index) => [row.key, index + rowBase()])));
+  const packageTotals = createMemo(() =>
+    rows()
+      .filter(row => row.kind === "project")
+      .reduce((sum, row) => ({ count: sum.count + (row.count ?? 0), total: sum.total + (row.total ?? 0) }), {
+        count: 0,
+        total: 0,
+      }),
+  );
+  const { copiedId, copyToClipboard } = useClipboard();
+  /** Copy, Group by, Scope and filter only when there is something to browse (like Vulnerabilities without findings). */
+  const controls = () => !!props.scan && projects().length > 0;
+  const itemCount = () => (controls() ? rowBase() + navRows().length : base());
+  let disposed = false;
+  let previousView = "";
+
+  const usableWidth = () =>
+    Math.max(1, props.contentWidth ?? Math.max(Math.floor(dimensions().width * DETAIL_PANEL_WIDTH_FRACTION), 60) - 4);
+  /** Sibling groups (same parent) with any triangle reserve its column on every row, so `dev`/`repeated` line up. */
+  const markerGroups = createMemo(
+    () => new Set(rows().flatMap(row => (row.kind === "dependency" && row.vulnerability ? [parentKey(row)] : []))),
+  );
+  const layout = (row: DependencyTreeRow) => ({
+    width: usableWidth(),
+    gap: !row.vulnerability && row.kind === "dependency" && markerGroups().has(parentKey(row)),
+  });
+  const label = (row: DependencyTreeRow, full = false) => {
+    const project = projects()[row.projectIndex];
+    const incomplete = row.kind !== "dependency" && project?.status === "failed" && project.graphs.length > 0;
+    // Maven `group:artifact@version` shows as `artifact@version`; the cursor row shows full coordinates.
+    const name = row.kind === "dependency" && !full ? row.label.slice(row.label.lastIndexOf(":") + 1) : row.label;
+    return `${name}${incomplete ? " · incomplete" : ""}`;
+  };
+  /** Filter hits within the package name (or the whole label for an exact `name@version` query), like matching. */
+  const highlightedLabel = (row: DependencyTreeRow) => {
+    const text = label(row);
+    const query = filter.query().trim();
+    const at = query.lastIndexOf("@") > 0 ? text.length : text.lastIndexOf("@");
+    const name = at > 0 ? text.slice(0, at) : text;
+    return [highlightMatch(name, query, t().snykBg), text.slice(name.length)];
+  };
+  /** Nesting shows the path; the cursor row shows the full name, banner-scrolled when clipped. */
+  const labelWidth = (row: DependencyTreeRow) => dependencyLabelWidth(row, layout(row));
+  const bannerOverflow = createMemo(() => {
+    if (!props.detailFocused()) return 0;
+    const row = navRows()[props.detailCursorIndex() - rowBase()];
+    return row?.kind === "dependency" ? Math.max(0, label(row, true).length - labelWidth(row)) : 0;
+  });
+  const bannerOffset = useBannerScroll(bannerOverflow);
+  /** Flat packages per project as the view sees them (scope and filter applied); graphs stay out — they are large. */
+  const dependenciesJson = () => {
+    const scan = props.scan;
+    if (!scan) return "";
+    return JSON.stringify(
+      {
+        commit: scan.sha,
+        scannedAt: scan.scannedAt,
+        includesDev: scan.includesDev,
+        scope: scope(),
+        filter: filter.query().trim() || null,
+        projects: dependencyPackageList(projects(), filter.query(), scope(), vulnerabilities()),
+      },
+      null,
+      2,
+    );
+  };
+  /** Every row in cursor order: Scan, then the controls and the tree when there is something to browse. */
+  const rowKeys = () => [
+    ...(props.unavailable ? [] : ["scan"]),
+    ...(controls() ? ["copyJson", "groupBy", "scope", "filter", ...navRows().map(row => row.key)] : []),
+  ];
+  const activateCurrentItem = () => {
+    if (disposed) return false;
+    const index = props.detailCursorIndex();
+    if (controls() && index === filterIndex()) {
+      if (filter.editing()) filter.stop();
+      else filter.start();
+      return false;
+    }
+    filter.stop();
+    if (controls() && index === scopeIndex()) {
+      setScope(SCOPE_OPTIONS[(SCOPE_OPTIONS.indexOf(scope()) + 1) % SCOPE_OPTIONS.length]);
+      return false;
+    }
+    if (controls() && index === copyIndex()) {
+      copyToClipboard(dependenciesJson(), "copyJson");
+      return false;
+    }
+    if (controls() && index === groupByIndex()) {
+      setGroupBy(GROUP_BY_OPTIONS[(GROUP_BY_OPTIONS.indexOf(groupBy()) + 1) % GROUP_BY_OPTIONS.length]);
+      return false;
+    }
+    if (index === scanIndex()) {
+      if (!props.loading) void props.onScan();
+      return false;
+    }
+    const row = navRows()[index - rowBase()];
+    if (!row) return false;
+    if (!row.expandable) {
+      // Leaves copy the full `name@version`, like copy rows in Vulnerabilities.
+      if (row.kind === "dependency") copyToClipboard(row.path[row.path.length - 1] ?? row.label, row.key);
+      return false;
+    }
+    setExpanded(previous => {
+      const next = new Set(previous);
+      if (!next.has(row.key)) {
+        next.add(row.key);
+        if (!buildDependencyTree(projects(), next, filter.query(), scope(), groupBy(), vulnerabilities()).truncated)
+          return next;
+        // Over the row cap: close other branches, keeping projects/modules and the path to this row.
+        const kept = new Set([...previous].filter(key => !key.includes("/")));
+        for (let at = row.key.indexOf("/"); at >= 0; at = row.key.indexOf("/", at + 1)) kept.add(row.key.slice(0, at));
+        kept.add(row.key);
+        return kept;
+      }
+      // Closing closes everything below, so reopening shows children closed.
+      const graphPrefix = row.kind === "project" ? `["graph",${row.projectIndex},` : null;
+      for (const key of previous)
+        if (key === row.key || key.startsWith(`${row.key}/`) || (graphPrefix && key.startsWith(graphPrefix)))
+          next.delete(key);
+      return next;
+    });
+    return false;
+  };
+  const rowsUi = useSnykRows(props, () => activateCurrentItem());
+  const cursored = rowsUi.cursored;
+  // `nav` comes after Enter's handler below; rows only call this once they render.
+  const rowRef = (key: string) => (element: Renderable) => nav.ref(key)(element);
+
+  createEffect(() => {
+    const identity = scanIdentity();
+    untrack(() => {
+      rowsUi.clearHover();
+      // Back from another tab on the same scan: restore the view as it was left.
+      const saved = savedView(identity);
+      if (saved) {
+        setGroupBy(saved.groupBy);
+        setScope(saved.scope);
+        filter.setQuery(saved.query);
+        previousView = JSON.stringify([saved.query, saved.scope, saved.groupBy]);
+        setExpanded(new Set(saved.expanded));
+        filter.suppressAutoEdit();
+        props.setDetailCursorIndex(saved.cursor);
+      } else {
+        // Another commit or a rescan starts fresh, like Vulnerabilities: default Scope and Group by too.
+        filter.reset();
+        setScope("all");
+        setGroupBy("tree");
+        previousView = JSON.stringify(["", "all", "tree"]);
+        setExpanded(defaultDependencyExpansion(projects(), "", "all", "tree"));
+        props.setDetailCursorIndex(0);
+      }
+      props.navRef?.scrollToCursor?.();
+    });
+  });
+
+  const savedView = useSnykTabMemory({
+    memory: props.memory,
+    key: "dependencies",
+    identity: scanIdentity,
+    cursor: props.detailCursorIndex,
+    active: props.active,
+    view: () => ({ groupBy: groupBy(), scope: scope(), query: filter.query(), expanded: expanded() }),
+  });
+
+  createEffect(() => {
+    const query = filter.query();
+    const view = JSON.stringify([query, scope(), groupBy()]);
+    if (view === previousView) return;
+    const queryChanged = JSON.parse(previousView || "[]")[0] !== query;
+    previousView = view;
+    untrack(() => {
+      setExpanded(defaultDependencyExpansion(projects(), query, scope(), groupBy()));
+      // Switching Scope or Group by keeps the cursor on its row.
+      if (!queryChanged) return;
+      props.setDetailCursorIndex(filterIndex());
+      props.navRef?.scrollToCursor?.();
+    });
+  });
+
+  /** The cursored vulnerable package, if any: `v` and the footer hint act on it. */
+  const cursorVulnerable = () => {
+    if (!props.detailFocused()) return null;
+    const row = navRows()[props.detailCursorIndex() - rowBase()];
+    return row?.kind === "dependency" && row.vulnerability ? row : null;
+  };
+  const handleKey = (event: KeyEvent) => {
+    const row = cursorVulnerable();
+    if (event.name !== "v" || event.ctrl || event.meta || !row) return false;
+    props.onShowVulnerabilities(row.path[row.path.length - 1] ?? row.label);
+    return true;
+  };
+  createEffect(() => props.setDetailCursorShortcut(cursorVulnerable() ? VULNERABILITY_SHORTCUT : null));
+
+  const nav = useDetailTree({
+    navRef: props.navRef,
+    keys: rowKeys,
+    activate: activateCurrentItem,
+    detailCursorIndex: props.detailCursorIndex,
+    setDetailCursorIndex: props.setDetailCursorIndex,
+  });
+  createEffect(() => {
+    itemCount();
+    if (props.navRef) props.navRef.handleKey = handleKey;
+  });
+
+  createEffect(() => {
+    const index = props.detailCursorIndex();
+    const row = navRows()[index - rowBase()];
+    if (!props.detailFocused()) {
+      props.setDetailCursorAction(null);
+      return;
+    }
+    if (index === scanIndex()) {
+      props.setDetailCursorAction(props.loading ? null : props.scan ? "rescan" : "scan");
+      return;
+    }
+    if (controls() && index === copyIndex()) {
+      props.setDetailCursorAction("copy");
+      return;
+    }
+    if (controls() && (index === scopeIndex() || index === groupByIndex())) {
+      props.setDetailCursorAction("switch");
+      return;
+    }
+    if (controls() && index === filterIndex()) {
+      props.setDetailCursorAction(filter.editing() ? "done" : "filter");
+      return;
+    }
+    props.setDetailCursorAction(
+      row?.expandable ? (row.expanded ? "collapse" : "expand") : row?.kind === "dependency" ? "copy" : null,
+    );
+  });
+
+  onCleanup(() => {
+    disposed = true;
+    if (!props.navRef || props.navRef.activateCurrentItem === activateCurrentItem) {
+      if (props.navRef) {
+        props.navRef.itemCount = 0;
+        props.navRef.itemRefs = [];
+        props.navRef.activateCurrentItem = () => false;
+        props.navRef.handleKey = undefined;
+      }
+      props.setDetailCursorAction(null);
+      props.setDetailCursorShortcut(null);
+    }
+  });
+
+  return (
+    <box flexDirection="column" width="100%" flexShrink={0}>
+      <SnykControlRow
+        rows={rowsUi}
+        id="scan"
+        index={scanIndex()}
+        label={props.scan ? "Rescan commit" : "Scan commit"}
+        status={props.loading ? BUSY.scanning : undefined}
+        disabled={props.unavailable}
+        mouseEnabled={props.mouseEnabled}
+        rowRef={rowRef("scan")}
+      />
+
+      {/* Copy, Group by, Scope and filter only when there is something to browse (like Vulnerabilities). */}
+      <Show when={controls()}>
+        <SnykControlRow
+          rows={rowsUi}
+          id="copyJson"
+          index={copyIndex()}
+          label="Copy dependencies as JSON"
+          copied={copiedId() === "copyJson"}
+          mouseEnabled={props.mouseEnabled}
+          rowRef={rowRef("copyJson")}
+        />
+        <box height={1} flexShrink={0} />
+        {/* Group by and Scope cycle like Group by in Vulnerabilities. */}
+        <SnykControlRow
+          rows={rowsUi}
+          id="groupBy"
+          index={groupByIndex()}
+          label="Group by"
+          value={groupBy()}
+          mouseEnabled={props.mouseEnabled}
+          rowRef={rowRef("groupBy")}
+        />
+        <SnykControlRow
+          rows={rowsUi}
+          id="scope"
+          index={scopeIndex()}
+          label="Scope"
+          value={scope()}
+          mouseEnabled={props.mouseEnabled}
+          rowRef={rowRef("scope")}
+        />
+        <SnykFilterRow
+          filter={filter}
+          selected={cursored(filterIndex())}
+          mouseEnabled={props.mouseEnabled}
+          rowRef={rowRef("filter")}
+          placeholder="Enter dependency filter..."
+        >
+          <text flexShrink={0} selectable={false} fg={t().foregroundMuted} wrapMode="none">
+            {filtering() ? `${packageTotals().count}/${packageTotals().total}` : packageTotals().total}
+          </text>
+        </SnykFilterRow>
+      </Show>
+
+      <Show when={props.scan}>
+        {/* Blank row before the tree, as in Vulnerabilities. */}
+        <box height={1} flexShrink={0} />
+        <Show when={projects().length === 0}>
+          <text fg={t().foregroundMuted} wrapMode="word">
+            {SNYK_BANNER.noDependencyProject}
+          </text>
+        </Show>
+        <For each={rows()}>
+          {row => {
+            const index = () => navIndexes().get(row.key) ?? -1;
+            return (
+              <DependencyRow
+                row={row}
+                index={index}
+                rows={rowsUi}
+                layout={layout(row)}
+                label={
+                  row.kind !== "dependency" && !isEmptyHeader(row) ? (
+                    <strong>{label(row)}</strong>
+                  ) : cursored(index()) && row.kind === "dependency" ? (
+                    label(row, true).substring(bannerOffset(), bannerOffset() + labelWidth(row))
+                  ) : row.kind === "dependency" ? (
+                    highlightedLabel(row)
+                  ) : (
+                    label(row)
+                  )
+                }
+                copied={copiedId() === row.key}
+                filtering={filtering()}
+                mouseEnabled={props.mouseEnabled}
+                rowRef={nav.ref(row.key)}
+              />
+            );
+          }}
+        </For>
+        <Show when={tree().truncated}>
+          <text fg={t().foregroundMuted} wrapMode="word">
+            Dependency tree truncated at 1,000 dependencies. Filter to narrow results.
+          </text>
+        </Show>
+        <Show when={tree().filterIncomplete}>
+          <text fg={t().warning} wrapMode="word">
+            {`${tree().matchCount} packages match; matching-path search is incomplete. Narrow the filter.`}
+          </text>
+        </Show>
+      </Show>
+    </box>
+  );
+}

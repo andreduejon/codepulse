@@ -21,7 +21,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
-import { storageRoot } from "../../src/utils/storage-path";
+import { storageRoot } from "../../src/adapters/system/storage-path";
 import { importHistory } from "./history";
 import { type DemoOptions, PROVIDERS, providerError } from "./options";
 import {
