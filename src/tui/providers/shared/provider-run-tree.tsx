@@ -1,11 +1,12 @@
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show, untrack } from "solid-js";
 import type { DebugEventSource } from "../../../core/debug-events";
-import { categorize, statusIcon } from "../../../core/status";
+import { categorize } from "../../../core/status";
 import { createRememberedSignal, type DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
 import { useT } from "../../hooks/use-t";
 import { BUSY } from "../../utils/busy-text";
 import { formatRelativeDate } from "../../utils/date";
+import { statusIcon } from "../../utils/status-icon";
 import { ProviderActionRow, ProviderSummaryRow, ScrollingLabel, useDetailRowMouse } from "./detail-rows";
 import { useDetailTree } from "./detail-tree";
 import { type RowShortcut, useOpenRowShortcut } from "./open-row";

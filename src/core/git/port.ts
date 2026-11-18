@@ -16,7 +16,7 @@ import type {
 
 /**
  * Git as the app uses it: the repository's history, refs, working tree and files, fetching and fast-forwarding. The
- * terminal app runs the Git command line (src/git/git-cli.ts); a test or another front end can answer from elsewhere.
+ * terminal app runs the Git command line (src/adapters/git/git-cli.ts); a test or another front end can answer from elsewhere.
  */
 export interface GitPort extends DashboardGit {
   /** An event's commit as the repository knows it, for the Dashboard's side panel; null when it doesn't. */

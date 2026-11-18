@@ -10,12 +10,13 @@
 import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show, untrack } from "solid-js";
-import { type StatusCategory, statusIcon } from "../../../core/status";
+import type { StatusCategory } from "../../../core/status";
 import { useScrollWindow } from "../../hooks/use-scroll-window";
 import { useT } from "../../hooks/use-t";
 import { useModalKeys } from "../../keyboard/dispatcher";
 import { statusColor } from "../../providers/shared/status";
 import { scrollElementIntoView } from "../../utils/scroll";
+import { statusIcon } from "../../utils/status-icon";
 import { fitHints, KeyHint, KeyHintSeparator, type RankedHint } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitle, DialogTitleBar, getStandardDialogFrame } from "./dialog-chrome";
 import {

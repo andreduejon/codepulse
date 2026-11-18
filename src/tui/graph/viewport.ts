@@ -2,6 +2,9 @@
 import type { GraphRow } from "../../core/git/types";
 import type { GraphChar, RenderOptions } from "./render";
 
+/** How many graph columns the terminal shows; commits on lanes beyond it are still laid out, and scroll into view. */
+export const MAX_GRAPH_COLUMNS = 12;
+
 /**
  * Slice a rendered GraphChar[] array to the viewport window.
  *

@@ -3,7 +3,7 @@
  * legend, so a mark means the same in both.
  */
 
-import { statusIcon } from "../../core/status";
+import { statusIcon } from "../utils/status-icon";
 import { type LegendItem, runLegend } from "./shared/detail-legend";
 import { statusColor } from "./shared/status";
 import { severityColor } from "./snyk/severity";

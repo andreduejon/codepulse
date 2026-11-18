@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { DashboardRow } from "./events";
+import type { DashboardRow } from "../../core/dashboard/events";
 import { BRANCH_MAX, branchColumnWidth, cutBranch } from "./layout";
 
 const eventRow = (branch?: string) => ({ kind: "event", event: { branch } }) as DashboardRow;

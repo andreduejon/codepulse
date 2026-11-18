@@ -1,7 +1,7 @@
 import { For, Show } from "solid-js";
-import { statusIcon } from "../../../core/status";
 import type { Theme } from "../../context/theme";
 import { useT } from "../../hooks/use-t";
+import { statusIcon } from "../../utils/status-icon";
 import { statusColor } from "./status";
 
 /** One legend entry: its markers, each in its own colour, then a muted label. */

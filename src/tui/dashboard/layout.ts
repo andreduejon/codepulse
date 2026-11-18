@@ -1,8 +1,5 @@
-/**
- * The Dashboard's row layout, without any UI: what its columns hold and how wide they are. The terminal view renders
- * it; another UI could too.
- */
-import type { DashboardRow } from "./events";
+/** The Dashboard's columns in the terminal: how many characters the Branch column takes. */
+import type { DashboardRow } from "../../core/dashboard/events";
 
 /** The longest branch name the Branch column shows whole; a longer one ends in `…`. */
 export const BRANCH_MAX = 20;

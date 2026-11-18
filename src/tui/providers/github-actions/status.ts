@@ -7,7 +7,8 @@
  * that the two views are always consistent.
  */
 
-export { categorize, type StatusCategory, statusIcon } from "../../../core/status";
+export { categorize, type StatusCategory } from "../../../core/status";
+export { statusIcon } from "../../utils/status-icon";
 export { statusColor } from "../shared/status";
 
 // ── Status category ───────────────────────────────────────────────────────

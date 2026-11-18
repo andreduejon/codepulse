@@ -1,7 +1,8 @@
 /**
  * The contract every provider meets: a module the provider host starts for the open repository. It returns the
  * provider (for what only it does) with what the host and the rest of the app read from every provider. Adding a
- * provider is a module here and a line in the host's list, plus its detail tab.
+ * provider is a module here and a line in the host's list, plus its detail tab; its id, settings, menu rows, colors
+ * and Dashboard source are still listed by hand in shared files.
  */
 
 import type { Accessor } from "solid-js";

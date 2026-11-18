@@ -110,8 +110,9 @@ The app's state is Solid signals in `tui/context/state.ts`: the repository, the 
 status and badges, and one detail slot each for the graph and the Dashboard. Its shape and rules are a port in core
 (`core/app-state.ts`): which highlight wins, which commits a search matches, how far a cursor moves. What the app does
 is core commands over that port: moving through the graph (`core/navigation.ts`) and turning highlights on and off
-(`core/highlights.ts`). Core knows no terminal words. It lays the graph out in lanes and connectors (`core/git`);
-the terminal draws them as box-drawing characters (`tui/graph`). Focus, dialogs, the command bar and its `:` commands
+(`core/highlights.ts`). Core knows no terminal words: no characters, colors or column widths. It lays the graph out in
+lanes and connectors (`core/git`) and sorts a status into passed, failed or running (`core/status.ts`); the terminal
+draws them as box-drawing characters and ✓ ✗ ● (`tui/graph`, `tui/utils/status-icon.ts`) and sizes the columns. Focus, dialogs, the command bar and its `:` commands
 (`tui/app/app-commands.ts`), and which step Esc takes back (`tui/keyboard/cascade.ts`) are the terminal's: its keys and
 commands call the core commands and the services.
 

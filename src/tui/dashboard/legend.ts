@@ -1,11 +1,11 @@
 import type { DashboardEvent } from "../../core/dashboard/events";
 import type { EventSource } from "../../core/provider-model";
-import { statusIcon } from "../../core/status";
 import type { Theme } from "../context/theme";
 import { GITHUB_LEGEND, JENKINS_LEGEND, OPENSHIFT_LEGEND, SNYK_SEVERITY_LEGEND } from "../providers/legends";
 import type { LegendItem } from "../providers/shared/detail-legend";
 import { statusColor } from "../providers/shared/status";
 import { severityColor } from "../providers/snyk/severity";
+import { statusIcon } from "../utils/status-icon";
 
 /** The knot every event shows in, in its provider's color. */
 export const KNOT = "█";

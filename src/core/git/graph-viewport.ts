@@ -1,12 +1,6 @@
 import type { GraphRow } from "./types";
 
 /**
- * Maximum number of graph columns to display. Commits on lanes beyond this
- * depth are still tracked but not rendered.
- */
-export const MAX_GRAPH_COLUMNS = 12;
-
-/**
  * Compute the maximum graph width (in columns) across all rows.
  * This ensures consistent alignment for content after the graph.
  */

@@ -1,4 +1,4 @@
-/** One status model for every CI provider: a run's or job's category, its icon, whether jobs settled. */
+/** One status model for every CI provider: a run's or job's category and whether its jobs settled. */
 
 export type StatusCategory = "pass" | "fail" | "cancelled" | "skipped" | "running" | "unknown";
 
@@ -20,23 +20,6 @@ export function categorize(status: string, conclusion: string | null): StatusCat
       return "skipped";
     default:
       return "unknown";
-  }
-}
-
-export function statusIcon(category: StatusCategory): string {
-  switch (category) {
-    case "pass":
-      return "✓";
-    case "fail":
-      return "✗";
-    case "running":
-      return "●";
-    case "cancelled":
-      return "○";
-    case "skipped":
-      return "–";
-    default:
-      return "?";
   }
 }
 
