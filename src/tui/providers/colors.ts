@@ -17,8 +17,10 @@ export function providerColors(
 ): ProviderColors {
   if (view === "dashboard") return { bg: theme.dashboardBg, fg: theme.dashboardFg };
   if (view === "git") return { bg: theme.gitBg, fg: theme.background };
-  // A provider the theme has no colors for shows in the accent.
-  return moduleOf(modules, view)?.colors(theme) ?? { bg: theme.accent, fg: theme.background };
+  // Each color the theme has none for falls back on its own: a provider whose colors a theme made before it lacks
+  // shows in the accent.
+  const own: Partial<ProviderColors> = moduleOf(modules, view)?.colors(theme) ?? {};
+  return { bg: own.bg || theme.accent, fg: own.fg || theme.background };
 }
 
 export function providerAccent(theme: Theme, view: ProviderView, modules: readonly AnyProviderModule[]): string {

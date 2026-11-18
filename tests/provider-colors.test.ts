@@ -32,3 +32,15 @@ test("the Dashboard has its own badge colors, apart from every provider's in eve
     for (const view of providers) expect(theme.dashboardBg).not.toBe(providerColors(theme, view, BUILT_IN_MODULES).bg);
   }
 });
+
+test("a provider's color the theme doesn't have falls back on its own: a theme made before the provider still works", () => {
+  const theme = themes["catppuccin-mocha"];
+  // A module reading theme keys an older custom theme lacks: both missing, then one.
+  const reads = (colors: { bg?: string; fg?: string }) =>
+    [
+      { definition: { id: "new-ci", displayName: "New CI" }, colors: () => colors },
+    ] as unknown as typeof BUILT_IN_MODULES;
+  expect(providerColors(theme, "new-ci", reads({}))).toEqual({ bg: theme.accent, fg: theme.background });
+  expect(providerColors(theme, "new-ci", reads({ bg: "#123456" }))).toEqual({ bg: "#123456", fg: theme.background });
+  expect(providerColors(theme, "unknown", BUILT_IN_MODULES)).toEqual({ bg: theme.accent, fg: theme.background });
+});

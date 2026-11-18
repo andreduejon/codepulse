@@ -103,8 +103,8 @@ export interface ProviderMenuContext<Settings extends SettingsSection> {
 export interface ProviderModule<Adapters, Settings extends SettingsSection, Instance, DetailSource> {
   definition: ProviderDefinition<Adapters, Settings>;
   start: (context: ProviderContext<Adapters, Settings>) => StartedProvider<Instance, DetailSource>;
-  /** Its badge's colors, from the theme. */
-  colors: (theme: Theme) => { bg: string; fg: string };
+  /** Its badge's colors, from the theme; one a theme lacks (made before the provider) falls back to the accent. */
+  colors: (theme: Theme) => { bg?: string; fg?: string };
   /** Its section of Menu → Providers, its header first. */
   menuItems: (menu: ProviderMenuContext<Settings>) => SettingItem[];
   /** What its own detail tab and the ones it adds render, by tab. */
