@@ -400,3 +400,41 @@ test("startup builds the app from the same list: its module, its settings and it
   expect(props.initialProviderSettings?.fake).toEqual({ enabled: true });
   expect(props.providers?.adapters(fakeProvider).checks).toBeInstanceOf(ShaSqliteCache);
 });
+
+test("an app given its ports and modules never reaches for the process's registered ones", async () => {
+  // The registered ones still answer, so the app runs as it would, but every read of them is counted.
+  const before = { ports: defaultPorts(), modules: defaultProviderModules() };
+  const reads: string[] = [];
+  const counted = <T extends object>(target: T, name: string): T =>
+    new Proxy(target, {
+      get: (object, field, receiver) => {
+        reads.push(`${name}.${String(field)}`);
+        return Reflect.get(object, field, receiver);
+      },
+    });
+  setDefaultPorts(counted(before.ports, "ports"));
+  setDefaultProviderModules(counted([...before.modules], "modules"));
+  cleanup.push(() => {
+    setDefaultPorts(before.ports);
+    setDefaultProviderModules(before.modules);
+  });
+  const app = await launch();
+  const { actions, frame } = app;
+  for (const view of ["fake-ci", "dashboard", "git"]) {
+    actions.setActiveProviderView(view);
+    await app.setup.flush();
+  }
+  await app.press("m");
+  await app.settle(() => frame().includes("Menu"));
+  await app.press("ESCAPE");
+  await app.command("cache");
+  await app.settle(() => frame().includes("Cache data"));
+  await app.press("ESCAPE");
+  await app.command("debug");
+  await app.setup.flush();
+  await app.press("ESCAPE");
+  expect(reads).toEqual([]);
+  // The count works: a read of the registered ports is seen.
+  void defaultPorts().git;
+  expect(reads).toEqual(["ports.git"]);
+});

@@ -14,6 +14,7 @@ export {
   toCachedBuild,
 } from "../../core/openshift/merge";
 
+import { openShiftProvider } from "../../core/openshift/definition";
 import {
   isOpenShiftCacheEntry,
   type OpenShiftCacheEntry,
@@ -23,7 +24,8 @@ import {
 export class OpenShiftCache extends ShaSqliteCache<OpenShiftCacheEntry> {
   constructor(options: OpenShiftCacheOptions & CacheLocation = {}) {
     super({
-      provider: "openshift",
+      // Its rows are its provider's: the cache screen and evictions group them by its id.
+      provider: openShiftProvider.id,
       root: options.root ?? DEFAULT_OPENSHIFT_CACHE_ROOT,
       maxEntries: options.maxEntries ?? DEFAULT_OPENSHIFT_CACHE_LIMIT,
       isEntry: isOpenShiftCacheEntry,

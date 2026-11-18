@@ -14,10 +14,13 @@ export {
   mergeGitHubRuns,
 } from "../../core/github/merge";
 
+import { githubProvider } from "../../core/github/definition";
+
 export class GitHubCache extends ShaSqliteCache<GitHubCacheEntry> {
   constructor(options: CacheLocation & { maxEntries?: ProviderCacheLimit } = {}) {
     super({
-      provider: "github-actions",
+      // Its rows are its provider's: the cache screen and evictions group them by its id.
+      provider: githubProvider.id,
       root: options.root ?? DEFAULT_GITHUB_CACHE_ROOT,
       maxEntries: options.maxEntries ?? DEFAULT_PROVIDER_CACHE_LIMIT,
       isEntry: isGitHubCacheEntry,

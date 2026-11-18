@@ -1,3 +1,4 @@
+import { snykProvider } from "../../core/snyk/definition";
 import { isSnykScanResult } from "../../core/snyk/parser";
 import type { SnykCacheLimit, SnykScanResult } from "../../core/snyk/types";
 import { DEFAULT_SNYK_CACHE_LIMIT } from "../../core/snyk/types";
@@ -12,7 +13,8 @@ export interface SnykCacheOptions extends CacheLocation {
 export class SnykCache extends ShaSqliteCache<SnykScanResult> {
   constructor(options: SnykCacheOptions = {}) {
     super({
-      provider: "snyk",
+      // Its rows are its provider's: the cache screen and evictions group them by its id.
+      provider: snykProvider.id,
       root: options.root ?? DEFAULT_SNYK_CACHE_ROOT,
       maxEntries: options.maxEntries ?? DEFAULT_SNYK_CACHE_LIMIT,
       isEntry: isSnykScanResult,

@@ -8,9 +8,9 @@
  * Each provider runs it with a fixture that fakes its list request (lifecycle-contract.test.ts). Test helper only.
  */
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
-import * as monotonic from "../../../core/monotonic";
-import type { ProviderView } from "../../../core/provider-model";
-import type { AppActions, AppState } from "../../context/state";
+import * as monotonic from "../src/core/monotonic";
+import type { ProviderView } from "../src/core/provider-model";
+import type { AppActions, AppState } from "../src/tui/context/state";
 
 export type ContractFailure = "auth" | "server" | null;
 

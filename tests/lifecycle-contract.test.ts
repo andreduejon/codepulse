@@ -1,5 +1,5 @@
 /**
- * The fetch lifecycle contract (lifecycle-contract.ts) for each provider on the shared lifecycle. A provider that
+ * The fetch lifecycle contract (tests/lifecycle-contract.ts) for each provider on the shared lifecycle. A provider that
  * moves to another implementation keeps its fixture and must still pass.
  */
 
@@ -8,25 +8,25 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { batch, createRoot, createSignal, untrack } from "solid-js";
-import { closeProviderCaches } from "../../../adapters/cache/sha-sqlite-cache";
-import { githubAdapters } from "../../../adapters/github/adapters";
-import * as githubApi from "../../../adapters/github/api";
-import { jenkinsAdapters } from "../../../adapters/jenkins/adapters";
-import * as jenkinsApi from "../../../adapters/jenkins/api";
-import { openShiftAdapters } from "../../../adapters/openshift/adapters";
-import * as openShiftApi from "../../../adapters/openshift/api";
-import type { OpenShiftCachedBuild } from "../../../adapters/openshift/cache";
-import { buildGraph } from "../../../core/git/graph";
-import { GITHUB_BANNER } from "../../../core/github/banner";
-import type { GitHubWorkflowRun } from "../../../core/github/types";
-import { JENKINS_BANNER } from "../../../core/jenkins/banner";
-import type { JenkinsRun } from "../../../core/jenkins/types";
-import { OPENSHIFT_BANNER } from "../../../core/openshift/banner";
-import type { OpenShiftWatchResult } from "../../../core/openshift/types";
-import { createAppState } from "../../context/state";
-import { useGitHubCI } from "../github-actions/use-github-ci";
-import { useJenkinsCI } from "../jenkins/use-jenkins-ci";
-import { commitDataFromCacheEntry, useOpenShift } from "../openshift/use-openshift";
+import { closeProviderCaches } from "../src/adapters/cache/sha-sqlite-cache";
+import { githubAdapters } from "../src/adapters/github/adapters";
+import * as githubApi from "../src/adapters/github/api";
+import { jenkinsAdapters } from "../src/adapters/jenkins/adapters";
+import * as jenkinsApi from "../src/adapters/jenkins/api";
+import { openShiftAdapters } from "../src/adapters/openshift/adapters";
+import * as openShiftApi from "../src/adapters/openshift/api";
+import type { OpenShiftCachedBuild } from "../src/adapters/openshift/cache";
+import { buildGraph } from "../src/core/git/graph";
+import { GITHUB_BANNER } from "../src/core/github/banner";
+import type { GitHubWorkflowRun } from "../src/core/github/types";
+import { JENKINS_BANNER } from "../src/core/jenkins/banner";
+import type { JenkinsRun } from "../src/core/jenkins/types";
+import { OPENSHIFT_BANNER } from "../src/core/openshift/banner";
+import type { OpenShiftWatchResult } from "../src/core/openshift/types";
+import { createAppState } from "../src/tui/context/state";
+import { useGitHubCI } from "../src/tui/providers/github-actions/use-github-ci";
+import { useJenkinsCI } from "../src/tui/providers/jenkins/use-jenkins-ci";
+import { commitDataFromCacheEntry, useOpenShift } from "../src/tui/providers/openshift/use-openshift";
 import {
   type ContractFailure,
   type ContractFixture,

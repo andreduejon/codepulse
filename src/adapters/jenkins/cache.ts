@@ -13,10 +13,13 @@ export {
   mergeJenkinsRuns,
 } from "../../core/jenkins/merge";
 
+import { jenkinsProvider } from "../../core/jenkins/definition";
+
 export class JenkinsCache extends ShaSqliteCache<JenkinsCacheEntry> {
   constructor(options: CacheLocation & { maxEntries?: ProviderCacheLimit } = {}) {
     super({
-      provider: "jenkins",
+      // Its rows are its provider's: the cache screen and evictions group them by its id.
+      provider: jenkinsProvider.id,
       root: options.root ?? DEFAULT_JENKINS_CACHE_ROOT,
       maxEntries: options.maxEntries ?? DEFAULT_PROVIDER_CACHE_LIMIT,
       isEntry: isJenkinsCacheEntry,

@@ -10,7 +10,10 @@ export function stripTerminalControls(text: string): string {
 
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
-/** Terminal columns `text` takes (wide CJK characters take two, combining marks none). */
+/**
+ * Terminal columns `text` takes (wide CJK characters take two, combining marks none). The terminal front end's one
+ * use of the runtime: every width goes through here, so another runtime replaces only this.
+ */
 export function cellWidth(text: string): number {
   return Bun.stringWidth(text);
 }
