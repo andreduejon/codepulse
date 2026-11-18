@@ -549,7 +549,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
 
         {/* Diff load error */}
         <Show when={!loading() && !fullFileMode() && !!diffError()}>
-          <box flexGrow={1} flexDirection="column" justifyContent="center" paddingY={2}>
+          <box flexGrow={1} flexDirection="column" justifyContent="center" paddingX={4} paddingY={2}>
             <MessageBox
               kind="error"
               title="Failed to load diff"
@@ -560,7 +560,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
         </Show>
 
         <Show when={!fileLoading() && fullFileMode() && !!fileError()}>
-          <box flexGrow={1} flexDirection="column" justifyContent="center" paddingY={2}>
+          <box flexGrow={1} flexDirection="column" justifyContent="center" paddingX={4} paddingY={2}>
             <MessageBox
               kind="error"
               title="Failed to load file"

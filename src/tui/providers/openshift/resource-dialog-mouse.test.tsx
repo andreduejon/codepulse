@@ -344,6 +344,11 @@ test("a failed log shows its reason in an error box, and an empty log says so, n
     await d.flush();
     expect(d.frame()).toContain("Failed to load log");
     expect(d.frame()).toContain("OpenShift token expired.");
+    // The box sits 1+4 from the dialog's border, as the title does: its own border in the title's column.
+    const rows = d.frame().split("\n");
+    const titleColumn = rows.find(row => row.includes("OpenShift · Build"))?.indexOf("OpenShift") ?? -1;
+    const boxRow = rows.find(row => row.includes("Failed to load log")) ?? "";
+    expect(boxRow.indexOf("│")).toBe(titleColumn);
     expect(d.frame()).not.toMatch(/\b1 {2}OpenShift token expired/);
     d.loadLog.mockResolvedValueOnce("");
     await d.key("r");

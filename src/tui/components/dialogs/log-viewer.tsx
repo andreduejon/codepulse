@@ -310,8 +310,8 @@ export function LogViewer(props: Readonly<LogViewerProps>) {
           stickyStart={props.stickToBottom?.() ? "bottom" : undefined}
           verticalScrollbarOptions={{ visible: false }}
         >
-          {/* An error box brings its own frame and inset, so it skips the text inset (like the diff dialog). */}
-          <box flexDirection="column" width="100%" paddingX={props.state()?.kind === "error" ? 0 : 4}>
+          {/* 1+4 from the dialog's border, as its title: an error box too, its own border in the title's column. */}
+          <box flexDirection="column" width="100%" paddingX={4}>
             <Show
               when={props.state()}
               fallback={
