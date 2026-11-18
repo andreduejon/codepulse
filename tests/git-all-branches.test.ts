@@ -2,7 +2,8 @@ import { expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getCommits, getPathMatchingHashes, runGit } from "../src/adapters/git/repo";
+import { getBranches, getCommits, getPathMatchingHashes, runGit } from "../src/adapters/git/repo";
+import { debugLog } from "../src/core/debug-events";
 
 async function repo() {
   const root = await mkdtemp(join(tmpdir(), "codepulse all branches "));
@@ -52,6 +53,32 @@ test("all branches load an empty repository and a file named HEAD", async () => 
     await git("add", "HEAD");
     await git("commit", "-m", "adds HEAD file");
     expect((await getCommits(root, { all: true })).map(commit => commit.subject)).toEqual(["adds HEAD file"]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("the commits and the branches of one refresh share one read of the remotes; another read's abort is its own", async () => {
+  const { root, git } = await repo();
+  try {
+    await git("commit", "--allow-empty", "-m", "first");
+    await git("remote", "add", "origin", "https://example.invalid/r.git");
+    await git("update-ref", "refs/remotes/origin/main", "HEAD");
+    const remoteReads = () => debugLog.all().filter(event => event.message === "git remote").length;
+    const before = remoteReads();
+    const refresh = new AbortController();
+    const [commits, branches] = await Promise.all([
+      getCommits(root, { all: true }, refresh.signal),
+      getBranches(root, refresh.signal),
+    ]);
+    expect(remoteReads() - before).toBe(1);
+    expect(branches.find(branch => branch.name === "origin/main")?.isRemote).toBe(true);
+    expect(commits[0]?.refs).toEqual(expect.arrayContaining([expect.objectContaining({ name: "origin/main" })]));
+    // A read with a signal of its own asks again: an abort elsewhere cannot leave it without remotes.
+    const other = new AbortController();
+    const reading = getBranches(root, other.signal);
+    refresh.abort();
+    expect((await reading).find(branch => branch.name === "origin/main")?.isRemote).toBe(true);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -1,6 +1,6 @@
 /** What codepulse asks Git for (log arguments and formats) and how it reads the answers: commits, refs, branches, tags, stashes, numstat, fast-forward results. */
 import { DEFAULT_MAX_COUNT } from "../settings/config";
-import type { Commit, FileChange, RefInfo, TagInfo } from "./types";
+import type { Branch, Commit, FileChange, RefInfo, TagInfo } from "./types";
 
 /** ASCII Record Separator — safe delimiter that cannot appear in commit fields. */
 export const RS = "\x1e";
@@ -128,6 +128,16 @@ export function buildCommitLogArgs(options: {
   }
 
   return args;
+}
+
+/**
+ * The checked-out branch from the branch list, as `git rev-parse --abbrev-ref HEAD` names it: `HEAD` when detached or
+ * mid-rebase (Git lists "(HEAD detached at …)" as current), "" before the first commit.
+ */
+export function currentBranchOf(branches: readonly Branch[]): string {
+  const current = branches.find(branch => branch.isCurrent && !branch.isRemote);
+  if (!current) return "";
+  return current.name.startsWith("(") ? "HEAD" : current.name;
 }
 
 /**

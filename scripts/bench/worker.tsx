@@ -14,7 +14,6 @@ import { loadAppEvents } from "../../src/adapters/dashboard/load";
 import {
   getBranches,
   getCommits,
-  getCurrentBranch,
   getRemoteUrl,
   getStashList,
   getTagDetails,
@@ -125,16 +124,18 @@ async function functions() {
     report(`graph build, ${count} commits`, await timed(5, () => buildGraph(commits)), "ms");
   }
   for (const count of [200, 2_000]) {
-    const refresh = () =>
-      Promise.all([
-        getCommits(repo, { all: true, maxCount: count }),
-        getBranches(repo),
-        getCurrentBranch(repo),
-        getRemoteUrl(repo),
-        getTagDetails(repo),
-        getStashList(repo),
-        getWorkingTreeStatus(repo),
+    // The app's refresh: one signal, so the commits and the branches share their read of the remotes.
+    const refresh = () => {
+      const signal = new AbortController().signal;
+      return Promise.all([
+        getCommits(repo, { all: true, maxCount: count }, signal),
+        getBranches(repo, signal),
+        getRemoteUrl(repo, signal),
+        getTagDetails(repo, signal),
+        getStashList(repo, signal),
+        getWorkingTreeStatus(repo, signal),
       ]);
+    };
     report(`refresh Git reads, ${count} commits loaded`, await timed(5, refresh), "ms");
   }
 

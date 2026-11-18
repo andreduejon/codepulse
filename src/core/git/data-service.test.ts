@@ -41,15 +41,17 @@ function harness(pageSize = 3) {
     hasMore: true,
     fetching: false,
     rowsSet: 0,
+    currentBranch: "",
   };
+  let branches: Branch[] = [{ name: "main", isCurrent: true, isRemote: false, lastCommitHash: "" }];
   let remote = "git@example.com:o/r.git";
   let fetchFails = false;
   const git = {
     getCommits: mock(async (_repo: string, options: { maxCount?: number; skip?: number } = {}) =>
       history.slice(options.skip ?? 0, (options.skip ?? 0) + (options.maxCount ?? history.length)),
     ),
-    getBranches: async () => [],
-    getCurrentBranch: async () => "main",
+    getBranches: async () => branches,
+    getCurrentBranch: mock(async () => "main"),
     getRemoteUrl: async () => remote,
     getTagDetails: async () => new Map(),
     getStashList: async () => [],
@@ -86,7 +88,9 @@ function harness(pageSize = 3) {
       setBranches: branches => {
         app.branches = branches;
       },
-      setCurrentBranch: () => {},
+      setCurrentBranch: branch => {
+        app.currentBranch = branch;
+      },
       setRepoPath: () => {},
       setRemoteUrl: url => {
         app.remote = url;
@@ -127,6 +131,9 @@ function harness(pageSize = 3) {
     failFetch: () => {
       fetchFails = true;
     },
+    branches: (next: Branch[]) => {
+      branches = next;
+    },
   };
 }
 
@@ -161,4 +168,26 @@ test("a fetch that fails says why and leaves the graph as it was", async () => {
   expect(h.app.error).toBe("The remote could not be reached");
   expect(h.app.rows).toBe(rows);
   expect(h.app.fetching).toBe(false);
+});
+
+test("a load takes the checked-out branch from the branch list, so it asks Git once less", async () => {
+  const h = harness();
+  const branch = (name: string, isCurrent: boolean): Branch => ({
+    name,
+    isCurrent,
+    isRemote: false,
+    lastCommitHash: "",
+  });
+  h.branches([branch("main", false), branch("feature", true)]);
+  await h.service.loadData();
+  expect(h.app.currentBranch).toBe("feature");
+  expect(h.git.getCurrentBranch).not.toHaveBeenCalled();
+  // Detached, or mid-rebase: Git lists "(HEAD detached at …)" as current; codepulse calls it HEAD, as Git's rev-parse does.
+  h.branches([branch("main", false), branch("(HEAD detached at 1a2b3c4)", true)]);
+  await h.service.loadData(undefined, undefined, true, true);
+  expect(h.app.currentBranch).toBe("HEAD");
+  // An empty repository lists no branch.
+  h.branches([]);
+  await h.service.loadData(undefined, undefined, true, true);
+  expect(h.app.currentBranch).toBe("");
 });

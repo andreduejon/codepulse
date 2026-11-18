@@ -16,7 +16,7 @@ import {
   injectUncommittedNode,
   isStaleResult,
 } from "./loading";
-import type { FastForwardResult } from "./log";
+import { currentBranchOf, type FastForwardResult } from "./log";
 import { mergeCommitPages } from "./merge-pages";
 import type { GitPort } from "./port";
 import type { Branch, Commit, GraphRow, TagInfo } from "./types";
@@ -118,10 +118,9 @@ export function createGitDataService(ports: GitDataPorts) {
       const silentMaxCount = computeSilentMaxCount(pageSize, state.commits(), silent, preserveLoaded);
 
       const logOptions = { branch: effectiveBranch, all: effectiveAll };
-      let [commits, branches, currentBranch, remoteUrl, tagDetails, stashes, wtStatus] = await Promise.all([
+      let [commits, branches, remoteUrl, tagDetails, stashes, wtStatus] = await Promise.all([
         git.getCommits(path, { ...logOptions, maxCount: silentMaxCount }, ctrl.signal),
         git.getBranches(path, ctrl.signal),
-        git.getCurrentBranch(path, ctrl.signal),
         git.getRemoteUrl(path, ctrl.signal),
         git.getTagDetails(path, ctrl.signal),
         git.getStashList(path, ctrl.signal),
@@ -130,6 +129,7 @@ export function createGitDataService(ports: GitDataPorts) {
 
       // If we were superseded by a newer loadData call, discard results
       if (ctrl.signal.aborted || repoPath() !== path) return;
+      const currentBranch = currentBranchOf(branches);
 
       // HEAD can sit past the first page (an old branch checked out while --all shows newer work).
       // Without it there is no selection anchor and no uncommitted row, so widen the page a few times.

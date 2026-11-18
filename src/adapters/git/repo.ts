@@ -30,8 +30,31 @@ export {
   getWorkingTreeStatus,
 } from "./repo-status";
 
-/** Fetch the list of configured remote names (e.g. ["origin", "upstream"]). */
-async function getRemoteNames(repoPath: string, signal?: AbortSignal): Promise<Set<string>> {
+/**
+ * The reads of `git remote` under way, by signal: the commits and the branches of one refresh share one. A read with
+ * another signal asks Git itself, so an abort elsewhere never leaves it without remotes.
+ */
+const remoteReads = new WeakMap<AbortSignal, Map<string, Promise<Set<string>>>>();
+
+/** The configured remote names (e.g. ["origin", "upstream"]). */
+function getRemoteNames(repoPath: string, signal?: AbortSignal): Promise<Set<string>> {
+  if (!signal) return readRemoteNames(repoPath);
+  let reads = remoteReads.get(signal);
+  if (!reads) {
+    reads = new Map();
+    remoteReads.set(signal, reads);
+  }
+  const shared = reads.get(repoPath);
+  if (shared) return shared;
+  const read = readRemoteNames(repoPath, signal);
+  reads.set(repoPath, read);
+  const done = reads;
+  const forget = () => done.delete(repoPath);
+  read.then(forget, forget);
+  return read;
+}
+
+async function readRemoteNames(repoPath: string, signal?: AbortSignal): Promise<Set<string>> {
   const { stdout, exitCode } = await runGit(repoPath, ["remote"], signal);
   if (exitCode !== 0) return new Set();
   return new Set(
