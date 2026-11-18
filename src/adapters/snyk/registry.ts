@@ -1,6 +1,10 @@
 import type { Database } from "bun:sqlite";
 import { addDebugEvent } from "../../core/debug-events";
-import { DEFAULT_PROVIDER_CACHE_ROOT, providerCacheDatabase } from "../cache/sha-sqlite-cache";
+import {
+  DEFAULT_PROVIDER_CACHE_ROOT,
+  type ProviderCacheRegistry,
+  providerCacheRegistry,
+} from "../cache/sha-sqlite-cache";
 import type { SnykCommandRunner } from "./scanner";
 
 /** Ranges a published version asks for; peers apart, since they accept what other packages resolve. */
@@ -28,9 +32,9 @@ const MAX_PARALLEL_COMMANDS = 4;
 export class RegistryCache {
   private db: Database | null;
 
-  constructor(root = DEFAULT_PROVIDER_CACHE_ROOT) {
+  constructor(root = DEFAULT_PROVIDER_CACHE_ROOT, registry: ProviderCacheRegistry = providerCacheRegistry) {
     try {
-      this.db = providerCacheDatabase(root);
+      this.db = registry.database(root);
       // Its own table, so older Codepulse versions keep reading the same database.
       this.db.exec(
         "CREATE TABLE IF NOT EXISTS registry_metadata (key TEXT PRIMARY KEY, payload TEXT NOT NULL CHECK (json_valid(payload)), fetched_at INTEGER NOT NULL);",

@@ -1,5 +1,5 @@
 import type { OpenShiftCacheLimit } from "../../core/openshift/types";
-import { DEFAULT_PROVIDER_CACHE_ROOT, ShaSqliteCache } from "../cache/sha-sqlite-cache";
+import { type CacheLocation, DEFAULT_PROVIDER_CACHE_ROOT, ShaSqliteCache } from "../cache/sha-sqlite-cache";
 
 export const DEFAULT_OPENSHIFT_CACHE_LIMIT: OpenShiftCacheLimit = 20;
 export const DEFAULT_OPENSHIFT_CACHE_ROOT = DEFAULT_PROVIDER_CACHE_ROOT;
@@ -21,13 +21,14 @@ import {
 } from "../../core/openshift/merge";
 
 export class OpenShiftCache extends ShaSqliteCache<OpenShiftCacheEntry> {
-  constructor(options: OpenShiftCacheOptions = {}) {
+  constructor(options: OpenShiftCacheOptions & CacheLocation = {}) {
     super({
       provider: "openshift",
       root: options.root ?? DEFAULT_OPENSHIFT_CACHE_ROOT,
       maxEntries: options.maxEntries ?? DEFAULT_OPENSHIFT_CACHE_LIMIT,
       isEntry: isOpenShiftCacheEntry,
       invalidMessage: "Cannot cache an invalid OpenShift build snapshot.",
+      registry: options.registry,
     });
   }
 

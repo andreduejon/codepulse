@@ -6,7 +6,7 @@ import {
   type CacheGroupSummary,
   type ProviderCacheSummary,
 } from "../../core/cache-store";
-import { DEFAULT_PROVIDER_CACHE_ROOT, invalidateProviderCacheWrites, providerCacheDatabase } from "./sha-sqlite-cache";
+import { DEFAULT_PROVIDER_CACHE_ROOT, type ProviderCacheRegistry, providerCacheRegistry } from "./sha-sqlite-cache";
 
 function fileSize(path: string): number {
   try {
@@ -28,10 +28,14 @@ function assertTimestamp(now: number): void {
     throw new Error("Cache operation requires a valid timestamp.");
 }
 
-export function getProviderCacheSummary(root = DEFAULT_PROVIDER_CACHE_ROOT): ProviderCacheSummary {
+export function getProviderCacheSummary(
+  root = DEFAULT_PROVIDER_CACHE_ROOT,
+  registry: ProviderCacheRegistry = providerCacheRegistry,
+): ProviderCacheSummary {
   const path = join(resolve(root), "cache.sqlite");
   const groups = existsSync(path)
-    ? providerCacheDatabase(root)
+    ? registry
+        .database(root)
         .query<CacheGroupSummary, [number]>(`
     WITH artifact_sizes AS (
       SELECT snapshot_id, COUNT(*) AS artifact_count,
@@ -69,21 +73,25 @@ export function resetRepositoryCacheTimer(
   repoHash: string,
   root = DEFAULT_PROVIDER_CACHE_ROOT,
   now = Date.now(),
+  registry: ProviderCacheRegistry = providerCacheRegistry,
 ): number {
   const hash = assertRepositoryHash(repoHash);
   assertTimestamp(now);
   if (!existsSync(join(resolve(root), "cache.sqlite"))) return 0;
-  return providerCacheDatabase(root)
-    .query("UPDATE snapshots SET cleanup_reset_at = ? WHERE repo_hash = ?")
-    .run(now, hash).changes > 0
+  return registry.database(root).query("UPDATE snapshots SET cleanup_reset_at = ? WHERE repo_hash = ?").run(now, hash)
+    .changes > 0
     ? 1
     : 0;
 }
 
-export function resetAllCacheTimers(root = DEFAULT_PROVIDER_CACHE_ROOT, now = Date.now()): number {
+export function resetAllCacheTimers(
+  root = DEFAULT_PROVIDER_CACHE_ROOT,
+  now = Date.now(),
+  registry: ProviderCacheRegistry = providerCacheRegistry,
+): number {
   assertTimestamp(now);
   if (!existsSync(join(resolve(root), "cache.sqlite"))) return 0;
-  const db = providerCacheDatabase(root);
+  const db = registry.database(root);
   return db
     .transaction(() => {
       const count =
@@ -98,11 +106,12 @@ export function evictProviderCache(
   repoHash: string,
   provider: string,
   root = DEFAULT_PROVIDER_CACHE_ROOT,
+  registry: ProviderCacheRegistry = providerCacheRegistry,
 ): CacheEvictionResult {
   const hash = assertRepositoryHash(repoHash);
   if (typeof provider !== "string" || !provider) throw new Error("Cache eviction requires a provider ID.");
   if (!existsSync(join(resolve(root), "cache.sqlite"))) return { snapshotCount: 0, artifactCount: 0 };
-  const db = providerCacheDatabase(root);
+  const db = registry.database(root);
   const result = db
     .transaction(() => {
       const counts = db
@@ -116,14 +125,18 @@ export function evictProviderCache(
       return counts ?? { snapshotCount: 0, artifactCount: 0 };
     })
     .immediate();
-  invalidateProviderCacheWrites(root);
+  registry.invalidateWrites(root);
   return result;
 }
 
-export function evictRepositoryCache(repoHash: string, root = DEFAULT_PROVIDER_CACHE_ROOT): CacheEvictionResult {
+export function evictRepositoryCache(
+  repoHash: string,
+  root = DEFAULT_PROVIDER_CACHE_ROOT,
+  registry: ProviderCacheRegistry = providerCacheRegistry,
+): CacheEvictionResult {
   const hash = assertRepositoryHash(repoHash);
   if (!existsSync(join(resolve(root), "cache.sqlite"))) return { snapshotCount: 0, artifactCount: 0 };
-  const db = providerCacheDatabase(root);
+  const db = registry.database(root);
   const result = db
     .transaction(() => {
       const counts = db
@@ -137,14 +150,18 @@ export function evictRepositoryCache(repoHash: string, root = DEFAULT_PROVIDER_C
       return counts ?? { snapshotCount: 0, artifactCount: 0 };
     })
     .immediate();
-  invalidateProviderCacheWrites(root);
+  registry.invalidateWrites(root);
   return result;
 }
 
-export function cleanupInactiveProviderCaches(root = DEFAULT_PROVIDER_CACHE_ROOT, now = Date.now()): number {
+export function cleanupInactiveProviderCaches(
+  root = DEFAULT_PROVIDER_CACHE_ROOT,
+  now = Date.now(),
+  registry: ProviderCacheRegistry = providerCacheRegistry,
+): number {
   assertTimestamp(now);
   if (!existsSync(join(resolve(root), "cache.sqlite"))) return 0;
-  const db = providerCacheDatabase(root);
+  const db = registry.database(root);
   const cutoff = now - CACHE_INACTIVITY_MS;
   const count = db
     .transaction(() => {
@@ -161,6 +178,6 @@ export function cleanupInactiveProviderCaches(root = DEFAULT_PROVIDER_CACHE_ROOT
       return expired.length;
     })
     .immediate();
-  if (count > 0) invalidateProviderCacheWrites(root);
+  if (count > 0) registry.invalidateWrites(root);
   return count;
 }

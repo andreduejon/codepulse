@@ -28,7 +28,7 @@ flowchart LR
     Snyk["snyk: the Snyk CLI"]
     Cache["cache: SQLite"]
     Settings["settings: the settings and themes files"]
-    System["system: browser, environment, storage paths"]
+    System["system: browser, clipboard, environment, storage paths, restart"]
   end
   Main -- builds --> Adapters
   Main -- hands the ports to --> TUI
@@ -44,7 +44,7 @@ flowchart LR
 
 | Folder | What | May import |
 |--------|------|------------|
-| `src/core` | the app's logic and its ports: no Solid, OpenTUI, `bun:*`, `node:fs` or `child_process` | core |
+| `src/core` | the app's logic and its ports: no Solid, OpenTUI, `node:*` or `bun:*` | core |
 | `src/adapters` | what implements the ports | core, adapters |
 | `src/tui` | the terminal front end | core, tui |
 | root: `src/*.ts`, `src/cli` | builds the adapters, starts the front end | everything |
@@ -117,5 +117,13 @@ commands call the core commands and the services.
 The app's root (`tui/app/app-content.tsx`) builds the state and the controllers and provides the contexts;
 `tui/app/layout.tsx` draws the screens from them.
 
-Process-wide objects a host could give each app its own of: the cache registry (`ProviderCacheRegistry`, one database
-connection per cache folder) and the debug log (`DebugLog`).
+## Process-wide objects
+
+The cache registry (`ProviderCacheRegistry`, `adapters/cache/sha-sqlite-cache.ts`) holds the open cache databases, one
+per folder, and what belongs to each: the writes an eviction drops, the cache screen's pause, the listeners told about
+a write. `terminalPorts({ cacheRoot, registry })` builds the providers' caches, the cache screen and the Dashboard on
+one folder and one registry; the terminal app uses the process's (`providerCacheRegistry`). `src/ports.test.ts` checks
+that ports built on a registry of their own write, evict and read through it alone.
+
+The debug log (`debugLog`, `core/debug-events.ts`) is the process's: the adapters and services write to it directly,
+so two apps in one process share it.

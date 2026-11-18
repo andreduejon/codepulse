@@ -11,8 +11,8 @@ export interface DebugEvent {
 const MAX_DEBUG_EVENTS = 100;
 
 /**
- * The Debug dialog's log: the newest events first, at most 100. One per app would be a host's choice (a web host with
- * several sessions); the terminal app uses `debugLog`, the process's.
+ * The Debug dialog's log: the newest events first, at most 100. The app writes to `debugLog`, the process's: the
+ * adapters and services reach it directly, so apps in one process share it.
  */
 export class DebugLog {
   private events: DebugEvent[] = [];

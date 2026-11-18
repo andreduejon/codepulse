@@ -3,10 +3,11 @@
  * through the modules at call time, so a test's spy on one of their functions sees them.
  */
 import type { GitHubAdapters } from "../../core/github/service";
+import type { ProviderCacheRegistry } from "../cache/sha-sqlite-cache";
 import * as api from "./api";
 import { GitHubCache } from "./cache";
 
-export function githubAdapters(cacheRoot?: string): GitHubAdapters {
+export function githubAdapters(cacheRoot?: string, registry?: ProviderCacheRegistry): GitHubAdapters {
   return {
     api: {
       fetchCIDataForSHAs: (...args) => api.fetchCIDataForSHAs(...args),
@@ -14,7 +15,7 @@ export function githubAdapters(cacheRoot?: string): GitHubAdapters {
       fetchJobAnnotations: (...args) => api.fetchJobAnnotations(...args),
       fetchJobLog: (...args) => api.fetchJobLog(...args),
     },
-    cache: maxEntries => new GitHubCache({ root: cacheRoot, maxEntries }),
+    cache: maxEntries => new GitHubCache({ root: cacheRoot, maxEntries, registry }),
     token: envVar => api.getGitHubToken(envVar),
   };
 }

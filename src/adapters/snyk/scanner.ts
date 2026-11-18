@@ -16,7 +16,7 @@ import type {
   SnykScanOptions,
   SnykScanResult,
 } from "../../core/snyk/types";
-import { repositoryIdentity } from "../cache/sha-sqlite-cache";
+import { type ProviderCacheRegistry, repositoryIdentity } from "../cache/sha-sqlite-cache";
 import { SnykCache } from "./cache";
 import { applyMavenManaged, mavenManagedVersions, PomIndex, type PomSource } from "./maven-managed";
 import { LocalRepositoryPoms, markRemovableManaged, mavenLocalRepository } from "./maven-removable";
@@ -39,6 +39,8 @@ export interface SnykScannerDependencies {
   runCommand?: SnykCommandRunner;
   which?: (command: string) => string | null;
   cacheRoot?: string;
+  /** The registry that holds the cache's database: the process's unless a host gives its own. */
+  registry?: ProviderCacheRegistry;
   now?: () => Date;
   /** The local Maven repository; otherwise found the way Maven finds it (see `mavenLocalRepository`). */
   mavenRepository?: string;
@@ -644,7 +646,11 @@ export async function scanSnykCommit(
   dependencies: SnykScannerDependencies = {},
 ): Promise<SnykScanResult> {
   const runCommand = dependencies.runCommand ?? runSnykCommand;
-  const cache = new SnykCache({ root: dependencies.cacheRoot, maxEntries: options.maxCachedScans });
+  const cache = new SnykCache({
+    root: dependencies.cacheRoot,
+    registry: dependencies.registry,
+    maxEntries: options.maxCachedScans,
+  });
   const sha = await resolveCommitSha(options.repoPath, options.sha, runCommand, options.signal);
   if (!options.force) {
     const cached = await cache.read(options.repoPath, sha);
@@ -727,7 +733,7 @@ export async function scanSnykCommit(
           scope: registryScope,
           signal: commandOptions.signal,
           which: dependencies.which ?? (command => Bun.which(command)),
-          cache: new RegistryCache(dependencies.cacheRoot),
+          cache: new RegistryCache(dependencies.cacheRoot, dependencies.registry),
         });
       return lookup;
     };
@@ -779,9 +785,18 @@ export async function scanSnykCommit(
 export async function getCachedSnykScan(
   repoPath: string,
   sha: string,
-  options: { cacheRoot?: string; maxCachedScans?: SnykCacheLimit; touch?: boolean } = {},
+  options: {
+    cacheRoot?: string;
+    registry?: ProviderCacheRegistry;
+    maxCachedScans?: SnykCacheLimit;
+    touch?: boolean;
+  } = {},
 ): Promise<SnykScanResult | null> {
-  return new SnykCache({ root: options.cacheRoot, maxEntries: options.maxCachedScans }).read(repoPath, sha, {
+  return new SnykCache({
+    root: options.cacheRoot,
+    registry: options.registry,
+    maxEntries: options.maxCachedScans,
+  }).read(repoPath, sha, {
     touch: options.touch,
   });
 }

@@ -3,10 +3,11 @@
  * environment. Calls go through the modules at call time, so a test's spy on one of their functions sees them.
  */
 import type { OpenShiftAdapters } from "../../core/openshift/service";
+import type { ProviderCacheRegistry } from "../cache/sha-sqlite-cache";
 import * as api from "./api";
 import { OpenShiftCache } from "./cache";
 
-export function openShiftAdapters(cacheRoot?: string): OpenShiftAdapters {
+export function openShiftAdapters(cacheRoot?: string, registry?: ProviderCacheRegistry): OpenShiftAdapters {
   return {
     api: {
       fetchOpenShiftInventory: (...args) => api.fetchOpenShiftInventory(...args),
@@ -18,7 +19,7 @@ export function openShiftAdapters(cacheRoot?: string): OpenShiftAdapters {
       fetchOpenShiftObject: (...args) => api.fetchOpenShiftObject(...args),
       fetchOpenShiftEvents: (...args) => api.fetchOpenShiftEvents(...args),
     },
-    cache: maxEntries => new OpenShiftCache({ root: cacheRoot, maxEntries }),
+    cache: maxEntries => new OpenShiftCache({ root: cacheRoot, maxEntries, registry }),
     token: envVar => api.getOpenShiftToken(envVar),
   };
 }

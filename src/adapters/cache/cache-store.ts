@@ -13,10 +13,10 @@ export function providerCacheStore(
 ): CacheStorePort {
   return {
     path: () => join(resolve(root), "cache.sqlite"),
-    summary: () => management.getProviderCacheSummary(root),
-    resetTimer: repoHash => management.resetRepositoryCacheTimer(repoHash, root),
-    resetAllTimers: () => management.resetAllCacheTimers(root),
-    evictRepository: repoHash => management.evictRepositoryCache(repoHash, root),
+    summary: () => management.getProviderCacheSummary(root, registry),
+    resetTimer: repoHash => management.resetRepositoryCacheTimer(repoHash, root, undefined, registry),
+    resetAllTimers: () => management.resetAllCacheTimers(root, undefined, registry),
+    evictRepository: repoHash => management.evictRepositoryCache(repoHash, root, registry),
     identity: repoPath => sqlite.repositoryIdentity(repoPath),
     onWrite: listener => registry.onWrite(listener),
     setSuspended: suspended => registry.setSuspended(suspended, root),

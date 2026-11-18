@@ -5,6 +5,7 @@
  */
 
 import { providerCacheStore } from "./adapters/cache/cache-store";
+import { type CacheLocation, DEFAULT_PROVIDER_CACHE_ROOT } from "./adapters/cache/sha-sqlite-cache";
 import * as dashboardLoad from "./adapters/dashboard/load";
 import { gitCli } from "./adapters/git/git-cli";
 import { githubAdapters } from "./adapters/github/adapters";
@@ -17,30 +18,44 @@ import type { AppPorts, ProviderAdapters } from "./core/app-ports";
 import type { DashboardReader } from "./core/dashboard/load";
 import type { GitPort } from "./core/git/port";
 
+/** Where the caches live: the user's cache folder and the process's registry unless given. */
+export interface CacheOptions {
+  cacheRoot?: string;
+  registry?: CacheLocation["registry"];
+}
+
 /** The providers' HTTP clients, caches, scanner and environment tokens. */
-export function terminalProviderAdapters(): ProviderAdapters {
-  return { github: githubAdapters(), jenkins: jenkinsAdapters(), openshift: openShiftAdapters(), snyk: snykAdapters() };
+export function terminalProviderAdapters({ cacheRoot, registry }: CacheOptions = {}): ProviderAdapters {
+  return {
+    github: githubAdapters(cacheRoot, registry),
+    jenkins: jenkinsAdapters(cacheRoot, registry),
+    openshift: openShiftAdapters(cacheRoot, registry),
+    snyk: snykAdapters(cacheRoot, registry),
+  };
 }
 
-/** The terminal app's adapters. */
 /** The Dashboard's reads: Git through the app's Git port, and the provider caches (through the module, for tests' spies). */
-export function terminalDashboard(git: GitPort): DashboardReader {
-  return { readEvents: (app, options) => dashboardLoad.loadAppEvents(app, options, git) };
+export function terminalDashboard(git: GitPort, { cacheRoot, registry }: CacheOptions = {}): DashboardReader {
+  return {
+    readEvents: (app, options) => dashboardLoad.loadAppEvents(app, { cacheRoot, registry, ...options }, git),
+  };
 }
 
-export function terminalPorts(): AppPorts {
-  return portsFrom({});
+/** The terminal app's adapters, every cache on one folder and one registry. */
+export function terminalPorts(caches: CacheOptions = {}): AppPorts {
+  return portsFrom({}, caches);
 }
 
 /** The ports given, the terminal app's for the others. */
-export function portsFrom(given: Partial<AppPorts>): AppPorts {
+export function portsFrom(given: Partial<AppPorts>, caches: CacheOptions = {}): AppPorts {
   const git = given.git ?? gitCli();
   return {
     settings: given.settings ?? fileSettings(),
     git,
-    cacheStore: given.cacheStore ?? providerCacheStore(),
-    providers: given.providers ?? terminalProviderAdapters(),
+    cacheStore:
+      given.cacheStore ?? providerCacheStore(caches.cacheRoot ?? DEFAULT_PROVIDER_CACHE_ROOT, caches.registry),
+    providers: given.providers ?? terminalProviderAdapters(caches),
     system: given.system ?? terminalSystem(),
-    dashboard: given.dashboard ?? terminalDashboard(git),
+    dashboard: given.dashboard ?? terminalDashboard(git, caches),
   };
 }

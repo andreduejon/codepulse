@@ -170,6 +170,12 @@ export class ProviderCacheRegistry {
 /** The process's cache registry. */
 export const providerCacheRegistry = new ProviderCacheRegistry();
 
+/** Where a cache lives: its folder, and the registry that holds its database (the process's unless a host gives its own). */
+export interface CacheLocation {
+  root?: string;
+  registry?: ProviderCacheRegistry;
+}
+
 /** See ProviderCacheRegistry.onWrite. */
 export const onProviderCacheWrite = (listener: (repoPath: string) => void): (() => void) =>
   providerCacheRegistry.onWrite(listener);
