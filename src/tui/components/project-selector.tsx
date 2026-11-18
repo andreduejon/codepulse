@@ -1,6 +1,6 @@
 import { type CliRenderer, MouseButton, type Renderable, type ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer } from "@opentui/solid";
-import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import packageJson from "../../../package.json";
 import type { KnownRepoInfo } from "../../core/settings/config";
 import { SHIFT_JUMP } from "../constants";
@@ -97,11 +97,19 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
     if (scrollboxRef && row) scrollElementIntoView(scrollboxRef, row);
   });
 
+  /** The pick being looked up: a newer pick or leaving the selector stops it, so only the last pick opens. */
+  let lookup: AbortController | undefined;
+  onCleanup(() => lookup?.abort());
+
   /** A repository by its top folder (a path inside it opens the whole repository): switch to it, or start on it. */
   const selectRepo = async (repoPath: string) => {
     const expanded = expandHome(repoPath);
+    lookup?.abort();
+    const pick = new AbortController();
+    lookup = pick;
     // A folder that isn't a repository (or doesn't exist) opens as typed: the app then says what is wrong with it.
-    const canonical = (await git.getRepoRoot(expanded).catch(() => null)) ?? expanded;
+    const canonical = (await git.getRepoRoot(expanded, pick.signal).catch(() => null)) ?? expanded;
+    if (pick.signal.aborted) return;
     if (props.onSelectRepo) {
       props.onSelectRepo(canonical);
       return;
