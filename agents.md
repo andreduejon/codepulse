@@ -70,7 +70,7 @@ needs from outside (Git, requests, the app's state, the time) comes in through i
 a Solid hook in `src/tui` adapts a core service (`core/git/data-service.ts` and `tui/hooks/use-data-loader.ts`). New
 logic that doesn't draw goes in `src/core`; a new way to reach the outside is a port in core and an adapter in
 `src/adapters`, built in `src/ports.ts`. A new provider is its own files in each layer (a definition in core, its
-adapters, its terminal module), listed once in `src/providers.ts`; no other file names it.
+adapters, its terminal module), listed once in `src/providers.ts`; no other file needs to name it.
 
 ## Keys
 

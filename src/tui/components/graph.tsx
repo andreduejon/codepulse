@@ -18,6 +18,7 @@ import {
   HASH_COL_WIDTH,
   UNCOMMITTED_PLACEHOLDER,
 } from "../constants";
+import { useProviderModules } from "../context/provider-modules";
 import { useAppState } from "../context/state";
 import { dimGraphChars } from "../graph/dim";
 import {
@@ -30,6 +31,7 @@ import {
 import { edgeMarks, MAX_GRAPH_COLUMNS, sliceGraphToViewport } from "../graph/viewport";
 import { useScrollWindow } from "../hooks/use-scroll-window";
 import { useT } from "../hooks/use-t";
+import { providerColors } from "../providers/colors";
 import { GIT_WIDTHS, type GraphColumnWidths } from "../providers/graph-column-widths";
 import { badgeOf, useGraphColumns } from "../providers/graph-columns-context";
 import type { ProviderGraphColumns } from "../providers/module";
@@ -236,6 +238,8 @@ function GraphLine(
   const [hovered, setHovered] = createSignal(false);
   /** The shown provider's two columns, in place of Author and Date; none in Git. */
   const providerColumns = useGraphColumns();
+  /** The shown provider's modules: names it adds after the refs show in its color. */
+  const providerModules = useProviderModules();
   /** Provider columns grow to fit their widest chips (within budget); header, row and subject width share these. */
   const columnWidths = () =>
     budgetedColumnWidths(providerColumns(), state.graphBadges(), props.terminalWidth(), graphWidth());
@@ -486,7 +490,9 @@ function GraphLine(
                 {ri => (
                   <Badge
                     name={ri.name}
-                    color={ri.namespace ? t().openShiftBg : laneColor()}
+                    color={
+                      ri.namespace ? providerColors(t(), state.activeProviderView(), providerModules).bg : laneColor()
+                    }
                     dimmed={ri.type === "stash" || ri.type === "uncommitted" || isDimmed()}
                     maxLength={refMaxLength()}
                     noShrink
