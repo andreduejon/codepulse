@@ -3,10 +3,15 @@
  * (`~/.config/codepulse`, `~/.cache/codepulse`, or `%APPDATA%` and `%LOCALAPPDATA%` on Windows). Bun reads `HOME`
  * once at startup, so `homedir()` itself is replaced.
  */
-import { afterAll, mock } from "bun:test";
+import { afterAll, mock, setDefaultTimeout } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import * as os from "node:os";
 import { join } from "node:path";
+
+// A test cut at its time limit keeps running beside the next one: its renderer and the next test's overlap, and its
+// errors land there (OpenTUI's WrongContext, counts read from the wrong screen). The UI tests mount large screens, which
+// on a loaded machine can take over Bun's default 5 s: give them room, so only a test that really hangs is cut.
+setDefaultTimeout(30_000);
 
 const realHome = os.homedir();
 const home = mkdtempSync(join(os.tmpdir(), "codepulse-test-home-"));
