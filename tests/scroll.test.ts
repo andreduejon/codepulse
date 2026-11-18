@@ -44,3 +44,23 @@ describe("scrollElementIntoView", () => {
     expect(positions).toEqual([]);
   });
 });
+
+describe("scheduled scrolls", () => {
+  test("a retry waiting when its screen closes never runs: it would touch an element another renderer drew", async () => {
+    const { createRoot } = await import("solid-js");
+    const { scheduleScrollIntoView, useScrollSchedule } = await import("../src/tui/utils/scroll");
+    let calls = 0;
+    const dispose = createRoot(dispose => {
+      // Layout not ready: the scroll waits for a retry.
+      scheduleScrollIntoView(useScrollSchedule(), () => {
+        calls++;
+        return false;
+      });
+      return dispose;
+    });
+    expect(calls).toBe(1);
+    dispose();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(calls).toBe(1);
+  });
+});

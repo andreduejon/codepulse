@@ -2,7 +2,7 @@ import type { KeyEvent, Renderable, ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, type JSX, on, onCleanup, Show, untrack } from "solid-js";
 import { useT } from "../../hooks/use-t";
-import { hasScrollLayout, scheduleScrollIntoView } from "../../utils/scroll";
+import { hasScrollLayout, scheduleScrollIntoView, useScrollSchedule } from "../../utils/scroll";
 
 /**
  * Search inside a log or object viewer: `/` opens the search row, typing jumps to the first hit, Enter keeps the
@@ -47,7 +47,7 @@ export function useLogSearch(opts: {
     });
     return hits;
   });
-  const scrollRef: { scrollTimer?: ReturnType<typeof setTimeout> } = {};
+  const scrollRef = useScrollSchedule();
   const reveal = (index: number) => {
     setCurrent(index);
     scheduleScrollIntoView(scrollRef, () => opts.scrollToLine(index));

@@ -1,4 +1,5 @@
 import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
+import { onCleanup } from "solid-js";
 import { scrollDeltaFor } from "../../core/scroll-window";
 
 const SCROLL_RETRY_MS = 16;
@@ -36,6 +37,19 @@ export function scrollElementIntoView(
   if (direction < 0 && delta > 0) return true;
   if (delta !== 0) scrollbox.scrollBy({ x: 0, y: delta });
   return true;
+}
+
+/**
+ * A screen's scroll schedule: a retry still waiting when the screen closes is cancelled, so it never touches an
+ * element of a closed screen (in tests, another renderer's: OpenTUI refuses that with `WrongContext`).
+ */
+export function useScrollSchedule(): ScrollSchedule {
+  const schedule: ScrollSchedule = {};
+  onCleanup(() => {
+    if (schedule.scrollTimer) clearTimeout(schedule.scrollTimer);
+    schedule.scrollTimer = undefined;
+  });
+  return schedule;
 }
 
 /** Scroll now. Retry once if layout is not ready. Cancels a pending retry so key-repeat cannot stack. */

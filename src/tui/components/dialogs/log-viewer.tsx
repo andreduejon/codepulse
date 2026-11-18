@@ -139,7 +139,11 @@ export function LogViewer(props: Readonly<LogViewerProps>) {
     props.scrollKey?.();
     const start = untrack(() => props.scrollStart?.() ?? "top");
     if (start === "top") scrollboxRef?.scrollTo(0);
-    else if (start === "bottom") queueMicrotask(() => scrollboxRef?.scrollTo(Number.POSITIVE_INFINITY));
+    else if (start === "bottom")
+      queueMicrotask(() => {
+        // Closed in the meantime: its scrollbox is gone.
+        if (scrollboxRef && !scrollboxRef.isDestroyed) scrollboxRef.scrollTo(Number.POSITIVE_INFINITY);
+      });
   });
 
   const toggleWrap = () => setWrapEnabled(value => !value);

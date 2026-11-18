@@ -1,6 +1,6 @@
 import { MouseButton } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
-import { createEffect, createMemo, createSelector, createSignal, For, Match, onCleanup, Show, Switch } from "solid-js";
+import { createEffect, createMemo, createSelector, createSignal, For, Match, Show, Switch } from "solid-js";
 import type { DashboardRow } from "../../core/dashboard/events";
 import { HASH_COL_WIDTH } from "../constants";
 import { useProviderModules } from "../context/provider-modules";
@@ -11,7 +11,7 @@ import { useScrollWindow } from "../hooks/use-scroll-window";
 import { useT } from "../hooks/use-t";
 import { providerColors } from "../providers/colors";
 import { formatClock, formatDayLabel } from "../utils/date";
-import { type ScrollSchedule, scheduleScrollIntoView } from "../utils/scroll";
+import { scheduleScrollIntoView, useScrollSchedule } from "../utils/scroll";
 import { DashboardEventText } from "./dashboard-event-text";
 
 /** Width of the Time column: `09:05` and its padding. */
@@ -67,14 +67,11 @@ export function DashboardView(
     const { start, end } = rowWindow.range();
     return d.rows().slice(start, end);
   });
-  const schedule: ScrollSchedule = {};
+  const schedule = useScrollSchedule();
   createEffect(() => {
     const index = d.cursor();
     if (index < 0) return;
     scheduleScrollIntoView(schedule, () => rowWindow.scrollIntoView(index));
-  });
-  onCleanup(() => {
-    if (schedule.scrollTimer) clearTimeout(schedule.scrollTimer);
   });
 
   const header = (label: string) => (

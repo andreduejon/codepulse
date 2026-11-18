@@ -35,7 +35,7 @@ import { badgeOf, useGraphColumns } from "../providers/graph-columns-context";
 import type { ProviderGraphColumns } from "../providers/module";
 import { ScrollingLabel } from "../providers/shared/detail-rows";
 import { formatRelativeDate } from "../utils/date";
-import { scheduleScrollIntoView } from "../utils/scroll";
+import { scheduleScrollIntoView, useScrollSchedule } from "../utils/scroll";
 import { cellWidth } from "../utils/terminal-text";
 import Badge from "./badge";
 import { graphCharsToContent } from "./graph-text";
@@ -690,7 +690,7 @@ export default function GraphView(
     const { start, end } = rowWindow.range();
     return state.graphRows().slice(start, end);
   });
-  const scrollSchedule: { scrollTimer?: ReturnType<typeof setTimeout> } = {};
+  const scrollSchedule = useScrollSchedule();
 
   createEffect(() => {
     const rows = state.graphRows();
@@ -716,9 +716,6 @@ export default function GraphView(
     const idx = state.scrollTargetIndex();
     if (idx < 0) return;
     scrollRowIntoView(idx);
-  });
-  onCleanup(() => {
-    if (scrollSchedule.scrollTimer) clearTimeout(scrollSchedule.scrollTimer);
   });
 
   // Deferred scroll-into-view after filter clear: polls until Yoga layout is ready.
