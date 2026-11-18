@@ -74,15 +74,15 @@ export const GOLDEN_PLAYS: readonly GoldenPlay[] = [
   },
   {
     name: "openshift-cached",
-    covers: "the next phase: (cached) and (removed) in the Events tab, the Cached section of the events",
+    covers: "the next phase: (cached) in the Events tab (a replaced pod, a deleted event), the Cached section of the events",
     args: [
       ...WIDE,
       "--play",
       [
         // The next phase has no BuildFailed event any more: only the cache keeps it.
         'click:OpenShift wait:"64ddc8a" advance type::reload enter',
-        'click:64ddc8a enter right wait:"BuildFailed (cached)" shot:events',
-        'click:BuildFailed enter wait:"Cached (no longer" shot:dialog',
+        'click:64ddc8a enter right wait:"shop-api-41 (cached)" shot:events',
+        'click:"shop-api-41 (cached)" enter wait:"Cached (no longer" shot:dialog',
       ].join("\n"),
     ],
   },

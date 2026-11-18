@@ -41,7 +41,15 @@ function harness() {
     },
   };
   let error: string | null = null;
-  const listed = commitDataFromCacheEntry({ sha: SHA, builds: [{ ...build, commitSha: SHA }] as never });
+  // What the cluster lists: the build as the API gives it, not a copy from the cache.
+  const fromCache = commitDataFromCacheEntry({ sha: SHA, builds: [{ ...build, commitSha: SHA }] as never });
+  const listed = {
+    ...fromCache,
+    namespaces: fromCache.namespaces.map(ns => ({
+      ...ns,
+      builds: ns.builds.map(({ cacheOnly: _cacheOnly, ...listedBuild }) => listedBuild),
+    })),
+  };
   const api = {
     fetchOpenShiftInventory: mock(async () => ({
       data: error ? new Map() : new Map([[SHA, listed]]),
@@ -249,7 +257,12 @@ test("a warning about a resource the live list no longer has is not present; the
   // No live list yet: nothing is known gone.
   expect(h.service.warningIsPresent(SHA, podWarning)).toBe(true);
   await liveOnce();
-  expect(h.service.getCommitData(SHA)?.warnings?.map(w => w.id).sort()).toEqual(["event-1", "event-pod"]);
+  expect(
+    h.service
+      .getCommitData(SHA)
+      ?.warnings?.map(w => w.id)
+      .sort(),
+  ).toEqual(["event-1", "event-pod"]);
   expect(h.service.warningIsPresent(SHA, podWarning)).toBe(true);
   expect(h.app.badges.get(SHA)?.warningCount).toBe(2);
   // The pod was replaced by another one with the same commit.

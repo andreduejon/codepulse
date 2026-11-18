@@ -60,10 +60,11 @@
    █      64ddc8a  main    03:10  ✓ build shop-api-42 complete in shop-dev                                                                    └─ ▸ CVE-2022-23540                                9.1 ●
    │                                                                                                                                          ▾ HIGH                                                 3
    █      64ddc8a  main    02:54  ✗ build shop-api-41 failed in shop-dev                                                                      ├─ ▸ CVE-2026-10001                                8.2 ●
-   █      64ddc8a  main    02:30  feat(payments): retry failed payments with expone...backoff, and a subject long enough to need cutting      ├─ ▸ CVE-2020-8203                                 7.5 ●
-   │                                                                                                                                          └─ ▸ CVE-2024-4068                                 7.5 ●
-   │      ──────────────── Yesterday · Sun, Mar 1 ────────────────────────────────────────────────────────────────────────────────────────    · MEDIUM                                               0
-   █      917f7b3  main    13:30  perf(cart): cache price lookups                                                                             · LOW                                                  0
+   █      64ddc8a  main    02:49  ○ build shop-api-39 cancelled in shop-dev                                                                   ├─ ▸ CVE-2020-8203                                 7.5 ●
+   █      64ddc8a  main    02:30  feat(payments): retry failed payments with expone...backoff, and a subject long enough to need cutting      └─ ▸ CVE-2024-4068                                 7.5 ●
+   │                                                                                                                                          · MEDIUM                                               0
+   │      ──────────────── Yesterday · Sun, Mar 1 ────────────────────────────────────────────────────────────────────────────────────────    · LOW                                                  0
+   █      917f7b3  main    13:30  perf(cart): cache price lookups
    │
    │      ──────────────── Sat, Feb 28 ───────────────────────────────────────────────────────────────────────────────────────────────────
    █      1bb16fb  main    01:30  Merge pull request #23 from demo/feature/i18n
@@ -75,7 +76,6 @@
    │
    █      0d02d96  main    11:30  Merge pull request #22 from demo/chore/eslint-9
    │
-   █      bd35bdd  main    05:30  Merge pull request #21 from demo/bugfix/cart-badge
 
   │
   │     Errors from GitHub and Jenkins                                                                                              ✕
@@ -86,7 +86,7 @@
   │
   │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                   Git   GitHub   Jenkins   OpenShift   Snyk
   │
-  │   customer-notification-service   shop   shop-web                                                                         21 events
+  │   customer-notification-service   shop   shop-web                                                                         22 events
   │
 
                                                                        tab Git · enter show in Snyk · → details · r refresh · ↑/↓ navigate           ● upgrade  ● override  ● no fix  ! mature exploit

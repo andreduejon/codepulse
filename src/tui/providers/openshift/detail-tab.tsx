@@ -58,6 +58,7 @@ function statusCategory(status: OpenShiftStatus): StatusCategory {
   if (status === "pass") return "pass";
   if (status === "fail") return "fail";
   if (status === "running") return "running";
+  if (status === "cancelled") return "cancelled";
   return "unknown";
 }
 
@@ -300,7 +301,10 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
         ? t().accent
         : resource.id === props.targetResourceId && props.targetColor
           ? props.targetColor
-          : t().foreground;
+          : // Only the cache has it (the cluster pruned it): history, muted. Its status keeps its color.
+            resource.cacheOnly
+            ? t().foregroundMuted
+            : t().foreground;
     return (
       <box
         {...mouseRow(`resource:${resource.id}`, idx)}

@@ -104,7 +104,7 @@
     │                                                                                                                                            ├─ Pods
     │ █                         6adc455   feature/payments-r…   origin/feature/pay…  wip(payments): retry…  ·······        ·······               │  ├─ shop-api-7d9f8-r2m4p                          ✓
     │ │                                                                                                                                          │  └─ shop-api-7d9f8-pull9                          ●
-    █─╯                         64ddc8a   shop-test  feat(payments): retry failed payments with exponenti…   4   1   5      1   1                └─ Builds
+    █─╯                         64ddc8a   shop-test  feat(payments): retry failed payments with exponenti…   4   1   5      1   1   1            └─ Builds
     │                                                                                                                                               └─ shop-api-44                                   ✓
     █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······
     │
@@ -136,7 +136,7 @@
   │   customer-notification-service   shop   shop-web                                                                 main   86 commits
   │
 
-                                                                        tab Snyk · enter reload · esc back · ←/→ switch tab · ↑/↓ navigate                              ✓ ok  ● in progress  ✗ failing
+                                                                        tab Snyk · enter reload · esc back · ←/→ switch tab · ↑/↓ navigate                 ✓ ok  ● in progress  ✗ failing  ○ cancelled
 
 
 === shot 4: openshift-events (200x45) ===
@@ -146,17 +146,17 @@
     █                           bf08113   dev   origin/dev   shop-dev  feat(api): export request metrics     2   1          1                 Reload commit                                       live
     │                                                                                                                                         total events                                           5
     █                           e6209dd  feat(api): add a health endpoint                                   ·······        ·······            ├─ ▾ shop-dev                                          1
-    │                                                                                                                                         │  └─ Build shop-api-41
-    █                           3447db9   v0.42.0   main   origin/…   shop-pr…   +2  docs: rewrite the RE…   4              1                 │     └─ BuildFailed                              2h ago
+    │                                                                                                                                         │  └─ ▾ BuildFailed                                    1
+    █                           3447db9   v0.42.0   main   origin/…   shop-pr…   +2  docs: rewrite the RE…   4              1                 │     └─ shop-api-41                              2h ago
     │                                                                                                                                         └─ ▾ shop-test                                         4
-    │ █                         6adc455   feature/payments-r…   origin/feature/pay…  wip(payments): retry…  ·······        ·······               ├─ Deployment shop-api
-    │ │                                                                                                                                          │  └─ ProgressDeadlineExceeded                40m ago
-    █─╯                         64ddc8a   shop-test  feat(payments): retry failed payments with exponentia   4   1   5      1   1                ├─ Pod shop-api-7d9f8-oom7k
-    │                                                                                                                                            │  └─ OOMKilling                              18m ago
-    █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······               └─ Pod shop-api-7d9f8-x2k4q
-    │                                                                                                                                               ├─ BackOff                                just now
-    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······                  └─ Unhealthy                                1m ago
-    │ │
+    │ █                         6adc455   feature/payments-r…   origin/feature/pay…  wip(payments): retry…  ·······        ·······               ├─ ▾ BackOff                                        1
+    │ │                                                                                                                                          │  └─ shop-api-7d9f8-x2k4q                   just now
+    █─╯                         64ddc8a   shop-test  feat(payments): retry failed payments with exponentia   4   1   5      1   1   1            ├─ ▾ Unhealthy                                      1
+    │                                                                                                                                            │  └─ shop-api-7d9f8-x2k4q                     1m ago
+    █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······               ├─ ▾ OOMKilling                                     1
+    │                                                                                                                                            │  └─ shop-api-7d9f8-oom7k                    18m ago
+    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······               └─ ▾ ProgressDeadlineExceeded                       1
+    │ │                                                                                                                                             └─ shop-api                                40m ago
     │ █                         0166f71  feat(i18n): add French                                             ·······        ·······
     │ │
     │ █─╮                       5245790  Merge branch 'main' into feature/i18n                              ·······        ·······

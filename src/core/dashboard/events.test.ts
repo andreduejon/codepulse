@@ -89,6 +89,25 @@ describe("events", () => {
     ).toEqual([
       expect.objectContaining({ source: "openshift", status: "pass", text: "build shop-api-12 complete in shop-dev" }),
     ]);
+    // A cancelled build says so, in the neutral status.
+    expect(
+      openShiftEvents("/repo/shop", [
+        {
+          sha: SHA,
+          builds: [
+            {
+              id: "Build/shop-api-13",
+              name: "shop-api-13",
+              namespace: "shop-dev",
+              status: "cancelled",
+              imageRefs: [],
+              commitSha: SHA,
+              updatedAt: "2026-03-02T10:20:00Z",
+            },
+          ],
+        },
+      ]),
+    ).toEqual([expect.objectContaining({ status: "cancelled", text: "build shop-api-13 cancelled in shop-dev" })]);
     // A finished build's own end time, also when the build carries no creation time.
     expect(
       openShiftEvents("/repo/shop", [

@@ -42,7 +42,8 @@ export const DEFAULT_OPENSHIFT_CONFIG: OpenShiftProviderConfig = {
 
 export type OpenShiftResourceKind = "Build" | "ImageStreamTag" | "Deployment" | "DeploymentConfig" | "Pod";
 export type OpenShiftInventoryKind = OpenShiftResourceKind | "ReplicaSet" | "ReplicationController";
-export type OpenShiftStatus = "pass" | "fail" | "running" | "unknown";
+/** `cancelled`: a Build stopped before it ended, neutral like a cancelled CI run. */
+export type OpenShiftStatus = "pass" | "fail" | "running" | "cancelled" | "unknown";
 
 export interface OpenShiftOwnerReference {
   kind: string;
@@ -113,7 +114,10 @@ export interface OpenShiftCommitData {
 
 /** Terminal Builds are persisted. Everything else stays in the live lane. */
 export function isCachedOpenShiftResource(resource: OpenShiftResource): boolean {
-  return resource.kind === "Build" && (resource.status === "pass" || resource.status === "fail");
+  return (
+    resource.kind === "Build" &&
+    (resource.status === "pass" || resource.status === "fail" || resource.status === "cancelled")
+  );
 }
 
 export interface OpenShiftInventoryResult {

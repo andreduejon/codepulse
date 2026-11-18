@@ -47,11 +47,11 @@ import type {
 } from "./types";
 import { OPENSHIFT_WATCH_KINDS, type OpenShiftListedInventory } from "./types";
 import {
+  isAboutPresentResource,
   linkWarningsToCommits,
   mergeWarnings,
   type OpenShiftWarning,
   type OpenShiftWarningList,
-  isAboutPresentResource,
   sameWarnings,
   warningsAbout,
 } from "./warnings";
@@ -676,7 +676,10 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
     warningIsCached: (warning: OpenShiftWarning) => !(listedIds.get(warning.namespace)?.has(warning.id) ?? false),
     /** Every warning kept about a resource, newest first: the resource dialog shows the ones OpenShift deleted. */
     warningsAboutResource: (resource: OpenShiftResource): OpenShiftWarning[] =>
-      mergeWarnings([], [...warningsBySha.values()].flatMap(list => warningsAbout(resource, list))),
+      mergeWarnings(
+        [],
+        [...warningsBySha.values()].flatMap(list => warningsAbout(resource, list)),
+      ),
     /** The namespaces whose warnings the token may not read: the Events tab says so. */
     warningsDenied: (): readonly string[] => warningsDenied,
     /** Frozen after a 401: no live session starts until a Reload. */

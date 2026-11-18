@@ -168,7 +168,7 @@ export function resourceOfWarning(
   commit: OpenShiftCommitData | null,
 ): OpenShiftResource | null {
   if (!RESOURCE_KINDS.has(warning.kind)) return null;
-  const own = commit ? warningsTarget(commit, warning) : undefined;
+  const own = heldResourceOf(warning, commit);
   if (own) return own;
   return {
     id: `${warning.namespace}/${warning.kind}/${warning.name}`,
@@ -180,11 +180,16 @@ export function resourceOfWarning(
   };
 }
 
-const warningsTarget = (commit: OpenShiftCommitData, warning: OpenShiftWarning) =>
-  resourcesOf(commit).find(
-    resource =>
-      resource.namespace === warning.namespace && resource.kind === warning.kind && resource.name === warning.name,
-  );
+/**
+ * The commit's own resource a warning is about (same name and uid), also one shown only from the cache (a pruned
+ * Build): what the resource dialog can open, log and object included.
+ */
+export function heldResourceOf(
+  warning: OpenShiftWarning,
+  commit: OpenShiftCommitData | null | undefined,
+): OpenShiftResource | undefined {
+  return commit ? resourcesOf(commit).find(resource => sameObject(warning, resource)) : undefined;
+}
 
 /** The warnings about one resource. */
 /**
@@ -201,7 +206,8 @@ export function isAboutPresentResource(
       !warning.uid ||
       controllers.some(controller => controller.namespace === warning.namespace && controller.uid === warning.uid)
     );
-  return commit ? resourcesOf(commit).some(resource => sameObject(warning, resource)) : false;
+  // One shown only from the cache (a Build OpenShift pruned) is no longer in the cluster either.
+  return commit ? resourcesOf(commit).some(resource => !resource.cacheOnly && sameObject(warning, resource)) : false;
 }
 
 export function warningsAbout(resource: OpenShiftResource, warnings: readonly OpenShiftWarning[]): OpenShiftWarning[] {

@@ -74,6 +74,7 @@
    █      64ddc8a  main                  03:10  ✓ build shop-api-42 complete in shop-dev
    │
    █      64ddc8a  main                  02:54  ✗ build shop-api-41 failed in shop-dev
+   █      64ddc8a  main                  02:49  ○ build shop-api-39 cancelled in shop-dev
    █      64ddc8a  main                  02:30  feat(payments): retry failed payments with exponential backoff, and a subject long enough to need cutting
    │
    │      ────────────────────────────── Yesterday · Sun, Mar 1 ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -81,12 +82,11 @@
    │
    │      ────────────────────────────── Sat, Feb 28 ─────────────────────────────────────────────────────────────────────────────────────────────────────────
    █      1bb16fb  main                  01:30  Merge pull request #23 from demo/feature/i18n
-   │
 
   │
   │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                                       Git   GitHub   Jenkins   OpenShift   Snyk
   │
-  │   customer-notification-service   shop   shop-web                                                                                             33 events
+  │   customer-notification-service   shop   shop-web                                                                                             34 events
   │
 
                                                                                                             tab Git · enter details · r refresh · ↑/↓ navigate

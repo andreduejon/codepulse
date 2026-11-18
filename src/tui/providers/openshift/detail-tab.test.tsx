@@ -381,3 +381,36 @@ test("a resource OpenShift warned about has ! in the warning color before its st
     t.renderer.destroy();
   }
 });
+
+test("a cancelled build shows ○, neutral like a cancelled CI run", async () => {
+  const t = await renderOpenShiftTab({
+    pods: [],
+    builds: [resource("Build", "payments-api-13", { status: "cancelled" })],
+  });
+  try {
+    expect(t.row("payments-api-13").replace(/\s+/g, " ").trim()).toMatch(/payments-api-13 ○$/);
+  } finally {
+    t.renderer.destroy();
+  }
+});
+
+test("a build only the cache has is muted, its (cached) too; its status keeps its color", async () => {
+  const t = await renderOpenShiftTab({
+    pods: [],
+    builds: [resource("Build", "payments-api-40", { cacheOnly: true }), resource("Build", "payments-api-41")],
+  });
+  try {
+    const color = (text: string) => {
+      const y = t
+        .captureCharFrame()
+        .split("\n")
+        .findIndex(line => line.includes(text));
+      return t.captureSpans().lines[y]?.spans.find(span => span.text.includes(text))?.fg;
+    };
+    expect(color("payments-api-40")).toEqual(RGBA.fromHex(t.theme.foregroundMuted));
+    expect(color("payments-api-41")).toEqual(RGBA.fromHex(t.theme.foreground));
+    expect(color("✓")).toEqual(RGBA.fromHex(t.theme.success));
+  } finally {
+    t.renderer.destroy();
+  }
+});

@@ -1,12 +1,11 @@
 /**
  * OpenShift's Events tab: the warnings Kubernetes reported about a commit's resources, kept with the commit
- * (core/openshift/warnings.ts), as a tree (events-tree.ts): namespace, resource, then its warnings. A resource the
- * commit no longer has stays in its place, muted and marked removed. Enter on a resource or a warning opens the
- * resource's events in the resource dialog, where the whole message is.
+ * (core/openshift/warnings.ts), as a tree (events-tree.ts): namespace, reason, then the resources it happened to.
+ * Enter on a resource opens its events in the resource dialog, where the whole message is.
  */
 import { createEffect, createMemo, createSignal, For, on, Show, untrack } from "solid-js";
 import type { OpenShiftCommitData, OpenShiftResource } from "../../../core/openshift/types";
-import { type OpenShiftWarning, resourceOfWarning } from "../../../core/openshift/warnings";
+import { heldResourceOf, type OpenShiftWarning, resourceOfWarning } from "../../../core/openshift/warnings";
 import type { DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
 import { useT } from "../../hooks/use-t";
@@ -17,7 +16,7 @@ import { useDetailTree } from "../shared/detail-tree";
 import { type RowShortcut, useOpenRowShortcut } from "../shared/open-row";
 import { openShiftConsoleUrl } from "./console";
 import { OPENSHIFT_EVENT_KINDS } from "./events";
-import { type EventsRow, eventsTreeRows, namespaceKey } from "./events-tree";
+import { type EventsRow, eventsTreeRows } from "./events-tree";
 
 export interface OpenShiftEventsTabProps {
   sha: string;
@@ -94,7 +93,13 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
   // An expired token only stops automatic fetches; Reload commit stays the explicit retry, as in Resources.
   const reloadEnabled = () => !props.unavailableReason;
 
-  const rows = createMemo(() => eventsTreeRows(warnings(), warning => props.isPresent?.(warning) ?? true, collapsed()));
+  const rows = createMemo(() =>
+    eventsTreeRows(warnings(), {
+      isPresent: warning => props.isPresent?.(warning) ?? true,
+      isCached: warning => props.isCached?.(warning) ?? false,
+      collapsed: collapsed(),
+    }),
+  );
   const byKey = createMemo(() => new Map(rows().map(row => [row.key, row])));
   /** The cursor's stops: Reload commit, then every row of the tree. */
   const keys = createMemo(() => [...(reloadEnabled() ? [RELOAD] : []), ...rows().map(row => row.key)]);
@@ -131,10 +136,11 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
     const row = current();
     if (row === RELOAD) {
       if (reloadEnabled() && !reloadBusy()) void props.fetchCommitData?.(props.sha, true);
-    } else if (row?.kind === "namespace") toggle(namespaceKey(row.namespace));
+    } else if (row?.kind === "namespace" || row?.kind === "reason") toggle(row.key);
     else if (row) {
       const resource = openable(row.warning);
-      if (resource) props.onOpenResource?.(resource, { eventsOnly: row.removed });
+      // Only its events when the commit holds nothing of it (a replaced pod); a pruned build opens from the cache.
+      if (resource) props.onOpenResource?.(resource, { eventsOnly: !heldResourceOf(row.warning, data()) });
     }
     return false;
   };
@@ -162,7 +168,8 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
       const consoleUrl = props.consoleUrl?.() ?? "";
       if (!row || row === RELOAD) return null;
       if (row.kind === "namespace") return openShiftConsoleUrl(consoleUrl, { namespace: row.namespace });
-      // A removed resource has no console page.
+      if (row.kind === "reason") return null;
+      // A resource the cluster no longer has has no console page.
       const resource = row.removed ? null : openable(row.warning);
       return resource ? openShiftConsoleUrl(consoleUrl, { namespace: resource.namespace, resource }) : null;
     },
@@ -182,7 +189,8 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
     const row = current();
     if (!props.detailFocused() || !row) props.setDetailCursorAction(null);
     else if (row === RELOAD) props.setDetailCursorAction(reloadEnabled() && !reloadBusy() ? reloadHint() : null);
-    else if (row.kind === "namespace") props.setDetailCursorAction(row.open ? "collapse" : "expand");
+    else if (row.kind === "namespace" || row.kind === "reason")
+      props.setDetailCursorAction(row.open ? "collapse" : "expand");
     else props.setDetailCursorAction(openable(row.warning) ? "events" : null);
   });
 
@@ -204,7 +212,24 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
       backgroundColor={cursored(row.key) ? t().backgroundElementActive : hoverBg(row.key)}
     >
       {lead(row.prefix)}
-      {row.kind === "namespace" ? (
+      {row.kind === "resource" ? (
+        <>
+          {/* The reason says what kind it is (BackOff: a pod); the dialog's title names it. */}
+          <ScrollingLabel
+            selectable={!props.mouseEnabled}
+            text={row.name}
+            tail={row.cached ? " (cached)" : ""}
+            tailFg={t().foregroundMuted}
+            active={cursored(row.key)}
+            fg={fg(row.key, row.cached)}
+            grow={false}
+          />
+          <box flexGrow={1} />
+          <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+            {row.lastSeen ? `  ${formatRelativeDate(row.lastSeen)}` : ""}
+          </text>
+        </>
+      ) : (
         <>
           <text
             selectable={!props.mouseEnabled}
@@ -216,37 +241,13 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
           </text>
           <ScrollingLabel
             selectable={!props.mouseEnabled}
-            text={row.namespace}
+            text={row.kind === "namespace" ? row.namespace : row.reason}
             active={cursored(row.key)}
-            fg={fg(row.key, false)}
+            // The reason is what the tab is about: in the warning color, like the graph's count.
+            fg={cursored(row.key) ? t().accent : row.kind === "reason" ? t().warning : t().foreground}
           />
           <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
             {String(row.count).padStart(3)}
-          </text>
-        </>
-      ) : row.kind === "resource" ? (
-        <ScrollingLabel
-          selectable={!props.mouseEnabled}
-          text={`${row.resourceKind} ${row.name}`}
-          tail={row.removed ? " (removed)" : ""}
-          tailFg={t().foregroundMuted}
-          active={cursored(row.key)}
-          fg={fg(row.key, row.removed)}
-        />
-      ) : (
-        <>
-          <ScrollingLabel
-            selectable={!props.mouseEnabled}
-            text={row.warning.reason}
-            tail={props.isCached?.(row.warning) ? " (cached)" : ""}
-            tailFg={t().foregroundMuted}
-            active={cursored(row.key)}
-            fg={fg(row.key, row.removed)}
-            grow={false}
-          />
-          <box flexGrow={1} />
-          <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {row.warning.lastSeen ? `  ${formatRelativeDate(row.warning.lastSeen)}` : ""}
           </text>
         </>
       )}

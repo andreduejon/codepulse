@@ -161,15 +161,22 @@ request failed) or a tab notice (some failed) says so.
 ## Status
 
 Resources show the same status symbols as CI runs; graph chips use the same
-colours. A legend below the tree explains them: `✓ ok  ● in progress  ✗ failing`.
+colours. A legend below the tree explains them: `✓ ok  ● in progress  ✗ failing  ○ cancelled`.
 
 - `✓` pass: successful Build, Ready Pod, or fully converged workload.
 - `●` running: active Build, Pending/not-ready Pod, or incomplete workload rollout.
 - `✗` fail: failed Build, fatal container state, replica failure, or failed
   workload progression.
+- `○` cancelled: a Build stopped before it ended (with the start policy `SerialLatestOnly`,
+  a queued build is cancelled when a newer one starts). Neutral, like a cancelled CI run:
+  a grey chip in the graph, not a failure. A Build cancelled before it checked out its
+  source carries no commit, so there is no commit to show it under.
 - `?` unknown: insufficient or indeterminate status (a grey chip in the graph).
 
-Aggregate precedence is fail, running, unknown, then pass.
+Aggregate precedence is fail, running, unknown (and cancelled), then pass.
+
+A row shown only from codepulse's cache says `(cached)` and is muted; its status mark
+keeps its colour. See Cached below.
 
 A failing row shows only its name and `✗`, to keep the tree quiet. Why it fails
 is in the resource dialog's events view: what its containers wait on, exit codes,
@@ -193,29 +200,40 @@ own status.
 - Warnings are saved in the commit's snapshot (see Cache), so they outlast the cluster's
   copy and are evicted with the snapshot by the cache limit.
 - The graph counts a commit's warnings in a yellow chip after its **Live** counts: how many
-  warnings about resources it still has, not how often each happened.
+  warnings, not how often each happened.
 - In **Resources**, a resource OpenShift warned about shows `!` before its status mark.
 - The **Events** tab starts with **Reload commit** and the count (`total events`), then a
-  tree: namespace, resource (`Pod shop-api-7d9f8-x2k4q`), then its warnings newest first,
-  each with its reason and when. Enter (or a click) on a resource or a warning opens the
-  resource's dialog on the events view, where the whole message is; `o` opens it in the
+  tree: namespace, each reason newest first (in the warning colour), then the resources it
+  happened to, newest first, each with when. An event is always about one object, so ten
+  pods crash-looping are ten BackOff events under one BackOff row. A resource with two
+  events of one reason (another message) is one row. Enter (or a click) on a resource
+  opens its dialog on the events view, where the whole message is; `o` opens it in the
   web console. A namespace whose events the token may not list is named in a notice
   under the tab.
-- A resource the commit no longer has (a replaced pod) stays in its place, muted, with
-  `(removed)`. That is known once the live list has loaded; before, nothing is removed.
-  Enter opens its dialog on its events only: there is no log, object or console page for
-  it any more. A resource recreated under its old name is two rows: the one the commit
-  has, then the removed one.
-- A warning OpenShift has deleted (it keeps events for about 3 hours after they last
-  happen) says `(cached)` after its resource, like a Build only the cache has. It is
-  cached when its event's uid is missing from its namespace's last list; a list that
-  failed changes nothing, and right after start every warning is cached until the first
-  list arrives. While a problem keeps happening Kubernetes updates the same event (its
-  count and last time), so it stays one warning. When it starts again after OpenShift
-  deleted it, the new event is a new warning beside the cached one.
 - The resource dialog's events view ends with a section **Cached (no longer in the
   cluster)**: the warnings kept about the resource that the cluster's events no longer
   have, newest first, in the same columns.
+
+## Cached
+
+Something shows from codepulse's cache when the cluster's latest list no longer has its
+uid: a Build OpenShift pruned, a pod that was replaced, an event OpenShift deleted (it
+keeps events for about 3 hours after they last happen). It says `(cached)` and its row is
+muted, in **Resources** and **Events** alike.
+
+- A list that failed changes nothing. Right after start, events read from the cache are
+  cached until their namespace is listed; whether a pod is still there is known once the
+  live list has loaded.
+- In **Events**, a resource is cached when the cluster no longer has it, or no longer has
+  any of its events of that reason. While a problem keeps happening Kubernetes updates the
+  same event (its count and last time), so it stays one; when it starts again after
+  OpenShift deleted it, the new event is a new one beside the cached one. A pod recreated
+  under its old name is two rows: the one running, then the cached one.
+- Enter on a cached pod opens its dialog on its events only: there is no log, object or
+  console page for it any more. A pruned Build opens in full: its log and object are
+  cached.
+- The graph's yellow count leaves out warnings about resources the cluster no longer has.
+- The graph's **Cache** column is another thing: every finished Build, still listed or not.
 
 ## Required read permissions
 

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { OpenShiftCommitData, OpenShiftControllerReference, OpenShiftResource } from "./types";
 import {
+  heldResourceOf,
   isAboutPresentResource,
   linkWarningsToCommits,
   mergeWarnings,
@@ -163,6 +164,14 @@ describe("OpenShift warnings", () => {
     const rs = { kind: "ReplicaSet", name: "shop-api-7d9f8" };
     expect(isAboutPresentResource(warning({ ...rs, uid: "rs-uid" }), data, controllers)).toBe(true);
     expect(isAboutPresentResource(warning({ ...rs, uid: "gone-rs" }), data, controllers)).toBe(false);
+    // A build OpenShift pruned is shown from the cache: the cluster no longer has it either.
+    const pruned = resource({ kind: "Build", name: "shop-api-39", uid: "build-uid", cacheOnly: true, status: "fail" });
+    const withPruned = commit("a".repeat(40), [pod, pruned]);
+    const buildWarning = warning({ kind: "Build", name: "shop-api-39", uid: "build-uid", reason: "BuildFailed" });
+    expect(isAboutPresentResource(buildWarning, withPruned, controllers)).toBe(false);
+    // The commit still holds it, though: the resource dialog opens it from the cache.
+    expect(heldResourceOf(buildWarning, withPruned)).toBe(pruned);
+    expect(heldResourceOf(warning({ name: "replaced-pod" }), withPruned)).toBeUndefined();
     // Its mark in Resources follows the same rule.
     expect(warningsAbout(pod, [warning({ uid: "older-pod-uid" })])).toEqual([]);
   });
@@ -190,4 +199,3 @@ describe("OpenShift warnings", () => {
     expect(linked.size).toBe(0);
   });
 });
-

@@ -12,13 +12,13 @@ import {
   type OpenShiftResourceKind,
   type OpenShiftStatus,
 } from "./types";
-import { isOpenShiftWatchGone, type OpenShiftWatchEvent } from "./watch";
 import type { OpenShiftWarning } from "./warnings";
+import { isOpenShiftWatchGone, type OpenShiftWatchEvent } from "./watch";
 
 type AnyObj = Record<string, unknown>;
 
 export function isTerminalBuildStatus(status: OpenShiftStatus): boolean {
-  return status === "pass" || status === "fail";
+  return status === "pass" || status === "fail" || status === "cancelled";
 }
 
 export function normalizeOpenShiftServerUrl(value: string): string {
@@ -287,7 +287,8 @@ export function openShiftStatusRows(kind: OpenShiftResourceKind, object: unknown
   return [];
 }
 
-function buildStatus(build: unknown): OpenShiftStatus {
+/** A Build's status from its object's phase. */
+export function buildStatus(build: unknown): OpenShiftStatus {
   const phase = str(obj(build)?.status && obj(obj(build)?.status)?.phase);
   switch (phase) {
     case "Complete":
@@ -298,8 +299,9 @@ function buildStatus(build: unknown): OpenShiftStatus {
       return "running";
     case "Failed":
     case "Error":
-    case "Cancelled":
       return "fail";
+    case "Cancelled":
+      return "cancelled";
     default:
       return "unknown";
   }
@@ -580,7 +582,8 @@ function statusCounts(resources: readonly OpenShiftResource[]): GraphStatusCount
     failCount: resources.filter(r => r.status === "fail").length,
     runningCount: resources.filter(r => r.status === "running").length,
     passCount: resources.filter(r => r.status === "pass").length,
-    unknownCount: resources.filter(r => r.status === "unknown").length,
+    // Neutral, as CI counts its cancelled runs: a grey chip.
+    unknownCount: resources.filter(r => r.status === "unknown" || r.status === "cancelled").length,
   };
 }
 
@@ -608,7 +611,8 @@ export function buildOpenShiftNamespaceMarkers(
     // Scaled to 0, it runs nothing: no badge (the detail panel still lists it, `0 replicas`).
     if (!resource.commitSha || resource.terminating || resource.scaledToZero) continue;
     const state = resource.status === "pass" ? "live" : resource.status === "running" ? "rolling" : resource.status;
-    if (state === "unknown") continue;
+    // Only a Build is ever cancelled; a workload's unknown state marks nothing.
+    if (state === "unknown" || state === "cancelled") continue;
     const sha = resource.commitSha.toLowerCase();
     const states = byCommit.get(sha) ?? new Map<string, NamespaceMarker["state"]>();
     const previous = states.get(resource.namespace);

@@ -2,6 +2,8 @@
  * OpenShift builds as the cache keeps them, and converting between them and resources: plain functions, no storage.
  * The cache (cache.ts) and the provider service (core/openshift/service.ts) both use them.
  */
+
+import { buildStatus } from "./resources";
 import type { OpenShiftCacheLimit, OpenShiftResource, OpenShiftStatus } from "./types";
 import type { OpenShiftWarning } from "./warnings";
 
@@ -44,7 +46,7 @@ export interface OpenShiftCacheOptions {
   maxEntries?: OpenShiftCacheLimit;
 }
 
-const STATUSES = new Set<OpenShiftStatus>(["pass", "fail", "running", "unknown"]);
+const STATUSES = new Set<OpenShiftStatus>(["pass", "fail", "running", "cancelled", "unknown"]);
 
 export function isOpenShiftCacheEntry(value: unknown): value is OpenShiftCacheEntry {
   if (typeof value !== "object" || value === null) return false;
@@ -94,7 +96,8 @@ export function cachedBuildToResource(build: OpenShiftCachedBuild): OpenShiftRes
     kind: "Build",
     namespace: build.namespace,
     name: build.name,
-    status: build.status,
+    // Its saved object says how it ended; a build cached before cancelled was a status of its own was saved as failed.
+    status: build.status === "fail" && buildStatus(build.object) === "cancelled" ? "cancelled" : build.status,
     imageRefs: build.imageRefs,
     commitSha: build.commitSha,
     uid: build.uid,

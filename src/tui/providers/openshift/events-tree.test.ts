@@ -15,68 +15,93 @@ const warning = (overrides: Partial<OpenShiftWarning>): OpenShiftWarning => ({
   ...overrides,
 });
 
-/** A row as the tab draws it, without colors: prefix, then its text. */
+/** A row as the tab draws it, without colors: prefix, then its text and count. */
 const text = (row: EventsRow) => {
   switch (row.kind) {
     case "namespace":
       return `${row.prefix}${row.open ? "▾" : "▸"} ${row.namespace} ${row.count}`;
+    case "reason":
+      return `${row.prefix}${row.open ? "▾" : "▸"} ${row.reason} ${row.count}`;
     case "resource":
-      return `${row.prefix}${row.resourceKind} ${row.name}${row.removed ? " (removed)" : ""}`;
-    case "warning":
-      return `${row.prefix}${row.warning.reason}`;
+      return `${row.prefix}${row.resourceKind} ${row.name}${row.cached ? " (cached)" : ""}`;
   }
 };
 
 const WARNINGS = [
-  warning({ id: "backoff", lastSeen: "2026-03-02T09:30:00Z" }),
-  warning({ id: "unhealthy", reason: "Unhealthy", lastSeen: "2026-03-02T09:20:00Z" }),
+  warning({ id: "backoff-1", lastSeen: "2026-03-02T09:30:00Z" }),
+  warning({ id: "backoff-2", name: "shop-api-7d9f8-a1b2c", lastSeen: "2026-03-02T09:28:00Z" }),
+  warning({ id: "backoff-3", name: "shop-api-7d9f8-q9r8s", lastSeen: "2026-03-02T09:00:00Z" }),
+  warning({ id: "unhealthy", reason: "Unhealthy", lastSeen: "2026-03-02T09:29:00Z" }),
   warning({ id: "deadline", kind: "Deployment", name: "shop-api", reason: "ProgressDeadlineExceeded" }),
   warning({ id: "build", namespace: "shop-dev", kind: "Build", name: "shop-api-41", reason: "BuildFailed" }),
-  warning({ id: "oom", name: "shop-api-7d9f8-oom7k", reason: "OOMKilling" }),
 ];
 
 describe("the Events tab's tree", () => {
-  test("namespace, resource, then its warnings newest first; a removed resource keeps its place", () => {
-    const rows = eventsTreeRows(WARNINGS, entry => entry.id !== "oom", new Set());
+  test("namespace, reason newest first, then each resource, newest first; (cached) when the cluster lost either", () => {
+    const rows = eventsTreeRows(WARNINGS, {
+      isPresent: entry => entry.id !== "backoff-3",
+      // backoff-3's pod is gone; build's event is gone, its build is not.
+      isCached: entry => entry.id === "build",
+      collapsed: new Set(),
+    });
     expect(rows.map(text)).toEqual([
       "├─ ▾ shop-dev 1",
-      "│  └─ Build shop-api-41",
-      "│     └─ BuildFailed",
-      "└─ ▾ shop-test 4",
-      "   ├─ Deployment shop-api",
-      "   │  └─ ProgressDeadlineExceeded",
-      "   ├─ Pod shop-api-7d9f8-oom7k (removed)",
-      "   │  └─ OOMKilling",
-      "   └─ Pod shop-api-7d9f8-x2k4q",
-      "      ├─ BackOff",
-      "      └─ Unhealthy",
+      "│  └─ ▾ BuildFailed 1",
+      "│     └─ Build shop-api-41 (cached)",
+      "└─ ▾ shop-test 5",
+      "   ├─ ▾ BackOff 3",
+      "   │  ├─ Pod shop-api-7d9f8-x2k4q",
+      "   │  ├─ Pod shop-api-7d9f8-a1b2c",
+      "   │  └─ Pod shop-api-7d9f8-q9r8s (cached)",
+      "   ├─ ▾ Unhealthy 1",
+      "   │  └─ Pod shop-api-7d9f8-x2k4q",
+      "   └─ ▾ ProgressDeadlineExceeded 1",
+      "      └─ Deployment shop-api",
     ]);
-    // The warnings under a removed resource are removed with it.
-    expect(rows.find(row => row.key === "warning:oom")).toMatchObject({ removed: true });
+  });
+
+  test("one resource with two events of a reason (another message) is one row: their count, the newer time", () => {
+    const rows = eventsTreeRows(
+      [
+        warning({ id: "probe-503", reason: "Unhealthy", lastSeen: "2026-03-02T09:10:00Z" }),
+        warning({ id: "probe-refused", reason: "Unhealthy", lastSeen: "2026-03-02T09:20:00Z" }),
+      ],
+      { isPresent: () => true, isCached: entry => entry.id === "probe-503", collapsed: new Set() },
+    );
+    expect(rows.map(text)).toEqual([
+      "└─ ▾ shop-test 2",
+      "   └─ ▾ Unhealthy 2",
+      // Cached only when every one of its events is.
+      "      └─ Pod shop-api-7d9f8-x2k4q",
+    ]);
+    expect(rows[2]).toMatchObject({ count: 2, lastSeen: "2026-03-02T09:20:00Z" });
   });
 
   test("a resource recreated under its old name is two rows: the one the commit has, then the removed one", () => {
     const rows = eventsTreeRows(
-      [warning({ id: "new", uid: "pod-2" }), warning({ id: "old", uid: "pod-1", reason: "OOMKilling" })],
-      entry => entry.uid === "pod-2",
-      new Set(),
+      [warning({ id: "new", uid: "pod-2" }), warning({ id: "old", uid: "pod-1", lastSeen: "2026-03-02T08:00:00Z" })],
+      { isPresent: entry => entry.uid === "pod-2", isCached: () => false, collapsed: new Set() },
     );
-    expect(rows.map(text)).toEqual([
-      "└─ ▾ shop-test 2",
-      "   ├─ Pod shop-api-7d9f8-x2k4q",
-      "   │  └─ BackOff",
-      "   └─ Pod shop-api-7d9f8-x2k4q (removed)",
-      "      └─ OOMKilling",
+    expect(rows.map(text).slice(2)).toEqual([
+      "      ├─ Pod shop-api-7d9f8-x2k4q",
+      "      └─ Pod shop-api-7d9f8-x2k4q (cached)",
     ]);
   });
 
-  test("a closed namespace keeps only its own row", () => {
-    const rows = eventsTreeRows(WARNINGS, () => true, new Set(["namespace:shop-test"]));
+  test("a closed namespace or reason keeps only its own row", () => {
+    const rows = eventsTreeRows(WARNINGS, {
+      isPresent: () => true,
+      isCached: () => false,
+      collapsed: new Set(["namespace:shop-dev", "reason:shop-test:BackOff"]),
+    });
     expect(rows.map(text)).toEqual([
-      "├─ ▾ shop-dev 1",
-      "│  └─ Build shop-api-41",
-      "│     └─ BuildFailed",
-      "└─ ▸ shop-test 4",
+      "├─ ▸ shop-dev 1",
+      "└─ ▾ shop-test 5",
+      "   ├─ ▸ BackOff 3",
+      "   ├─ ▾ Unhealthy 1",
+      "   │  └─ Pod shop-api-7d9f8-x2k4q",
+      "   └─ ▾ ProgressDeadlineExceeded 1",
+      "      └─ Deployment shop-api",
     ]);
   });
 });

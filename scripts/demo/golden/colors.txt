@@ -27,6 +27,7 @@
    «openShiftBg:█»      «foregroundMuted:64ddc8a»  «foregroundMuted:main»                  «foregroundMuted:03:10»  «success|diffAdded:✓ »build shop-api-42 complete in shop-dev
    «backgroundElementActive|border:│»
    «openShiftBg:█»      «foregroundMuted:64ddc8a»  «foregroundMuted:main»                  «foregroundMuted:02:54»  «error|severityCritical|diffRemoved:✗ »build shop-api-41 failed in shop-dev
+   «openShiftBg:█»      «foregroundMuted:64ddc8a»  «foregroundMuted:main»                  «foregroundMuted:02:49»  «foregroundMuted:○ »build shop-api-39 cancelled in shop-dev
    «gitBg|accent:█»      «foregroundMuted:64ddc8a»  «foregroundMuted:main»                  «foregroundMuted:02:30»  feat(payments): retry failed payments with..., and a subject long enough to need cutting
    «backgroundElementActive|border:│»
    «backgroundElementActive|border:│»      «backgroundElementActive|border:────────────────────────────── »«foregroundMuted:Yesterday · Sun, Mar 1 »«backgroundElementActive|border:──────────────────────────────────────────────────────────────────────────»
@@ -34,12 +35,11 @@
    «backgroundElementActive|border:│»
    «backgroundElementActive|border:│»      «backgroundElementActive|border:────────────────────────────── »«foregroundMuted:Sat, Feb 28 »«backgroundElementActive|border:─────────────────────────────────────────────────────────────────────────────────────»
    «gitBg|accent:█»      «foregroundMuted:1bb16fb»  «foregroundMuted:main»                  «foregroundMuted:01:30»  Merge pull request #23 from demo/feature/i18n
-   «backgroundElementActive|border:│»
 
   «dashboardBg:│»
   «dashboardBg:│»  «dashboardBg/backgroundElementActive|border: Dashboard » «foregroundMuted/backgroundElementActive|border: Git » «foregroundMuted/backgroundElementActive|border: GitHub » «foregroundMuted/backgroundElementActive|border: Jenkins » «foregroundMuted/backgroundElementActive|border: OpenShift » «foregroundMuted/backgroundElementActive|border: Snyk »                                 «background|githubActionsFg|jenkinsFg|+3/gitBg|accent: Git » «background|githubActionsFg|jenkinsFg|+3/primary|info|githubActionsBg: GitHub » «background|githubActionsFg|jenkinsFg|+3/jenkinsBg: Jenkins » «background|githubActionsFg|jenkinsFg|+3/openShiftBg: OpenShift » «background|githubActionsFg|jenkinsFg|+3/snykBg: Snyk »
   «dashboardBg:│»
-  «dashboardBg:│»  «foregroundMuted/backgroundElementActive|border: customer-notification-service » «background|githubActionsFg|jenkinsFg|+3/dashboardBg: shop » «foregroundMuted/backgroundElementActive|border: shop-web »                                                                       «foregroundMuted/backgroundElementActive|border: 33 events »
+  «dashboardBg:│»  «foregroundMuted/backgroundElementActive|border: customer-notification-service » «background|githubActionsFg|jenkinsFg|+3/dashboardBg: shop » «foregroundMuted/backgroundElementActive|border: shop-web »                                                                       «foregroundMuted/backgroundElementActive|border: 34 events »
   «dashboardBg:│»
 
                                                                        tab«foregroundMuted: Git · »enter«foregroundMuted: show in Snyk · »→«foregroundMuted: details · »r«foregroundMuted: refresh · »↑/↓«foregroundMuted: navigate»           «success|diffAdded:● »«foregroundMuted:upgrade»  «warning|severityMedium:● »«foregroundMuted:override»  «foregroundMuted:● no fix»  «error|severityCritical|diffRemoved:! »«foregroundMuted:mature exploit»

@@ -26,9 +26,35 @@ const warning = (overrides: Partial<OpenShiftWarning>): OpenShiftWarning => ({
 
 async function renderEventsTab(
   warnings: OpenShiftWarning[],
-  options: { cached?: readonly string[]; removed?: readonly string[] } = {},
+  options: { cached?: readonly string[]; removed?: readonly string[]; pruned?: readonly string[] } = {},
 ) {
-  const data: OpenShiftCommitData = { sha: SHA, liveFetched: true, namespaces: [], warnings };
+  // The commit holds what the warnings are about, but a removed one; a pruned build only from the cache.
+  const held = (kind: string) =>
+    warnings
+      .filter(entry => entry.kind === kind && !options.removed?.includes(entry.id))
+      .map(
+        (entry): OpenShiftResource => ({
+          id: `${entry.kind}:${entry.namespace}:${entry.name}`,
+          kind: entry.kind as OpenShiftResource["kind"],
+          namespace: entry.namespace,
+          name: entry.name,
+          status: "pass",
+          imageRefs: [],
+          ...(options.pruned?.includes(entry.id) ? { cacheOnly: true } : {}),
+        }),
+      );
+  const namespaces = [...new Set(warnings.map(entry => entry.namespace))].map(namespace => {
+    const inNamespace = (kind: string) => held(kind).filter(resource => resource.namespace === namespace);
+    return {
+      namespace,
+      builds: inNamespace("Build"),
+      imageStreamTags: [],
+      deployments: inNamespace("Deployment"),
+      deploymentConfigs: [],
+      pods: inNamespace("Pod"),
+    };
+  });
+  const data: OpenShiftCommitData = { sha: SHA, liveFetched: true, namespaces, warnings };
   const [cursor, setCursor] = createSignal(0);
   const action = mock((_action: string | null) => {});
   const opened = mock((_resource: OpenShiftResource, _options?: { eventsOnly: boolean }) => {});
@@ -58,7 +84,7 @@ async function renderEventsTab(
             setDetailCursorIndex={setCursor}
             onOpenResource={opened}
             isCached={entry => options.cached?.includes(entry.id) ?? false}
-            isPresent={entry => !options.removed?.includes(entry.id)}
+            isPresent={entry => !options.removed?.includes(entry.id) && !options.pruned?.includes(entry.id)}
           />
         </box>
       </ThemeContext.Provider>
@@ -107,7 +133,7 @@ async function renderEventsTab(
   };
 }
 
-test("Reload commit, the count, then namespace, resource and its warnings, newest first", async () => {
+test("Reload commit, the count, then namespace, reason newest first, and the resources it happened to", async () => {
   const t = await renderEventsTab([
     warning({ id: "event-1" }),
     warning({ id: "event-2", reason: "Unhealthy", message: "Readiness probe failed", lastSeen: minutesAgo(1) }),
@@ -118,13 +144,16 @@ test("Reload commit, the count, then namespace, resource and its warnings, newes
       "Reload commit live",
       "total events 3",
       "├─ ▾ shop-dev 1",
-      "│ └─ Build shop-api-41",
-      "│ └─ BuildFailed 2m ago",
+      "│ └─ ▾ BuildFailed 1",
+      "│ └─ shop-api-41 2m ago",
       "└─ ▾ shop-test 2",
-      "└─ Pod shop-api-7d9f8-x2k4q",
-      "├─ Unhealthy 1m ago",
-      "└─ BackOff 2m ago",
+      "├─ ▾ Unhealthy 1",
+      "│ └─ shop-api-7d9f8-x2k4q 1m ago",
+      "└─ ▾ BackOff 1",
+      "└─ shop-api-7d9f8-x2k4q 2m ago",
     ]);
+    // The reason leads, in the warning color.
+    expect(t.fgOf("BuildFailed")).toEqual(RGBA.fromHex(t.theme.warning));
     await t.enterOn("Reload commit");
     expect(t.fetchCommitData).toHaveBeenLastCalledWith(SHA, true);
   } finally {
@@ -147,17 +176,18 @@ test("a selected row adds no lines: the message is in the resource dialog", asyn
   }
 });
 
-test("Enter on a resource or a warning opens the resource's events; on a namespace it closes it", async () => {
+test("Enter on a resource opens its events; on a reason or a namespace it closes it", async () => {
   const t = await renderEventsTab([warning({})]);
   try {
-    await t.enterOn("Pod shop-api-7d9f8-x2k4q");
+    await t.enterOn("shop-api-7d9f8-x2k4q");
     expect(t.action).toHaveBeenLastCalledWith("events");
     expect(t.opened).toHaveBeenLastCalledWith(
       expect.objectContaining({ kind: "Pod", namespace: "shop-test", name: "shop-api-7d9f8-x2k4q" }),
       { eventsOnly: false },
     );
     await t.enterOn("BackOff");
-    expect(t.opened).toHaveBeenCalledTimes(2);
+    expect(t.frame()).toContain("▸ BackOff");
+    expect(t.frame()).not.toContain("shop-api-7d9f8");
     await t.enterOn("shop-test");
     expect(t.frame()).toContain("▸ shop-test");
     expect(t.frame()).not.toContain("BackOff");
@@ -166,7 +196,7 @@ test("Enter on a resource or a warning opens the resource's events; on a namespa
   }
 });
 
-test("a removed resource keeps its place, muted and marked; Enter shows only its events", async () => {
+test("a resource the cluster no longer has says (cached), muted; a replaced pod opens on its events only", async () => {
   const t = await renderEventsTab(
     [
       warning({ id: "event-1" }),
@@ -177,15 +207,14 @@ test("a removed resource keeps its place, muted and marked; Enter shows only its
   try {
     expect(t.lines().slice(2)).toEqual([
       "└─ ▾ shop-test 2",
-      "├─ Pod shop-api-7d9f8-oom7k (removed)",
-      "│ └─ OOMKilling 18m ago",
-      "└─ Pod shop-api-7d9f8-x2k4q",
-      "└─ BackOff 2m ago",
+      "├─ ▾ BackOff 1",
+      "│ └─ shop-api-7d9f8-x2k4q 2m ago",
+      "└─ ▾ OOMKilling 1",
+      "└─ shop-api-7d9f8-oom7k (cached) 18m ago",
     ]);
-    const muted = RGBA.fromHex(t.theme.foregroundMuted);
-    expect(t.fgOf("OOMKilling")).toEqual(muted);
-    expect(t.fgOf("BackOff")).toEqual(RGBA.fromHex(t.theme.foreground));
-    await t.enterOn("OOMKilling");
+    expect(t.fgOf("shop-api-7d9f8-oom7k")).toEqual(RGBA.fromHex(t.theme.foregroundMuted));
+    expect(t.fgOf("shop-api-7d9f8-x2k4q")).toEqual(RGBA.fromHex(t.theme.foreground));
+    await t.enterOn("oom7k");
     expect(t.opened).toHaveBeenLastCalledWith(expect.objectContaining({ name: "shop-api-7d9f8-oom7k" }), {
       eventsOnly: true,
     });
@@ -194,14 +223,16 @@ test("a removed resource keeps its place, muted and marked; Enter shows only its
   }
 });
 
-test("a warning only the cache has says (cached)", async () => {
+test("a resource whose events of a reason OpenShift deleted says (cached) under that reason only", async () => {
   const t = await renderEventsTab(
     [warning({ id: "event-1" }), warning({ id: "event-2", reason: "OOMKilling", lastSeen: minutesAgo(300) })],
     { cached: ["event-2"] },
   );
   try {
-    expect(t.lines().find(line => line.includes("OOMKilling"))).toContain("OOMKilling (cached)");
-    expect(t.lines().find(line => line.includes("BackOff"))).not.toContain("(cached)");
+    // Under OOMKilling the pod's event is cached; under BackOff it is not.
+    const rows = t.lines();
+    expect(rows[rows.findIndex(line => line.includes("OOMKilling")) + 1]).toContain("x2k4q (cached)");
+    expect(rows[rows.findIndex(line => line.includes("BackOff")) + 1]).not.toContain("(cached)");
   } finally {
     t.renderer.destroy();
   }
@@ -210,7 +241,7 @@ test("a warning only the cache has says (cached)", async () => {
 test("a warning about a resource without events of its own (a ReplicaSet) has no Enter", async () => {
   const t = await renderEventsTab([warning({ kind: "ReplicaSet", name: "shop-api-7d9f8", reason: "FailedCreate" })]);
   try {
-    await t.enterOn("FailedCreate");
+    await t.enterOn("─ shop-api-7d9f8");
     expect(t.action).toHaveBeenLastCalledWith(null);
     expect(t.opened).not.toHaveBeenCalled();
   } finally {
@@ -222,6 +253,23 @@ test("no warnings says so", async () => {
   const t = await renderEventsTab([]);
   try {
     expect(t.frame()).toContain("No warnings about this commit's resources.");
+  } finally {
+    t.renderer.destroy();
+  }
+});
+
+test("a build OpenShift pruned says (cached), muted, and opens in full from the cache", async () => {
+  const t = await renderEventsTab(
+    [warning({ id: "event-1", namespace: "shop-dev", kind: "Build", name: "shop-api-39", reason: "BuildFailed" })],
+    { pruned: ["event-1"] },
+  );
+  try {
+    expect(t.lines()).toContain("└─ shop-api-39 (cached) 2m ago");
+    expect(t.fgOf("shop-api-39")).toEqual(RGBA.fromHex(t.theme.foregroundMuted));
+    await t.enterOn("shop-api-39");
+    expect(t.opened).toHaveBeenLastCalledWith(expect.objectContaining({ name: "shop-api-39", cacheOnly: true }), {
+      eventsOnly: false,
+    });
   } finally {
     t.renderer.destroy();
   }

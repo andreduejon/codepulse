@@ -111,7 +111,8 @@ describe("fetchOpenShiftInventory", () => {
         ["Running", "running"],
         ["Failed", "fail"],
         ["Error", "fail"],
-        ["Cancelled", "fail"],
+        // Stopped, not failed: neutral, as GitHub's cancelled runs and Jenkins' aborted builds.
+        ["Cancelled", "cancelled"],
         ["mystery", "unknown"],
       ]);
       expect(ns?.imageStreamTags.map(resource => [resource.name, resource.status])).toEqual([
@@ -784,7 +785,7 @@ describe("buildOpenShiftGraphBadges", () => {
     return buildOpenShiftGraphBadges(data).get(SHA);
   };
 
-  test.each<[string, OpenShiftResource["status"][], OpenShiftResource["status"]]>([
+  test.each<[string, OpenShiftResource["status"][], "pass" | "fail" | "running" | "unknown"]>([
     ["fail when any matched resource fails", ["pass", "running", "fail"], "fail"],
     ["running when no resource fails and one is running", ["pass", "running"], "running"],
     ["unknown before pass", ["pass", "unknown"], "unknown"],
@@ -801,6 +802,16 @@ describe("buildOpenShiftGraphBadges", () => {
   test("does not treat an empty commit as pass", () => {
     const data = new Map<string, OpenShiftCommitData>([[SHA, { sha: SHA, namespaces: [], liveFetched: true }]]);
     expect(buildOpenShiftGraphBadges(data).has(SHA)).toBe(false);
+  });
+
+  test("a cancelled Build is neutral, in the Cache column", () => {
+    const data = buildOpenShiftCommitMap([
+      { ...resource("build-1", "cancelled"), kind: "Build", commitSha: SHA },
+      { ...resource("build-2", "pass"), kind: "Build", commitSha: SHA },
+    ]);
+    const badge = buildOpenShiftGraphBadges(data).get(SHA);
+    expect(badge?.lanes?.cache).toEqual({ passCount: 1, failCount: 0, runningCount: 0, unknownCount: 1 });
+    expect(badge?.badge).toBe("unknown");
   });
 
   test("puts terminal Builds in cacheCounts and Pods in liveCounts", () => {

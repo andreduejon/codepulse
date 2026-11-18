@@ -1027,6 +1027,24 @@ export function openShiftWorld(state: DemoState, phase: Phase): OpenShiftWorld {
       status: { phase: "Complete", outputDockerImageReference: imageOf(sha), completionTimestamp: created(endedMin) },
     });
   completeBuild("shop-api-40", s.rounding, 2 * 24 * 60, "main");
+  // Cancelled when 41 started (start policy SerialLatestOnly): neutral, not a failure. A fixed uid keeps the others'.
+  add("shop-dev", "Build", {
+    kind: "Build",
+    metadata: {
+      name: "shop-api-39",
+      namespace: "shop-dev",
+      uid: "uid-shop-api-39",
+      labels: { [COMMIT_KEY]: s.payments },
+      creationTimestamp: created(410),
+    },
+    spec: { source: source("refs/heads/main"), output: { to: { kind: "ImageStreamTag", name: "shop-api:39" } } },
+    status: {
+      phase: "Cancelled",
+      reason: "CancelledBuild",
+      message: "The build was cancelled by the user.",
+      completionTimestamp: created(401),
+    },
+  });
   add("shop-dev", "Build", {
     kind: "Build",
     metadata: {
