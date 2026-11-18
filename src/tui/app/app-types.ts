@@ -1,14 +1,14 @@
-import type { ProviderAdapters } from "../../core/app-ports";
 import type { CacheStorePort } from "../../core/cache-store";
 import type { DashboardReader } from "../../core/dashboard/load";
 import type { GitPort } from "../../core/git/port";
 import type { Branch, Commit, GraphRow, TagInfo } from "../../core/git/types";
 import type { ProviderView } from "../../core/provider-model";
-import type { ProviderCacheLimit } from "../../core/provider-settings";
-import type { ConfigInfo, KnownRepoInfo } from "../../core/settings/config";
+import type { ProviderSet } from "../../core/provider-set";
+import type { CodepulseConfig, ConfigInfo, KnownRepoInfo } from "../../core/settings/config";
 import type { SettingsPort } from "../../core/settings/port";
 import type { SystemPort } from "../../core/system";
 import type { CustomTheme, createThemeState } from "../context/theme";
+import type { AnyProviderModule } from "../providers/module";
 
 export interface AppProps {
   repoPath: string;
@@ -26,48 +26,17 @@ export interface AppProps {
   git?: GitPort;
   /** The providers' cache: the SQLite cache unless the caller gives another. */
   cacheStore?: CacheStorePort;
-  /** Each provider's API, cache and token. */
-  providers?: ProviderAdapters;
+  /** The providers: their definitions and the adapters each runs on. */
+  providers?: ProviderSet;
+  /** Each provider's terminal module, one per provider in the set. */
+  providerModules?: readonly AnyProviderModule[];
   /** The browser and the environment. */
   system?: SystemPort;
   /** The Dashboard's reads. */
   dashboard?: DashboardReader;
   startupMode: StartupMode;
-  initialGithubConfig?: {
-    enabled?: boolean;
-    tokenEnvVar?: string;
-    trustedEnterpriseHost?: string;
-    fetchDepth?: 10 | 20 | 50;
-    cacheLimit?: ProviderCacheLimit;
-    autoRefreshSeconds?: 0 | 120 | 300 | 600;
-  };
-  initialJenkinsConfig?: {
-    enabled?: boolean;
-    username?: string;
-    tokenEnvVar?: string;
-    graphBuildLimit?: 10 | 20 | 50;
-    fetchDepth?: 10 | 20 | 50;
-    cacheLimit?: ProviderCacheLimit;
-    autoRefreshSeconds?: 0 | 120 | 300 | 600;
-    jobs?: { label?: string; url: string }[];
-  };
-  initialOpenShiftConfig?: {
-    enabled?: boolean;
-    serverUrl?: string;
-    consoleUrl?: string;
-    tokenEnvVar?: string;
-    namespaces?: string[];
-    commitShaAnnotation?: string;
-    cacheLimit?: ProviderCacheLimit;
-    fetchDepth?: 10 | 20 | 50;
-    autoRefreshSeconds?: 0 | 120 | 300 | 600;
-  };
-  initialSnykConfig?: {
-    enabled?: boolean;
-    tokenEnvVar?: string;
-    autoScanBranches?: string[];
-    maxCachedScans?: ProviderCacheLimit;
-  };
+  /** Each provider's settings as startup read them, by its key. */
+  initialProviderSettings?: CodepulseConfig["providers"];
 }
 
 export interface AppContentProps extends AppProps {

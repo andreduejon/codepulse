@@ -1,6 +1,7 @@
-import type { JenkinsJobConfig } from "../../core/jenkins/types";
-import type { ProviderAutoRefreshSeconds, ProviderCacheLimit, ProviderLimit } from "../../core/provider-settings";
-import type { SnykCacheLimit } from "../../core/snyk/types";
+import type { GitHubSettings } from "../../core/github/definition";
+import type { JenkinsSettings } from "../../core/jenkins/definition";
+import type { OpenShiftSettings } from "../../core/openshift/definition";
+import type { SnykSettings } from "../../core/snyk/service";
 
 export type MenuTab = "repository" | "branch" | "providers";
 
@@ -48,41 +49,8 @@ export type SettingItem =
 /** Usable width for copyable text: dialog=70 - 2(paddingX=1) - 8(paddingX=4) = 60 */
 export const COPYABLE_VISIBLE_WIDTH = 60;
 
-export interface GitHubMenuConfig {
-  enabled: boolean;
-  tokenEnvVar: string;
-  trustedEnterpriseHost: string | null;
-  fetchDepth: ProviderLimit;
-  cacheLimit: ProviderCacheLimit;
-  autoRefreshSeconds: ProviderAutoRefreshSeconds;
-}
-
-export interface JenkinsMenuConfig {
-  enabled: boolean;
-  username?: string;
-  tokenEnvVar: string;
-  fetchDepth: ProviderLimit;
-  cacheLimit: ProviderCacheLimit;
-  autoRefreshSeconds: ProviderAutoRefreshSeconds;
-  jobs: JenkinsJobConfig[];
-}
-
-export interface OpenShiftMenuConfig {
-  enabled: boolean;
-  serverUrl: string;
-  /** Web console URL; empty when not set (then `o` is not offered for OpenShift). */
-  consoleUrl: string;
-  tokenEnvVar: string;
-  namespaces: string[];
-  commitShaAnnotation: string;
-  cacheLimit: ProviderCacheLimit;
-  fetchDepth: ProviderLimit;
-  autoRefreshSeconds: ProviderAutoRefreshSeconds;
-}
-
-export interface SnykMenuConfig {
-  enabled: boolean;
-  tokenEnvVar: string;
-  autoScanBranches: string[];
-  maxCachedScans: SnykCacheLimit;
-}
+/** Each provider's settings as its Menu rows change them: its definition's (core/<provider>/definition.ts). */
+export type GitHubMenuConfig = GitHubSettings;
+export type JenkinsMenuConfig = JenkinsSettings;
+export type OpenShiftMenuConfig = OpenShiftSettings;
+export type SnykMenuConfig = SnykSettings;

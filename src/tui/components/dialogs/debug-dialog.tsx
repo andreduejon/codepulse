@@ -3,6 +3,7 @@ import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { For } from "solid-js";
 import { getDebugEvents } from "../../../core/debug-events";
 import { SHIFT_JUMP } from "../../constants";
+import { useProviderModules } from "../../context/provider-modules";
 import {
   formatDebugDuration,
   formatDebugMessage,
@@ -16,6 +17,7 @@ import { debugSourceColor } from "../../providers/colors";
 import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
 export default function DebugDialog(props: Readonly<{ onClose: () => void; gitColor: string }>) {
+  const modules = useProviderModules();
   const t = useT();
   const renderer = useRenderer();
   const dimensions = useTerminalDimensions();
@@ -25,7 +27,7 @@ export default function DebugDialog(props: Readonly<{ onClose: () => void; gitCo
   let scrollboxRef: ScrollBoxRenderable | undefined;
 
   const sourceColor = (source: ReturnType<typeof events>[number]["source"]) =>
-    debugSourceColor(t(), source, props.gitColor);
+    debugSourceColor(t(), source, props.gitColor, modules);
 
   /** Errors are red whatever their source (a GitHub request error as much as a Git one). */
   const messageColor = (event: ReturnType<typeof events>[number]) =>

@@ -2,7 +2,6 @@ import { type Accessor, createEffect, on, onCleanup, untrack } from "solid-js";
 import { createCommitDetailService } from "../../core/git/commit-detail";
 import type { GitPort } from "../../core/git/port";
 import { isUncommittedHash } from "../../core/git/types";
-import { isProviderDetailView } from "../../core/provider-model";
 import type { DetailNavRef } from "../components/detail-types";
 import type { AppActions, AppState } from "../context/state";
 import { getAvailableTabs, getDefaultDetailTab } from "../utils/tab-utils";
@@ -82,7 +81,7 @@ export function useDetailLoader({
      * view: while the Dashboard shows, the graph's tab waits for one.
      */
     if (commit && !getIsJumpNavigation() && activeProvider !== "dashboard") {
-      setGraphDetail.setDetailActiveTab(getDefaultDetailTab(commit, activeProvider));
+      setGraphDetail.setDetailActiveTab(getDefaultDetailTab(commit, activeProvider, state.providers.set));
       setGraphDetail.setDetailCursorIndex(0);
       detailNavRef.pendingJumpDirection = null;
     }
@@ -100,9 +99,12 @@ export function useDetailLoader({
 
     const isUncommitted = isUncommittedHash(commit.hash);
 
-    if (tab === "snyk-deps") {
+    const owner = state.providers.set.providerOfTab(tab);
+    // A tab a provider adds (Snyk's Dependencies): it goes when the commit has nothing for it.
+    if (owner && owner.id !== tab) {
       const provider = state.activeProviderView();
       const available = getAvailableTabs({
+        providers: state.providers.set,
         commit,
         uncommittedDetail: ud,
         commitDetail: cd,
@@ -111,7 +113,7 @@ export function useDetailLoader({
         getCommitData,
       });
       if (!available.includes(tab)) {
-        setGraphDetail.setDetailActiveTab(getDefaultDetailTab(commit, provider));
+        setGraphDetail.setDetailActiveTab(getDefaultDetailTab(commit, provider, state.providers.set));
         setGraphDetail.setDetailCursorIndex(0);
         actions.setDetailCursorAction(null);
       }
@@ -134,7 +136,7 @@ export function useDetailLoader({
       }
     } else if (!isUncommitted && cd) {
       isEmpty = tab === "files" && cd.files.length === 0;
-    } else if (!isUncommitted && isProviderDetailView(tab)) {
+    } else if (!isUncommitted && owner) {
       // Provider tabs own their empty/loading UI. Never auto-switch away.
     }
 
@@ -142,6 +144,7 @@ export function useDetailLoader({
 
     // Switch to the first non-empty tab
     const available = getAvailableTabs({
+      providers: state.providers.set,
       commit,
       uncommittedDetail: ud,
       commitDetail: cd,

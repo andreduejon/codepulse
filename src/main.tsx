@@ -7,19 +7,27 @@ import type { AppPorts } from "./core/app-ports";
 import { addDebugEvent, redactDebugValue } from "./core/debug-events";
 import { mergeOptions, reportConfigWarnings } from "./core/settings/config";
 import { portsFrom } from "./ports";
+import { builtInProviders, modulesOf, type ProviderPlugin } from "./providers";
 import App from "./tui/app/app";
 import type { AppProps, StartupMode } from "./tui/app/app-types";
 import { parseCustomThemes } from "./tui/context/custom-themes";
 import { setDefaultPorts } from "./tui/context/ports";
+import { setDefaultProviderModules } from "./tui/context/provider-modules";
 
 /** Startup mode determines which screen the app shows first. */
 /**
  * Everything before the first frame: arguments, config, themes and which screen to show. The demo's headless player
  * (`bun run demo --play`) starts the app through this too, so it boots the way the real app does.
  */
-export async function startupProps(argv: string[], ports: Partial<AppPorts> = {}): Promise<AppProps> {
-  const all = portsFrom(ports);
+export async function startupProps(
+  argv: string[],
+  ports: Partial<AppPorts> = {},
+  plugins: readonly ProviderPlugin[] = builtInProviders,
+): Promise<AppProps> {
+  const all = portsFrom(ports, {}, plugins);
   setDefaultPorts(all);
+  const providerModules = modulesOf(plugins);
+  setDefaultProviderModules(providerModules);
   const { settings, git, cacheStore, providers, system, dashboard } = all;
   const cli = parseArgs(argv);
   try {
@@ -92,11 +100,9 @@ export async function startupProps(argv: string[], ports: Partial<AppPorts> = {}
     providers,
     system,
     dashboard,
+    providerModules,
     startupMode,
-    initialGithubConfig: config.providers?.github,
-    initialJenkinsConfig: config.providers?.jenkins,
-    initialOpenShiftConfig: config.providers?.openshift,
-    initialSnykConfig: config.providers?.snyk,
+    initialProviderSettings: config.providers,
   };
 }
 

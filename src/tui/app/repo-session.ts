@@ -106,7 +106,7 @@ export function useRepoSession(opts: {
         setPendingGraphScrollTop(snapshot.graphScrollTop);
       } else {
         // A repository not shown yet in this session opens in its start view; one shown before, where it was left.
-        actions.setActiveProviderView(startViewFor(nextConfig));
+        actions.setActiveProviderView(startViewFor(nextConfig, state.providers.set.definitions));
         actions.setCommits([]);
         actions.setGraphRows([]);
         actions.setBranches([]);

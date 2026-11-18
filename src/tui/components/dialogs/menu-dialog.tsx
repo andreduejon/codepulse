@@ -4,18 +4,12 @@ import { batch, createEffect, createSignal, For } from "solid-js";
 import type { DashboardSettings } from "../../../core/dashboard-settings";
 import type { ProviderView } from "../../../core/provider-model";
 import type { ConfigInfo } from "../../../core/settings/config";
+import type { RepoSettings } from "../../app/repo-settings";
 import { SHIFT_JUMP } from "../../constants";
 import { useAppState } from "../../context/state";
 import { useTheme } from "../../context/theme";
 import type { MenuTab } from "../../hooks/menu-items-types";
-import {
-  COPYABLE_VISIBLE_WIDTH,
-  type GitHubMenuConfig,
-  type JenkinsMenuConfig,
-  type OpenShiftMenuConfig,
-  type SettingItem,
-  type SnykMenuConfig,
-} from "../../hooks/menu-items-types";
+import { COPYABLE_VISIBLE_WIDTH, type SettingItem } from "../../hooks/menu-items-types";
 import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useClipboard } from "../../hooks/use-clipboard";
 import { useMenuItems } from "../../hooks/use-menu-items";
@@ -39,16 +33,8 @@ interface MenuDialogProps {
   /** Open the project selector to switch repos. */
   onSwitchRepo?: () => void;
   onOpenCache?: () => void;
-  /** Current GitHub provider config (passed through to Providers tab). */
-  githubConfig?: GitHubMenuConfig;
-  /** Callback to update GitHub provider config. */
-  onGithubConfigChange?: (cfg: GitHubMenuConfig) => void;
-  jenkinsConfig?: JenkinsMenuConfig;
-  onJenkinsConfigChange?: (cfg: JenkinsMenuConfig) => void;
-  openshiftConfig?: OpenShiftMenuConfig;
-  onOpenShiftConfigChange?: (cfg: OpenShiftMenuConfig) => void;
-  snykConfig?: SnykMenuConfig;
-  onSnykConfigChange?: (cfg: SnykMenuConfig) => void;
+  /** Each provider's settings: its rows in the Providers tab read and change them. */
+  providerSettings?: RepoSettings;
   dashboardConfig?: DashboardSettings;
   onDashboardConfigChange?: (cfg: DashboardSettings) => void;
   startView?: ProviderView;
@@ -112,14 +98,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     configInfo: props.configInfo,
     onSwitchRepo: props.onSwitchRepo,
     onOpenCache: props.onOpenCache,
-    githubConfig: () => props.githubConfig,
-    onGithubConfigChange: props.onGithubConfigChange,
-    jenkinsConfig: () => props.jenkinsConfig,
-    onJenkinsConfigChange: props.onJenkinsConfigChange,
-    openshiftConfig: () => props.openshiftConfig,
-    onOpenShiftConfigChange: props.onOpenShiftConfigChange,
-    snykConfig: () => props.snykConfig,
-    onSnykConfigChange: props.onSnykConfigChange,
+    providerSettings: () => props.providerSettings,
     dashboardConfig: () => props.dashboardConfig,
     onDashboardConfigChange: props.onDashboardConfigChange,
     startView: () => props.startView,

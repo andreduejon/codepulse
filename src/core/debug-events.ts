@@ -1,4 +1,5 @@
-export type DebugEventSource = "Git" | "GitHub" | "Jenkins" | "OpenShift" | "Snyk" | "error";
+/** Where a Debug event comes from: Git, a provider (by its display name), or an error. */
+export type DebugEventSource = "Git" | "error" | (string & {});
 
 export interface DebugEvent {
   timestamp: number;

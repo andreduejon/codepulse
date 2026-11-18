@@ -3,8 +3,9 @@ import { type Accessor, createEffect, createSignal, For, type JSX, onCleanup, Sh
 import type { DashboardEvent } from "../../core/dashboard/events";
 import type { CommitInfo } from "../../core/dashboard/load";
 import { DETAIL_DEBOUNCE_MS } from "../../core/git/commit-detail";
-import { providerDisplayName } from "../../core/provider-model";
 import { useGit } from "../context/git";
+import { useProviderModules } from "../context/provider-modules";
+import { useProviderSet } from "../context/providers";
 import type { DetailTab } from "../context/state";
 import { markLegend } from "../dashboard/legend";
 import { useT } from "../hooks/use-t";
@@ -53,6 +54,10 @@ export function DashboardDetail(
 ) {
   /** Git, through the app's port: the side panel reads the event's commit with it. */
   const git = useGit();
+  /** Each provider's name and its events' legend. */
+  const modules = useProviderModules();
+  const providers = useProviderSet();
+  const providerDisplayName = (view: string) => providers.displayName(view);
   const t = useT();
   const [actionHovered, setActionHovered] = createSignal(false);
   /** The commits read, the newest last: an event shown again shows its commit at once. */
@@ -104,7 +109,7 @@ export function DashboardDetail(
   const legend = () => {
     const event = props.event();
     if (!event) return null;
-    return props.legend ? props.legend() : markLegend(event.source);
+    return props.legend ? props.legend() : markLegend(event.source, modules);
   };
   const tabs = () => (props.event() ? (props.tabs?.() ?? []) : []);
   /** The shown tab's identity: another event or tab builds its own content. */

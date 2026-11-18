@@ -1,36 +1,18 @@
-/** The providers the app knows, in their order, and what each commit's badge says. */
+import type { ProviderSet } from "./provider-set";
 
 /**
- * Canonical provider order used everywhere providers are cycled or displayed.
- * Mental model: the dashboard over every provider, then source → CI → runtime → scan/quality.
- * Future providers should extend this order as:
- * Dashboard → Git → GitHub → Jenkins → OpenShift → Snyk → SonarQube.
+ * The views and what each commit's badge says. Which providers there are, their names and order, is the app's provider
+ * set (provider-set.ts), built from each provider's definition.
  */
-export const PROVIDER_ORDER = ["dashboard", "git", "github-actions", "jenkins", "openshift", "snyk"] as const;
 
-/** Provider view identifiers — Tab cycles through these. */
-export type ProviderView = (typeof PROVIDER_ORDER)[number];
+/** A view Tab cycles through: the Dashboard, Git, or a provider's id. */
+export type ProviderView = "dashboard" | "git" | (string & {});
 
-/** The views that show a provider's events on the dashboard: every view but the dashboard itself. */
+/** Where a Dashboard event comes from: Git or a provider. */
 export type EventSource = Exclude<ProviderView, "dashboard">;
 
-export type ProviderDetailView = Exclude<ProviderView, "git" | "dashboard">;
-
-export interface ProviderMetadata {
-  displayName: string;
-  /** Label for detail panel tab. Defaults to displayName. */
-  detailLabel?: string;
-  category: "overview" | "source" | "ci" | "runtime" | "scan-quality";
-}
-
-export const PROVIDER_METADATA: Record<ProviderView, ProviderMetadata> = {
-  dashboard: { displayName: "Dashboard", category: "overview" },
-  git: { displayName: "Git", category: "source" },
-  "github-actions": { displayName: "GitHub", detailLabel: "Actions", category: "ci" },
-  jenkins: { displayName: "Jenkins", detailLabel: "Builds", category: "ci" },
-  openshift: { displayName: "OpenShift", detailLabel: "Resources", category: "runtime" },
-  snyk: { displayName: "Snyk", detailLabel: "Vulnerabilities", category: "scan-quality" },
-};
+/** A provider's view: not Git, not the Dashboard. */
+export type ProviderDetailView = string;
 
 export interface GraphStatusCounts {
   passCount: number;
@@ -78,24 +60,6 @@ export interface GraphBadge {
   latestStatus: "pass" | "fail" | "running" | "unknown";
 }
 
-export function providerDisplayName(view: ProviderView): string {
-  return PROVIDER_METADATA[view]?.displayName ?? view;
-}
-
-export function isProviderView(view: string): view is ProviderView {
-  return PROVIDER_ORDER.includes(view as ProviderView);
-}
-
-export function isProviderDetailView(view: string): view is ProviderDetailView {
-  return isProviderView(view) && view !== "git" && view !== "dashboard";
-}
-
-export function providerDetailTab(view: ProviderView): { id: ProviderDetailView; label: string } | null {
-  if (!isProviderDetailView(view)) return null;
-  const metadata = PROVIDER_METADATA[view];
-  return { id: view, label: metadata.detailLabel ?? metadata.displayName };
-}
-
 /** Provider registration entry — each provider registers itself on init. */
 export interface ProviderRegistration {
   id: ProviderView;
@@ -111,6 +75,8 @@ export interface ProviderRegistration {
 }
 
 export interface ProviderRegistry {
+  /** The providers the app runs with: their names, tabs and order. */
+  readonly set: ProviderSet;
   register: (p: ProviderRegistration) => void;
   unregister: (id: ProviderView) => void;
   getVersion: () => number;

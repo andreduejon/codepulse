@@ -3,7 +3,7 @@ import { useTerminalDimensions } from "@opentui/solid";
 import type { ComponentProps } from "solid-js";
 import { type Accessor, Show } from "solid-js";
 import type { DashboardEvent } from "../../../core/dashboard/events";
-import { providerDisplayName } from "../../../core/provider-model";
+import { useProviderSet } from "../../context/providers";
 import { useT } from "../../hooks/use-t";
 import { DashboardDetail } from "../dashboard-detail";
 import { KeyHint, KeyHintSeparator } from "../key-hint";
@@ -27,12 +27,13 @@ export function DashboardEventDialog(
     tabProps?: Partial<ComponentProps<typeof DashboardDetail>>;
   }>,
 ) {
+  const providers = useProviderSet();
   const dimensions = useTerminalDimensions();
   const t = useT();
   const dialogWidth = () => Math.min(72, dimensions().width - 8);
   const dialogHeight = () => dimensions().height - 8;
   const hasTab = () => (props.tabProps?.tabs?.().length ?? 0) > 0;
-  const showIn = () => providerDisplayName(props.event()?.source ?? "git");
+  const showIn = () => providers.displayName(props.event()?.source ?? "git");
 
   return (
     <DialogOverlay>

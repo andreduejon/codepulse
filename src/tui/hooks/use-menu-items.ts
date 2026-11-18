@@ -1,31 +1,18 @@
 import type { Accessor } from "solid-js";
 import { createEffect, createMemo, createSignal } from "solid-js";
 import { type DashboardSettings, DEFAULT_DASHBOARD_SETTINGS } from "../../core/dashboard-settings";
-import { type ProviderDetailView, type ProviderView, providerDisplayName } from "../../core/provider-model";
-import { DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS } from "../../core/provider-settings";
-import type { CodepulseConfig, ConfigInfo } from "../../core/settings/config";
+import type { ProviderDetailView, ProviderView } from "../../core/provider-model";
+import type { CodepulseConfig, ConfigInfo, ProviderSection } from "../../core/settings/config";
 import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL } from "../../core/settings/config";
+import type { RepoSettings } from "../app/repo-settings";
 import { AUTO_REFRESH_MS, INTERVAL_OPTIONS, MAX_COUNT_OPTIONS, MS_TO_LABEL } from "../constants";
+import { useProviderModules } from "../context/provider-modules";
 import { useSettings } from "../context/settings";
 import { useAppState } from "../context/state";
 import { useSystem } from "../context/system";
 import type { Theme } from "../context/theme";
-import {
-  COPYABLE_VISIBLE_WIDTH,
-  type GitHubMenuConfig,
-  type JenkinsMenuConfig,
-  type MenuTab,
-  type OpenShiftMenuConfig,
-  type SettingItem,
-  type SnykMenuConfig,
-} from "./menu-items-types";
-import {
-  buildDashboardItems,
-  buildGitHubProviderItems,
-  buildJenkinsProviderItems,
-  buildOpenShiftProviderItems,
-  buildSnykProviderItems,
-} from "./menu-provider-items";
+import { COPYABLE_VISIBLE_WIDTH, type MenuTab, type SettingItem } from "./menu-items-types";
+import { buildDashboardItems } from "./menu-provider-items";
 
 /** `5s ago`, `3h ago`; a time the clock puts ahead of now (a clock that is off) is `just now`. */
 export const relativeAgeLabel = (time: Date): string => {
@@ -73,16 +60,8 @@ export interface MenuItemsOptions {
   /** Open the project selector to switch repos. */
   onSwitchRepo?: () => void;
   onOpenCache?: () => void;
-  /** Current GitHub provider config (tokenEnvVar, enabled, trustedEnterpriseHost). */
-  githubConfig?: Accessor<GitHubMenuConfig | undefined>;
-  /** Callback to update GitHub provider config. */
-  onGithubConfigChange?: (cfg: GitHubMenuConfig) => void;
-  jenkinsConfig?: Accessor<JenkinsMenuConfig | undefined>;
-  onJenkinsConfigChange?: (cfg: JenkinsMenuConfig) => void;
-  openshiftConfig?: Accessor<OpenShiftMenuConfig | undefined>;
-  onOpenShiftConfigChange?: (cfg: OpenShiftMenuConfig) => void;
-  snykConfig?: Accessor<SnykMenuConfig | undefined>;
-  onSnykConfigChange?: (cfg: SnykMenuConfig) => void;
+  /** Each provider's settings: its rows read and change them. */
+  providerSettings?: Accessor<RepoSettings | undefined>;
   dashboardConfig?: Accessor<DashboardSettings | undefined>;
   onDashboardConfigChange?: (cfg: DashboardSettings) => void;
   startView?: Accessor<ProviderView | undefined>;
@@ -97,14 +76,15 @@ export function startViewItem(
   views: readonly ProviderView[],
   current: ProviderView,
   save: (view: ProviderView) => void,
+  displayName: (view: ProviderView) => string,
 ): SettingItem {
   return {
     kind: "cycle",
     label: "Start in",
-    options: views.map(providerDisplayName),
-    get: () => providerDisplayName(views.includes(current) ? current : "git"),
+    options: views.map(displayName),
+    get: () => displayName(views.includes(current) ? current : "git"),
     set: value => {
-      const view = views.find(option => providerDisplayName(option) === value);
+      const view = views.find(option => displayName(option) === value);
       if (view) save(view);
     },
   };
@@ -134,6 +114,8 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
   /** Where the settings are kept: the menu reads and writes them there. */
   const savedSettings = useSettings();
   const { state, actions } = useAppState();
+  /** Each provider's module: its rows in the Providers tab. */
+  const providerModules = useProviderModules();
   const [repoDisplayConfig, setRepoDisplayConfig] = createSignal(savedSettings.display(state.repoPath()));
 
   createEffect(() => {
@@ -153,32 +135,15 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
       autoFetchSeconds: state.autoFetchInterval() / 1000,
       ...overrides,
     };
-    if (!overrides?.providers && opts.githubConfig?.()) {
-      const ghCfg = opts.githubConfig();
-      if (!ghCfg) return;
-      cfg.providers = {
-        github: {
-          enabled: ghCfg.enabled,
-          tokenEnvVar: ghCfg.tokenEnvVar,
-          trustedEnterpriseHost: ghCfg.trustedEnterpriseHost ?? undefined,
-          fetchDepth: ghCfg.fetchDepth,
-          cacheLimit: ghCfg.cacheLimit,
-          autoRefreshSeconds: ghCfg.autoRefreshSeconds,
-        },
-      };
-      const jenkinsCfg = opts.jenkinsConfig?.();
-      if (jenkinsCfg) {
-        cfg.providers.jenkins = {
-          enabled: jenkinsCfg.enabled,
-          username: jenkinsCfg.username,
-          tokenEnvVar: jenkinsCfg.tokenEnvVar,
-          fetchDepth: jenkinsCfg.fetchDepth,
-          cacheLimit: jenkinsCfg.cacheLimit,
-          autoRefreshSeconds: jenkinsCfg.autoRefreshSeconds,
-          jobs: jenkinsCfg.jobs,
-        };
-      }
-    }
+    // Every provider's settings too, unless the change is one provider's own.
+    const repoSettings = opts.providerSettings?.();
+    if (!overrides?.providers && repoSettings)
+      cfg.providers = Object.fromEntries(
+        state.providers.set.definitions.map(definition => [
+          definition.key,
+          repoSettings.of(definition)() as ProviderSection,
+        ]),
+      );
     savedSettings.write(cfg, state.repoPath());
     if (overrides && (Object.hasOwn(overrides, "group") || Object.hasOwn(overrides, "appName"))) {
       const nextRepoDisplayConfig = {
@@ -259,10 +224,15 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         dialogId: "theme",
         get: () => opts.themes[opts.themeName()]?.name ?? opts.themeName(),
       },
-      startViewItem(state.providers.getEnabledViews(), opts.startView?.() ?? "git", view => {
-        opts.onStartViewChange?.(view);
-        persistFullConfig({ startView: view });
-      }),
+      startViewItem(
+        state.providers.getEnabledViews(),
+        opts.startView?.() ?? "git",
+        view => {
+          opts.onStartViewChange?.(view);
+          persistFullConfig({ startView: view });
+        },
+        state.providers.set.displayName,
+      ),
       {
         kind: "cycle",
         label: "Page size",
@@ -466,79 +436,29 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
 
   // ── Provider tab items ────────────────────────────────────────────
   const providerItems = createMemo<SettingItem[]>(() => {
-    const ghCfg = opts.githubConfig?.() ?? {
-      enabled: false,
-      tokenEnvVar: "GITHUB_TOKEN",
-      trustedEnterpriseHost: null,
-      fetchDepth: 20,
-      cacheLimit: 20,
-      autoRefreshSeconds: DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS,
-    };
-    const tokenSource = system.tokenSource(ghCfg.tokenEnvVar);
+    const repoSettings = opts.providerSettings?.();
     const tokenIsSet = (envVar: string) => system.tokenSource(envVar) === "env";
-    const jenkinsCfg = opts.jenkinsConfig?.() ?? {
-      enabled: false,
-      tokenEnvVar: "JENKINS_TOKEN",
-      fetchDepth: 20,
-      cacheLimit: 20,
-      autoRefreshSeconds: DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS,
-      jobs: [],
-    };
-    const openshiftCfg = opts.openshiftConfig?.() ?? {
-      enabled: false,
-      serverUrl: "",
-      consoleUrl: "",
-      tokenEnvVar: "OPENSHIFT_TOKEN",
-      namespaces: [],
-      commitShaAnnotation: "dev/commit-sha",
-      cacheLimit: 20,
-      fetchDepth: 20,
-      autoRefreshSeconds: DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS,
-    };
-    const snykCfg = opts.snykConfig?.() ?? {
-      enabled: false,
-      tokenEnvVar: "SNYK_TOKEN",
-      autoScanBranches: [],
-      maxCachedScans: 20 as const,
-    };
+    const dashboard = buildDashboardItems(opts.dashboardConfig?.() ?? DEFAULT_DASHBOARD_SETTINGS, next => {
+      opts.onDashboardConfigChange?.(next);
+      persistFullConfig({ dashboard: next });
+    });
+    if (!repoSettings) return dashboard;
+    // Each provider's own section, in the providers' order.
     return [
-      ...buildDashboardItems(opts.dashboardConfig?.() ?? DEFAULT_DASHBOARD_SETTINGS, next => {
-        opts.onDashboardConfigChange?.(next);
-        persistFullConfig({ dashboard: next });
+      ...dashboard,
+      ...providerModules.flatMap(module => {
+        const definition = module.definition;
+        return module.menuItems({
+          settings: repoSettings.of(definition)(),
+          update: next => {
+            repoSettings.set(definition, next);
+            persistFullConfig({ providers: { [definition.key]: next as ProviderSection } });
+          },
+          lastRefresh: () => providerRefreshLabel(definition.id),
+          tokenIsSet,
+          state,
+        });
       }),
-      ...buildGitHubProviderItems(
-        ghCfg,
-        state.remoteUrl(),
-        tokenSource,
-        opts.onGithubConfigChange,
-        newCfg =>
-          persistFullConfig({
-            providers: { github: { ...newCfg, trustedEnterpriseHost: newCfg.trustedEnterpriseHost ?? undefined } },
-          }),
-        () => providerRefreshLabel("github-actions"),
-      ),
-      ...buildJenkinsProviderItems(
-        jenkinsCfg,
-        opts.onJenkinsConfigChange,
-        newCfg => persistFullConfig({ providers: { jenkins: newCfg } }),
-        () => providerRefreshLabel("jenkins"),
-        tokenIsSet,
-      ),
-      ...buildOpenShiftProviderItems(
-        openshiftCfg,
-        opts.onOpenShiftConfigChange,
-        newCfg => persistFullConfig({ providers: { openshift: newCfg } }),
-        () => providerRefreshLabel("openshift"),
-        tokenIsSet,
-      ),
-      ...buildSnykProviderItems(
-        snykCfg,
-        state.branches,
-        opts.onSnykConfigChange,
-        newCfg => persistFullConfig({ providers: { snyk: newCfg } }),
-        () => providerRefreshLabel("snyk"),
-        tokenIsSet,
-      ),
     ];
   });
 

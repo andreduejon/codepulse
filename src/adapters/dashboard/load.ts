@@ -1,43 +1,26 @@
 /**
- * The terminal app's Dashboard reads: core/dashboard/load.ts with the provider caches as its sources and the Git
- * command line (or the app's Git port). Tests spy on these two functions.
+ * The terminal app's Dashboard reads: core/dashboard/load.ts with each provider's stored events (through its adapters,
+ * on the provider caches) and the Git command line (or the app's Git port). Tests spy on these two functions.
  */
 import type { DashboardEvent } from "../../core/dashboard/events";
-import { type CommitInfo, type DashboardSources, type ReadOptions, readAppEvents } from "../../core/dashboard/load";
+import { type CommitInfo, type ReadOptions, readAppEvents } from "../../core/dashboard/load";
 import type { GitPort } from "../../core/git/port";
-import type { ProviderCacheRegistry } from "../cache/sha-sqlite-cache";
+import type { ProviderSet } from "../../core/provider-set";
 import { gitCli } from "../git/git-cli";
-import { GitHubCache } from "../github/cache";
-import { JenkinsCache } from "../jenkins/cache";
-import { OpenShiftCache } from "../openshift/cache";
-import { SnykCache } from "../snyk/cache";
 
 export type { CommitInfo } from "../../core/dashboard/load";
-
-export interface LoadOptions extends ReadOptions {
-  /** The provider caches' folder (tests); the app's own otherwise. */
-  cacheRoot?: string;
-  /** The registry that holds the caches' database: the process's unless a host gives its own. */
-  registry?: ProviderCacheRegistry;
-}
-
-/** The provider caches as the Dashboard's sources. */
-export function cacheSources(cacheRoot?: string, registry?: ProviderCacheRegistry): DashboardSources {
-  const root = { ...(cacheRoot === undefined ? {} : { root: cacheRoot }), registry };
-  return {
-    github: app => new GitHubCache(root).peekAll(app),
-    jenkins: app => new JenkinsCache(root).peekAll(app),
-    openshift: app => new OpenShiftCache(root).peekAll(app),
-    snyk: app => new SnykCache(root).peekAll(app),
-  };
-}
 
 /**
  * One app's events since the window starts: the commits on its main branch, and the finished runs, builds and scans
  * its provider caches hold. Nothing is fetched: the caches are as fresh as the last time the app was open.
  */
-export function loadAppEvents(app: string, options: LoadOptions, git: GitPort = gitCli()): Promise<DashboardEvent[]> {
-  return readAppEvents(app, options, { git, sources: cacheSources(options.cacheRoot, options.registry) });
+export function loadAppEvents(
+  app: string,
+  options: ReadOptions,
+  providers: ProviderSet,
+  git: GitPort = gitCli(),
+): Promise<DashboardEvent[]> {
+  return readAppEvents(app, options, { git, sources: providers.storedEvents() });
 }
 
 /** An event's commit as the app's repository knows it; null when it does not (a commit only CI saw). */

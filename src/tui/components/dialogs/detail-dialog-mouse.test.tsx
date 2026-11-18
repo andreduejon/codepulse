@@ -90,7 +90,7 @@ async function renderDetail(compact = true, fileCount = 40, family = false, jump
           if (!commit) return;
           commitChanged(commit.hash, isJumpNavigation);
           if (!isJumpNavigation) {
-            app.actions.setDetailActiveTab(getDefaultDetailTab(commit, provider));
+            app.actions.setDetailActiveTab(getDefaultDetailTab(commit, provider, app.state.providers.set));
             app.actions.setDetailCursorIndex(0);
             navRef.pendingJumpDirection = null;
           }

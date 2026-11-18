@@ -6,6 +6,7 @@ import { createSignal, Show } from "solid-js";
 import * as config from "../../../adapters/settings/config";
 import * as configWrite from "../../../adapters/settings/config-write";
 import type { ConfigInfo } from "../../../core/settings/config";
+import type { RepoSettings } from "../../app/repo-settings";
 import { AppStateContext, createAppState } from "../../context/state";
 import { createThemeState, ThemeContext } from "../../context/theme";
 import type {
@@ -33,7 +34,7 @@ async function renderMenu(height = 60, configInfo?: ConfigInfo) {
   const [github, setGithub] = createSignal<GitHubMenuConfig>({
     enabled: true,
     tokenEnvVar: "GITHUB_TOKEN",
-    trustedEnterpriseHost: null,
+    trustedEnterpriseHost: undefined,
     fetchDepth: 20,
     cacheLimit: 20,
     autoRefreshSeconds: 120,
@@ -64,6 +65,17 @@ async function renderMenu(height = 60, configInfo?: ConfigInfo) {
     fetchDepth: 20,
     autoRefreshSeconds: 120,
   });
+  /** Each provider's settings, as the app's repository settings hold them: by its settings key. */
+  const signals: Record<string, [() => unknown, (next: never) => void]> = {
+    github: [github, setGithub],
+    jenkins: [jenkins, setJenkins],
+    snyk: [snyk, setSnyk],
+    openshift: [openshift, setOpenShift],
+  };
+  const providerSettings = {
+    of: (definition: { key: string }) => signals[definition.key]?.[0],
+    set: (definition: { key: string }, next: never) => signals[definition.key]?.[1](next),
+  } as unknown as RepoSettings;
   const fetch = mock(() => {});
   const reload = mock(() => {});
   const cache = mock(() => {});
@@ -92,14 +104,7 @@ async function renderMenu(height = 60, configInfo?: ConfigInfo) {
                 onOpenCache={cache}
                 onViewBranch={branch}
                 configInfo={configInfo}
-                githubConfig={github()}
-                onGithubConfigChange={setGithub}
-                jenkinsConfig={jenkins()}
-                onJenkinsConfigChange={setJenkins}
-                snykConfig={snyk()}
-                onSnykConfigChange={setSnyk}
-                openshiftConfig={openshift()}
-                onOpenShiftConfigChange={setOpenShift}
+                providerSettings={providerSettings}
               />
             </Show>
           </AppStateContext.Provider>

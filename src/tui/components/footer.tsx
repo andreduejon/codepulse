@@ -1,6 +1,5 @@
 import type { BoxRenderable } from "@opentui/core";
 import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
-import { providerDisplayName } from "../../core/provider-model";
 import type { CommandBarMode } from "../app/ui-state";
 import { useAppState } from "../context/state";
 import type { DashboardState } from "../dashboard/use-dashboard";
@@ -39,6 +38,7 @@ export default function Footer(
 ) {
   const t = useT();
   const { state } = useAppState();
+  const providerDisplayName = (view: string) => state.providers.set.displayName(view);
 
   /** Git's own work by name; reading a commit's details is too quick for words, so it only spins. */
   const gitActivity = () =>

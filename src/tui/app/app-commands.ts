@@ -29,14 +29,11 @@ export interface AppCommandContext {
   hiddenDashboardSources: () => ReadonlySet<EventSource>;
 }
 
-/** The names `:hide` and `:show` take, as the badges read (`GitHub` is `github`). */
-const DASHBOARD_SOURCES: Readonly<Record<string, EventSource>> = {
-  git: "git",
-  github: "github-actions",
-  jenkins: "jenkins",
-  openshift: "openshift",
-  snyk: "snyk",
-};
+/** The source `:hide` and `:show` name: `git`, or a provider by its settings key, as the badges read (`github`). */
+function dashboardSource(name: string, ctx: AppCommandContext): EventSource | undefined {
+  if (name === "git") return "git";
+  return ctx.state.providers.set.byKey(name)?.id;
+}
 
 /** `:hide NAME`, `:show NAME`, `:show`: what a badge click does, from the keyboard. Dashboard only. */
 function runSourceCommand(verb: "hide" | "show", name: string | undefined, ctx: AppCommandContext): void {
@@ -46,7 +43,7 @@ function runSourceCommand(verb: "hide" | "show", name: string | undefined, ctx: 
     for (const source of [...hidden]) ctx.toggleDashboardSource(source);
     return;
   }
-  const source = name === undefined ? undefined : DASHBOARD_SOURCES[name];
+  const source = name === undefined ? undefined : dashboardSource(name, ctx);
   if (source && hidden.has(source) !== (verb === "hide")) ctx.toggleDashboardSource(source);
 }
 

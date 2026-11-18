@@ -32,7 +32,7 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
 
   // Active tab for uncommitted node: "staged" | "unstaged" | "untracked"
   const activeTab = () => state.detailActiveTab();
-  const providerNotice = () => getUncommittedProviderNotice(state.activeProviderView());
+  const providerNotice = () => getUncommittedProviderNotice(state.activeProviderView(), state.providers.set);
 
   // Get files for the active tab from uncommittedDetail
   const activeFiles = createMemo(() => {

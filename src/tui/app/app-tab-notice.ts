@@ -1,8 +1,6 @@
 import { bannerParts } from "../../core/banner";
 import type { ProviderView } from "../../core/provider-model";
-import type { SnykScanResult } from "../../core/snyk/types";
-import type { DetailTab, ProviderStatus } from "../context/state";
-import { snykPartialScanNotice, snykProjectNotice } from "../providers/snyk/project-notice";
+import type { ProviderStatus } from "../context/state";
 
 /**
  * A notice pinned at the bottom of the details, under the tab content. The banner over the graph is for "can't
@@ -34,9 +32,8 @@ export function tabNoticeFor(input: {
   /** Display name of the active provider (`OpenShift`), stripped from the headline. */
   source: string;
   status: ProviderStatus;
-  tab: DetailTab;
-  /** Snyk scan of the selected commit, if any. */
-  snykScan: SnykScanResult | null;
+  /** The provider's own notice for the selected commit and tab (a Snyk scan's coverage gaps), if any. */
+  providerNotice: TabNotice | null;
 }): TabNotice | null {
   if (input.view === "git" || input.view === "dashboard") return null;
   if (input.status.kind === "warning") {
@@ -50,13 +47,5 @@ export function tabNoticeFor(input: {
       entries: [],
     };
   }
-  const scan = input.snykScan;
-  if (input.view !== "snyk" || !scan) return null;
-  const notice =
-    input.tab === "snyk-deps"
-      ? snykProjectNotice(scan.dependencyProjects)
-      : input.tab === "snyk"
-        ? snykPartialScanNotice(scan)
-        : null;
-  return notice ? { ...notice, key: `${input.tab}:${scan.sha}:${scan.scannedAt}`, fromStatus: false } : null;
+  return input.providerNotice;
 }

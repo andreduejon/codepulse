@@ -3,7 +3,9 @@ import { aggregateRunsToGraphBadge } from "../../core/github/commit-data";
 import type { GitHubWorkflowRun } from "../../core/github/types";
 import type { GraphBadge } from "../../core/provider-model";
 import { AUTHOR_COL_WIDTH, DATE_COL_WIDTH } from "../constants";
-import { graphColumnWidths } from "./graph-column-widths";
+import { GIT_WIDTHS } from "./graph-column-widths";
+import { OPENSHIFT_GRAPH_COLUMNS } from "./openshift/graph-columns";
+import { CI_GRAPH_COLUMNS } from "./shared/ci-columns";
 import { chipsWidth, statusCountChipsWidth } from "./shared/status-chips";
 
 const badge = (overrides: Partial<GraphBadge>): GraphBadge => ({
@@ -27,17 +29,17 @@ describe("status chips", () => {
   });
 });
 
-describe("graphColumnWidths", () => {
+describe("provider column widths", () => {
   test("Git and small CI counts keep the Author and Date widths", () => {
-    expect(graphColumnWidths("git", new Map())).toEqual({ first: AUTHOR_COL_WIDTH, second: DATE_COL_WIDTH });
+    expect(GIT_WIDTHS).toEqual({ first: AUTHOR_COL_WIDTH, second: DATE_COL_WIDTH });
     const small = new Map([["a", badge({ passCount: 3 })]]);
-    expect(graphColumnWidths("github-actions", small)).toEqual({ first: AUTHOR_COL_WIDTH, second: DATE_COL_WIDTH });
+    expect(CI_GRAPH_COLUMNS.widths(small)).toEqual({ first: AUTHOR_COL_WIDTH, second: DATE_COL_WIDTH });
   });
 
   test("CI columns grow to fit every chip instead of clipping the last one", () => {
     const wide = new Map([["a", badge({ failCount: 12, runningCount: 10, unknownCount: 11, passCount: 140 })]]);
     // ` 12 ` ` 10 ` ` 11 ` ` 140 ` + 3 gaps + 2 padding
-    expect(graphColumnWidths("jenkins", wide).first).toBe(4 + 4 + 4 + 5 + 3 + 2);
+    expect(CI_GRAPH_COLUMNS.widths(wide).first).toBe(4 + 4 + 4 + 5 + 3 + 2);
   });
 
   test("OpenShift Live fits four single-digit chips (15 + padding)", () => {
@@ -45,7 +47,7 @@ describe("graphColumnWidths", () => {
       live: { failCount: 1, runningCount: 1, unknownCount: 1, passCount: 1 },
       cache: { failCount: 0, runningCount: 0, unknownCount: 0, passCount: 2 },
     };
-    const widths = graphColumnWidths("openshift", new Map([["a", badge({ lanes })]]));
+    const widths = OPENSHIFT_GRAPH_COLUMNS.widths(new Map([["a", badge({ lanes })]]));
     expect(widths.first).toBe(15 + 2);
     expect(widths.second).toBe(DATE_COL_WIDTH);
   });

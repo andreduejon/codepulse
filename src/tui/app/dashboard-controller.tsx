@@ -8,12 +8,7 @@ import { KeyEvent, parseKeypress, type ScrollBoxRenderable } from "@opentui/core
 import { type Accessor, batch, createEffect, createMemo, createSignal, Show, untrack } from "solid-js";
 import type { DashboardEvent } from "../../core/dashboard/events";
 import type { CommitInfo, ReadOptions } from "../../core/dashboard/load";
-import {
-  type EventSource,
-  isProviderDetailView,
-  type ProviderView,
-  providerDetailTab,
-} from "../../core/provider-model";
+import type { EventSource, ProviderView } from "../../core/provider-model";
 import { DashboardCommitFields, type DashboardDetailTab } from "../components/dashboard-detail";
 import CommitDetailView from "../components/detail";
 import type { createDetailMemory } from "../components/detail-memory";
@@ -27,7 +22,7 @@ import { type DashboardApp, useDashboard } from "../dashboard/use-dashboard";
 import { handleDetailKey } from "../hooks/handle-detail-keys";
 import { openGraphDetails } from "../hooks/handle-graph-keys";
 import { providerColors } from "../providers/colors";
-import { detailEntryFor } from "../providers/detail-entries";
+import type { AnyProviderModule } from "../providers/module";
 import { repoDisplayName } from "../utils/group-repos";
 import type { DialogHost, LayoutMode } from "./dialogs";
 import type { ProviderHost } from "./providers";
@@ -45,6 +40,8 @@ export function useDashboardController(opts: {
   openUrl: (url: string | undefined) => void;
   settings: RepoSettings;
   providers: ProviderHost;
+  /** Each provider's terminal module: its colors and its events' legend. */
+  modules: readonly AnyProviderModule[];
   dialogs: Pick<DialogHost, "dialog" | "setDialog">;
   layoutMode: Accessor<LayoutMode>;
   /** The graph's details: "Show in provider" opens them on the event's commit. */
@@ -102,10 +99,10 @@ export function useDashboardController(opts: {
     load: opts.loadEvents,
     onCacheWrite: opts.onCacheWrite,
   });
-  // A scan on the dashboard: its cached result, also for a commit the graph doesn't hold (Snyk reads the graph's).
+  // An event's provider reads what its tab will show, also for a commit the graph doesn't hold (Snyk: the cached scan).
   createEffect(() => {
     const event = dashboard.selected();
-    if (dashboardShown() && event?.source === "snyk") void providers.snyk.readCachedScan(event.sha);
+    if (dashboardShown() && event) providers.dashboardSelected(event);
   });
   const dashboardAppName = () => dashboardApp().name;
   // No commit details or graph search beside the dashboard; its own details leave with it.
@@ -156,14 +153,7 @@ export function useDashboardController(opts: {
   /** The selected event's tabs: its provider's own (Snyk's two), then Info, its commit as the graph shows it. */
   const dashboardTabsFor = (event: DashboardEvent | null): DashboardDetailTab[] => {
     if (!event) return [];
-    const tabs: DashboardDetailTab[] = [];
-    if (isProviderDetailView(event.source)) {
-      const own = providerDetailTab(event.source);
-      if (own) tabs.push({ id: own.id, label: own.label });
-      if (event.source === "snyk") tabs.push({ id: "snyk-deps", label: "Dependencies" });
-    }
-    tabs.push({ id: "info", label: "Info" });
-    return tabs;
+    return [...state.providers.set.tabsOf(event.source), { id: "info", label: "Info" }];
   };
   /** The tab shown: the one chosen for this event's provider, else its first. */
   const dashboardActiveTab = (): DetailTab | null => {
@@ -211,8 +201,8 @@ export function useDashboardController(opts: {
     legend: () => {
       const event = dashboard.selected();
       const tab = dashboardActiveTab();
-      if (!event || !tab) return event ? markLegend(event.source) : null;
-      return detailEntryFor(tab)?.legend(providers.detailSources, event.sha) ?? null;
+      if (!event || !tab) return event ? markLegend(event.source, opts.modules) : null;
+      return providers.details.legend(tab, event.sha);
     },
     renderTab: (event: DashboardEvent, tab: DetailTab, info: Accessor<CommitInfo | null>) =>
       tab === "info" ? (
@@ -221,14 +211,14 @@ export function useDashboardController(opts: {
         <ProviderTab
           tab={tab}
           sha={event.sha}
-          providers={providers.detailSources}
+          providers={providers.details}
           navRef={detailNavRef}
           mouseEnabled={dialog() == null || dialog() === "dashboard-event"}
           onMouseFocus={() => focusDashboardTab(tab)}
           memory={opts.detailMemory}
           // The event's own run, build or resource: open, marked in the dashboard's color like its row.
           target={event.entry}
-          targetColor={providerColors(opts.theme(), "dashboard").bg}
+          targetColor={providerColors(opts.theme(), "dashboard", opts.modules).bg}
         />
       ),
   });

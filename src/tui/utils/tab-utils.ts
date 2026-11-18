@@ -1,6 +1,7 @@
 import type { Commit, CommitDetail, UncommittedDetail } from "../../core/git/types";
 import { isUncommittedHash } from "../../core/git/types";
-import { isProviderDetailView, type ProviderView, providerDisplayName } from "../../core/provider-model";
+import type { ProviderView } from "../../core/provider-model";
+import type { ProviderSet } from "../../core/provider-set";
 import type { DetailTab } from "../context/state";
 
 interface TabAvailabilityInput {
@@ -8,6 +9,8 @@ interface TabAvailabilityInput {
   uncommittedDetail: UncommittedDetail | null;
   commitDetail: CommitDetail | null;
   stashByParent: Map<string, Commit[]>;
+  /** The app's providers: a provider's view shows its tabs. */
+  providers: ProviderSet;
   /**
    * The active provider view.
    */
@@ -23,15 +26,19 @@ interface TabAvailabilityInput {
 }
 
 /** Returns the initial detail tab for normal (non-jump) navigation. */
-export function getDefaultDetailTab(commit: Commit, activeProviderView: ProviderView): DetailTab {
+export function getDefaultDetailTab(
+  commit: Commit,
+  activeProviderView: ProviderView,
+  providers: ProviderSet,
+): DetailTab {
   if (isUncommittedHash(commit.hash)) return "unstaged";
-  if (isProviderDetailView(activeProviderView)) return activeProviderView;
+  if (providers.isProvider(activeProviderView)) return activeProviderView;
   return "files";
 }
 
-export function getUncommittedProviderNotice(activeProviderView: ProviderView): string | null {
-  if (!isProviderDetailView(activeProviderView)) return null;
-  return `No ${providerDisplayName(activeProviderView)} data for uncommitted changes.`;
+export function getUncommittedProviderNotice(activeProviderView: ProviderView, providers: ProviderSet): string | null {
+  if (!providers.isProvider(activeProviderView)) return null;
+  return `No ${providers.displayName(activeProviderView)} data for uncommitted changes.`;
 }
 
 /**
@@ -41,7 +48,7 @@ export function getUncommittedProviderNotice(activeProviderView: ProviderView): 
  * presented in an additional tab.
  */
 export function getAvailableTabs(input: TabAvailabilityInput): DetailTab[] {
-  const { commit, uncommittedDetail, commitDetail, stashByParent, activeProviderView } = input;
+  const { commit, uncommittedDetail, commitDetail, stashByParent, activeProviderView, providers } = input;
 
   if (commit && isUncommittedHash(commit.hash)) {
     const ud = uncommittedDetail;
@@ -54,14 +61,14 @@ export function getAvailableTabs(input: TabAvailabilityInput): DetailTab[] {
 
   const tabs: DetailTab[] = [];
 
-  if (activeProviderView && isProviderDetailView(activeProviderView)) {
-    tabs.push(activeProviderView);
-    if (activeProviderView === "snyk") tabs.push("snyk-deps");
+  if (activeProviderView && providers.isProvider(activeProviderView)) {
+    // Its own tab, and the ones it adds (Snyk's Dependencies).
+    for (const tab of providers.tabsOf(activeProviderView)) tabs.push(tab.id);
   } else if (commitDetail?.files.length) {
     tabs.push("files");
   }
 
-  if (!isProviderDetailView(activeProviderView ?? "git") && stashByParent.has(commit?.hash ?? "")) {
+  if (!providers.isProvider(activeProviderView ?? "git") && stashByParent.has(commit?.hash ?? "")) {
     tabs.push("stashes");
   }
 

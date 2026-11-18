@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { DashboardEvent } from "../../core/dashboard/events";
+import { defaultProviderModules } from "../context/provider-modules";
 import { themes } from "../context/theme";
 import { GITHUB_LEGEND, JENKINS_LEGEND, OPENSHIFT_LEGEND, SNYK_SEVERITY_LEGEND } from "../providers/legends";
 import { eventMark, markLegend } from "./legend";
+
+const modules = defaultProviderModules();
 
 const scan = (severity: DashboardEvent["severity"]): DashboardEvent => ({
   id: "snyk",
@@ -17,11 +20,11 @@ const scan = (severity: DashboardEvent["severity"]): DashboardEvent => ({
 
 describe("dashboard marks", () => {
   test("each provider's events are explained with the legend of its own detail tab", () => {
-    expect(markLegend("git")).toBeNull();
-    expect(markLegend("github-actions")).toBe(GITHUB_LEGEND);
-    expect(markLegend("jenkins")).toBe(JENKINS_LEGEND);
-    expect(markLegend("openshift")).toBe(OPENSHIFT_LEGEND);
-    expect(markLegend("snyk")).toBe(SNYK_SEVERITY_LEGEND);
+    expect(markLegend("git", modules)).toBeNull();
+    expect(markLegend("github-actions", modules)).toBe(GITHUB_LEGEND);
+    expect(markLegend("jenkins", modules)).toBe(JENKINS_LEGEND);
+    expect(markLegend("openshift", modules)).toBe(OPENSHIFT_LEGEND);
+    expect(markLegend("snyk", modules)).toBe(SNYK_SEVERITY_LEGEND);
   });
 
   test("a scan's mark is the Snyk triangle in its worst finding's color, and a clean scan has none", () => {
@@ -32,11 +35,11 @@ describe("dashboard marks", () => {
       ["medium", theme.severityMedium],
       ["low", theme.severityLow],
     ] as const) {
-      const mark = eventMark(scan(severity));
+      const mark = eventMark(scan(severity), modules);
       expect(mark?.icon).toBe("▲");
       expect(mark?.color(theme)).toBe(color);
     }
-    expect(eventMark(scan(null))).toBeNull();
+    expect(eventMark(scan(null), modules)).toBeNull();
   });
 
   test("the severity legend names each level beside its triangle, without the Snyk tab to explain it", () => {

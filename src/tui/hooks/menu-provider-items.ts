@@ -307,7 +307,7 @@ export function buildGitHubProviderItems(
       label: "Allow host",
       get: () => hostAllowed,
       set: v => {
-        const newCfg = { ...ghCfg, trustedEnterpriseHost: v ? remoteHost : null };
+        const newCfg = { ...ghCfg, trustedEnterpriseHost: v ? (remoteHost ?? undefined) : undefined };
         onChange?.(newCfg);
         persist?.(newCfg);
       },

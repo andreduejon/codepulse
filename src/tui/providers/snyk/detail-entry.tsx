@@ -97,14 +97,12 @@ function DependenciesTab(props: SnykTabProps) {
 
 const hasFindings = (source: SnykDetailSource, sha: string) => (source.getCommitData(sha)?.findings.length ?? 0) > 0;
 
-export const snykVulnerabilitiesDetail = detailEntry({
-  view: "snyk",
+export const snykVulnerabilitiesDetail = detailEntry<SnykDetailSource>({
   Tab: VulnerabilitiesTab,
   legend: (source, sha) => (hasFindings(source, sha) ? VULNERABILITY_LEGEND : null),
 });
 
-export const snykDependenciesDetail = detailEntry({
-  view: "snyk",
+export const snykDependenciesDetail = detailEntry<SnykDetailSource>({
   Tab: DependenciesTab,
   legend: (source, sha) => (hasFindings(source, sha) ? SNYK_SEVERITY_LEGEND : null),
 });

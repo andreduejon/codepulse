@@ -9,8 +9,7 @@ import { useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSelector, createSignal, For, onCleanup, Show, untrack } from "solid-js";
 import { computeBrightColumns, computeSingleViewportOffset } from "../../core/git/graph";
 import type { GraphRow, RefInfo } from "../../core/git/types";
-import type { GraphBadge, ProviderView } from "../../core/provider-model";
-import type { SnykScanResult } from "../../core/snyk/types";
+import type { GraphBadge } from "../../core/provider-model";
 import {
   AUTHOR_COL_WIDTH,
   COMPACT_THRESHOLD_WIDTH,
@@ -31,19 +30,10 @@ import {
 import { edgeMarks, MAX_GRAPH_COLUMNS, sliceGraphToViewport } from "../graph/viewport";
 import { useScrollWindow } from "../hooks/use-scroll-window";
 import { useT } from "../hooks/use-t";
-import {
-  ActionsColumnHeaders,
-  ActionsCountsColumn,
-  ActionsDateColumn,
-} from "../providers/github-actions/graph-columns";
-import { type GraphColumnWidths, graphColumnWidths } from "../providers/graph-column-widths";
-import {
-  lookupOpenShiftBadge,
-  OpenShiftColumnHeaders,
-  OpenShiftCountsColumn,
-} from "../providers/openshift/graph-columns";
+import { GIT_WIDTHS, type GraphColumnWidths } from "../providers/graph-column-widths";
+import { badgeOf, useGraphColumns } from "../providers/graph-columns-context";
+import type { ProviderGraphColumns } from "../providers/module";
 import { ScrollingLabel } from "../providers/shared/detail-rows";
-import { SnykColumnHeaders, SnykCountsColumn, SnykScanColumn } from "../providers/snyk/graph-columns";
 import { formatRelativeDate } from "../utils/date";
 import { scheduleScrollIntoView } from "../utils/scroll";
 import { cellWidth } from "../utils/terminal-text";
@@ -82,17 +72,18 @@ function rowTextRoom(terminalWidth: number, graphWidth: number): number {
 }
 
 /**
- * Provider columns grow to fit their chips (`graphColumnWidths`), but only into room beyond the subject's minimum;
+ * Provider columns grow to fit their chips (their `widths`), but only into room beyond the subject's minimum;
  * past that they keep their base widths (chips then clip) rather than squeezing the subject out.
  */
 function budgetedColumnWidths(
-  view: ProviderView,
+  columns: ProviderGraphColumns | null,
   badges: ReadonlyMap<string, GraphBadge>,
   terminalWidth: number,
   graphWidth: number,
 ): GraphColumnWidths {
-  const wanted = graphColumnWidths(view, badges);
-  const base = graphColumnWidths(view, NO_BADGES);
+  if (!columns) return GIT_WIDTHS;
+  const wanted = columns.widths(badges);
+  const base = columns.widths(NO_BADGES);
   const room = Math.max(
     base.first + base.second,
     rowTextRoom(terminalWidth, graphWidth) - MIN_SUBJECT_WIDTH - MIN_REFS_WIDTH,
@@ -108,12 +99,12 @@ export function ColumnHeader() {
   const t = useT();
   const { state } = useAppState();
   const leftPanelFocused = () => !state.detailFocused();
-  const isProviderView = () => state.activeProviderView() !== "git";
+  const providerColumns = useGraphColumns();
   const dimensions = useTerminalDimensions();
 
   const { graphWidth } = useGraphDimensions(() => state.maxGraphColumns());
   const columnWidths = () =>
-    budgetedColumnWidths(state.activeProviderView(), state.graphBadges(), dimensions().width, graphWidth());
+    budgetedColumnWidths(providerColumns(), state.graphBadges(), dimensions().width, graphWidth());
 
   return (
     <box flexDirection="column" width="100%" flexShrink={0}>
@@ -156,31 +147,29 @@ export function ColumnHeader() {
         </box>
 
         {/* Author / Date columns — swapped for provider headers when in provider view */}
-        {isProviderView() ? (
-          state.activeProviderView() === "openshift" ? (
-            <OpenShiftColumnHeaders {...columnWidths()} />
-          ) : state.activeProviderView() === "snyk" ? (
-            <SnykColumnHeaders {...columnWidths()} />
-          ) : (
-            <ActionsColumnHeaders {...columnWidths()} />
-          )
-        ) : (
-          <>
-            {/* Author */}
-            <box flexShrink={0} width={AUTHOR_COL_WIDTH} paddingRight={2}>
-              <text wrapMode="none" truncate fg={leftPanelFocused() ? t().accent : t().foregroundMuted}>
-                <strong>Author</strong>
-              </text>
-            </box>
+        <Show
+          when={providerColumns()}
+          keyed
+          fallback={
+            <>
+              {/* Author */}
+              <box flexShrink={0} width={AUTHOR_COL_WIDTH} paddingRight={2}>
+                <text wrapMode="none" truncate fg={leftPanelFocused() ? t().accent : t().foregroundMuted}>
+                  <strong>Author</strong>
+                </text>
+              </box>
 
-            {/* Date */}
-            <box flexShrink={0} width={DATE_COL_WIDTH}>
-              <text wrapMode="none" truncate fg={leftPanelFocused() ? t().accent : t().foregroundMuted}>
-                <strong>Date</strong>
-              </text>
-            </box>
-          </>
-        )}
+              {/* Date */}
+              <box flexShrink={0} width={DATE_COL_WIDTH}>
+                <text wrapMode="none" truncate fg={leftPanelFocused() ? t().accent : t().foregroundMuted}>
+                  <strong>Date</strong>
+                </text>
+              </box>
+            </>
+          }
+        >
+          {columns => <columns.Headers {...columnWidths()} />}
+        </Show>
       </box>
       {/* Muted separator below headers */}
       <box width="100%" border={["top"]} borderStyle="single" borderColor={t().border} />
@@ -239,17 +228,17 @@ function GraphLine(
     /** Set of column indices where horizontal glyphs on the commit row itself should
      *  stay bright (ancestry connection via commit-row merge arms, not fan-out rows). */
     brightCommitHorizontals: () => Set<number> | undefined;
-    snykGetCommitData?: (sha: string) => SnykScanResult | null;
-    snykIsScanning?: (sha: string) => boolean;
   }>,
 ) {
   const t = useT();
   const { state } = useAppState();
 
   const [hovered, setHovered] = createSignal(false);
+  /** The shown provider's two columns, in place of Author and Date; none in Git. */
+  const providerColumns = useGraphColumns();
   /** Provider columns grow to fit their widest chips (within budget); header, row and subject width share these. */
   const columnWidths = () =>
-    budgetedColumnWidths(state.activeProviderView(), state.graphBadges(), props.terminalWidth(), graphWidth());
+    budgetedColumnWidths(providerColumns(), state.graphBadges(), props.terminalWidth(), graphWidth());
 
   const commit = () => props.row.commit;
   const padCols = () => state.maxGraphColumns();
@@ -380,18 +369,13 @@ function GraphLine(
     if (graphTextRef) graphTextRef.content = commitRowGraphContent();
   });
 
-  // Ref sort order: tag=0, branch=1, remote=2, head=3 (hoisted to module scope). In the OpenShift view the
-  // namespaces running this commit follow the refs, in the OpenShift colour.
+  // Ref sort order: tag=0, branch=1, remote=2, head=3 (hoisted to module scope). A provider's names follow the refs
+  // in its colour (OpenShift: the namespaces running this commit).
   const visibleRefs = createMemo((): RowBadge[] => {
     const allRefs = commit().refs;
     const refs: RowBadge[] = [...allRefs].sort((a, b) => (REF_SORT_ORDER[a.type] ?? 9) - (REF_SORT_ORDER[b.type] ?? 9));
-    if (state.activeProviderView() !== "openshift") return refs;
-    const markers = lookupOpenShiftBadge(state.graphBadges(), commit().hash)?.namespaces ?? [];
-    return [
-      ...refs,
-      // By name only: whether it is ready, rolling out or failing shows in the Live counts and the details.
-      ...markers.map(marker => ({ name: marker.namespace, isCurrent: false, namespace: true })),
-    ];
+    const names = providerColumns()?.refs?.(badgeOf(state.graphBadges(), commit().hash)) ?? [];
+    return [...refs, ...names.map(name => ({ name, isCurrent: false, namespace: true }))];
   });
 
   // Effective text color for the commit subject (primary column).
@@ -523,90 +507,57 @@ function GraphLine(
           />
         </box>
 
-        {/* Author / Date — replaced by CI columns when in CI view */}
-        {state.activeProviderView() === "openshift" ? (
-          <>
-            <OpenShiftCountsColumn
-              badge={lookupOpenShiftBadge(state.graphBadges(), commit().hash)}
-              lane="live"
-              active={props.active}
-              dimmed={isDimmed()}
-              width={columnWidths().first}
-            />
-            <OpenShiftCountsColumn
-              badge={lookupOpenShiftBadge(state.graphBadges(), commit().hash)}
-              lane="cache"
-              active={props.active}
-              dimmed={isDimmed()}
-              width={columnWidths().second}
-            />
-          </>
-        ) : state.activeProviderView() === "snyk" ? (
-          <>
-            <SnykCountsColumn
-              scan={props.snykGetCommitData?.(commit().hash) ?? null}
-              active={props.active}
-              dimmed={isDimmed()}
-              width={columnWidths().first}
-            />
-            <SnykScanColumn
-              scan={props.snykGetCommitData?.(commit().hash) ?? null}
-              scanning={!isUncommitted() && (props.snykIsScanning?.(commit().hash) ?? false)}
-              active={props.active}
-              dimmed={isDimmed()}
-              width={columnWidths().second}
-            />
-          </>
-        ) : state.activeProviderView() !== "git" ? (
-          <>
-            <ActionsCountsColumn
-              badge={state.graphBadges().get(commit().hash)}
-              active={props.active}
-              dimmed={isDimmed()}
-              width={columnWidths().first}
-            />
-            <ActionsDateColumn
-              badge={state.graphBadges().get(commit().hash)}
-              active={props.active}
-              dimmed={isDimmed()}
-              width={columnWidths().second}
-            />
-          </>
-        ) : (
-          <>
-            {/* Author */}
-            <box flexShrink={0} width={AUTHOR_COL_WIDTH} paddingRight={2} overflow="hidden">
-              <text fg={secondaryColumnColor()} wrapMode="none" truncate>
-                {(() => {
-                  const v = isUncommitted() ? UNCOMMITTED_PLACEHOLDER : commit().author;
-                  return props.active ? (
-                    <strong>
-                      <span>{v}</span>
-                    </strong>
-                  ) : (
-                    v
-                  );
-                })()}
-              </text>
-            </box>
+        {/* Author / Date — replaced by the provider's columns in its view */}
+        <Show
+          when={providerColumns()}
+          keyed
+          fallback={
+            <>
+              {/* Author */}
+              <box flexShrink={0} width={AUTHOR_COL_WIDTH} paddingRight={2} overflow="hidden">
+                <text fg={secondaryColumnColor()} wrapMode="none" truncate>
+                  {(() => {
+                    const v = isUncommitted() ? UNCOMMITTED_PLACEHOLDER : commit().author;
+                    return props.active ? (
+                      <strong>
+                        <span>{v}</span>
+                      </strong>
+                    ) : (
+                      v
+                    );
+                  })()}
+                </text>
+              </box>
 
-            {/* Date */}
-            <box flexShrink={0} width={DATE_COL_WIDTH} overflow="hidden">
-              <text fg={secondaryColumnColor()} wrapMode="none" truncate>
-                {(() => {
-                  const v = isUncommitted() ? UNCOMMITTED_PLACEHOLDER : formatRelativeDate(commit().authorDate);
-                  return props.active ? (
-                    <strong>
-                      <span>{v}</span>
-                    </strong>
-                  ) : (
-                    v
-                  );
-                })()}
-              </text>
-            </box>
-          </>
-        )}
+              {/* Date */}
+              <box flexShrink={0} width={DATE_COL_WIDTH} overflow="hidden">
+                <text fg={secondaryColumnColor()} wrapMode="none" truncate>
+                  {(() => {
+                    const v = isUncommitted() ? UNCOMMITTED_PLACEHOLDER : formatRelativeDate(commit().authorDate);
+                    return props.active ? (
+                      <strong>
+                        <span>{v}</span>
+                      </strong>
+                    ) : (
+                      v
+                    );
+                  })()}
+                </text>
+              </box>
+            </>
+          }
+        >
+          {columns => (
+            <columns.Cells
+              sha={commit().hash}
+              badge={badgeOf(state.graphBadges(), commit().hash)}
+              uncommitted={isUncommitted()}
+              active={props.active}
+              dimmed={isDimmed()}
+              widths={columnWidths()}
+            />
+          )}
+        </Show>
       </box>
 
       {/* Connector row: vertical lines between commits. */}
@@ -708,8 +659,6 @@ export default function GraphView(
     suppressAutoScroll?: () => boolean;
     mouseEnabled?: () => boolean;
     onSelectRow?: (index: number) => void;
-    snykGetCommitData?: (sha: string) => SnykScanResult | null;
-    snykIsScanning?: (sha: string) => boolean;
   }>,
 ) {
   const { state, actions } = useAppState();
@@ -835,19 +784,12 @@ export default function GraphView(
   // re-evaluations from N (every row) down to exactly 2.
   const isActive = createSelector(() => state.cursorIndex());
 
-  /**
-   * OpenShift: namespaces that run a commit the graph does not show (older than the loaded history, or filtered out),
-   * named at the end of the graph since they have no row to carry the badge.
-   */
+  /** What the shown provider holds for commits the graph doesn't show (OpenShift: namespaces running older ones). */
+  const providerColumns = useGraphColumns();
   const unseenDeployments = createMemo(() => {
-    if (state.activeProviderView() !== "openshift") return null;
-    const shown = new Set(state.commits().map(commit => commit.hash.toLowerCase()));
-    const parts: string[] = [];
-    for (const [sha, badge] of state.graphBadges()) {
-      if (!badge.namespaces || shown.has(sha.toLowerCase())) continue;
-      for (const marker of badge.namespaces) parts.push(`${marker.namespace} runs ${sha.slice(0, 7)}`);
-    }
-    return parts.length > 0 ? `Not in the graph: ${parts.join(", ")}` : null;
+    const unseen = providerColumns()?.unseen;
+    if (!unseen) return null;
+    return unseen(new Set(state.commits().map(commit => commit.hash.toLowerCase())), state.graphBadges());
   });
 
   return (
@@ -926,8 +868,6 @@ export default function GraphView(
                   brightFanOutVerticals={() => brightColumnsByHash()?.fanOutVertical.get(row.commit.hash)}
                   brightFanOutHorizontals={() => brightColumnsByHash()?.fanOutHorizontal.get(row.commit.hash)}
                   brightCommitHorizontals={() => brightColumnsByHash()?.commitHorizontal.get(row.commit.hash)}
-                  snykGetCommitData={props.snykGetCommitData}
-                  snykIsScanning={props.snykIsScanning}
                 />
               );
             }}

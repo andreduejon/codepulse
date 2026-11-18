@@ -1,5 +1,9 @@
 /** The settings document without a file: reading a repository's settings, changing and removing them, the defaults. */
 import { expect, test } from "bun:test";
+import { githubProvider } from "../github/definition";
+import { jenkinsProvider } from "../jenkins/definition";
+import { openShiftProvider } from "../openshift/definition";
+import { snykProvider } from "../snyk/definition";
 import {
   defaultConfig,
   hasRepoSettings,
@@ -9,6 +13,8 @@ import {
   withoutRepoSettings,
   withRepoSettings,
 } from "./config";
+
+const PROVIDERS = [githubProvider, jenkinsProvider, openShiftProvider, snykProvider];
 
 const document = {
   other: "kept",
@@ -20,15 +26,15 @@ const document = {
 
 test("a repository's settings are checked: what is wrong is left out and named", () => {
   const warnings: string[] = [];
-  expect(repoSettingsIn(document, "/repo/a", "file", warnings)).toEqual({
+  expect(repoSettingsIn(document, "/repo/a", "file", warnings, PROVIDERS)).toEqual({
     group: "shop",
     appName: "web",
     pageSize: 50,
   });
   expect(warnings).toEqual([]);
-  expect(repoSettingsIn(document, "/repo/b", "file", warnings)).toEqual({});
+  expect(repoSettingsIn(document, "/repo/b", "file", warnings, PROVIDERS)).toEqual({});
   expect(warnings).toHaveLength(1);
-  expect(repoSettingsIn(document, "/repo/none", "file", warnings)).toEqual({});
+  expect(repoSettingsIn(document, "/repo/none", "file", warnings, PROVIDERS)).toEqual({});
   expect(hasRepoSettings(document, "/repo/a")).toBe(true);
   expect(hasRepoSettings(document, "/repo/none")).toBe(false);
 });
@@ -60,9 +66,9 @@ test("removing the last repository removes `repos`", () => {
 });
 
 test("the missing defaults never name a setting the repository has", () => {
-  const missing = missingDefaults({ pageSize: 50, providers: { snyk: { enabled: true } } });
+  const missing = missingDefaults({ pageSize: 50, providers: { snyk: { enabled: true } } }, PROVIDERS);
   expect(missing?.pageSize).toBeUndefined();
   expect(missing?.theme).toBe(defaultConfig().theme);
   expect(missing?.providers?.snyk?.enabled).toBeUndefined();
-  expect(missing?.providers?.snyk?.tokenEnvVar).toBe(defaultConfig().providers.snyk?.tokenEnvVar);
+  expect(missing?.providers?.snyk?.tokenEnvVar).toBe(defaultConfig(PROVIDERS).providers.snyk?.tokenEnvVar);
 });

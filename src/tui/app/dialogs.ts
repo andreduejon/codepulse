@@ -1,11 +1,10 @@
 /**
- * The dialog host: which dialog is open and what it shows (a file's diff, a job's log, an OpenShift resource), opening
+ * The dialog host: which dialog is open and what it shows (a file's diff, a job's log, a provider's own), opening
  * them, and where closing one goes back to. In the compact layout the details are a dialog too: a dialog opened from
  * them returns to them, and resizing across the side panel's width moves the details between dialog and panel.
  */
-import { type Accessor, createEffect, createSignal, on, untrack } from "solid-js";
+import { type Accessor, createEffect, createSignal, type JSX, on, untrack } from "solid-js";
 import type { DiffTarget } from "../../core/git/types";
-import type { OpenShiftResource } from "../../core/openshift/types";
 import type { AppState } from "../context/state";
 import { DETAIL_CHILD_DIALOGS } from "../keyboard/cascade";
 import type { JobLogTarget } from "../providers/shared/job-log-dialog";
@@ -20,7 +19,8 @@ export function useDialogHost(opts: { state: AppState; layoutMode: Accessor<Layo
   const [diffTarget, setDiffTarget] = createSignal<DiffTarget | null>(null);
   /** The log dialog's job, build or failed test, as its provider built it. */
   const [jobLogTarget, setJobLogTarget] = createSignal<JobLogTarget | null>(null);
-  const [openShiftResourceTarget, setOpenShiftResourceTarget] = createSignal<OpenShiftResource | null>(null);
+  /** A provider's own dialog (OpenShift's resource), drawn with the function that closes it. */
+  const [providerDialog, setProviderDialog] = createSignal<((close: () => void) => JSX.Element) | null>(null);
   const dashboardShown = () => state.activeProviderView() === "dashboard";
 
   // Seamless resize transitions between layout modes:
@@ -66,7 +66,7 @@ export function useDialogHost(opts: { state: AppState; layoutMode: Accessor<Layo
     diffTarget,
     setDiffTarget,
     jobLogTarget,
-    openShiftResourceTarget,
+    providerDialog,
     /** The diff dialog for a file. */
     openDiff: (target: DiffTarget) => {
       setDiffTarget(target);
@@ -78,9 +78,10 @@ export function useDialogHost(opts: { state: AppState; layoutMode: Accessor<Layo
       setJobLogTarget(target);
       setDialog("job-log");
     },
-    openResource: (resource: OpenShiftResource) => {
-      setOpenShiftResourceTarget(resource);
-      setDialog("openshift-resource");
+    /** A provider's own dialog over the app (OpenShift's resource). */
+    openProviderDialog: (render: (close: () => void) => JSX.Element) => {
+      setProviderDialog(() => render);
+      setDialog("provider");
     },
     /** A dialog the Menu opens (the theme picker). */
     openFromMenu: (id: "theme") => {

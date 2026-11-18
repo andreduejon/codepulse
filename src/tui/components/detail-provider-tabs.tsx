@@ -1,7 +1,7 @@
 import { For, Show } from "solid-js";
 import type { ProviderDetailView } from "../../core/provider-model";
 import { type DetailTab, type ProviderStatus, useAppState } from "../context/state";
-import { DETAIL_ENTRIES, detailEntryFor, type ProviderDetailSources } from "../providers/detail-entries";
+import { NO_PROVIDER_DETAILS, type ProviderDetails } from "../providers/detail-entries";
 import type { DetailEntryContext } from "../providers/shared/detail-entry";
 import type { DetailMemory } from "./detail-memory";
 import type { DetailNavRef, DetailViewProps } from "./detail-types";
@@ -14,7 +14,7 @@ export function ProviderTab(
   props: Readonly<{
     tab: DetailTab;
     sha: string;
-    providers: Partial<ProviderDetailSources>;
+    providers: ProviderDetails;
     navRef?: DetailNavRef;
     mouseEnabled?: boolean;
     onMouseFocus?: () => void;
@@ -65,7 +65,7 @@ export function ProviderTab(
       return props.targetColor;
     },
   };
-  return <>{detailEntryFor(props.tab)?.render(props.providers, context)}</>;
+  return <>{props.providers.render(props.tab, context)}</>;
 }
 
 /** The provider tabs of a committed commit's detail view: the active one, from its provider's entry. */
@@ -78,14 +78,15 @@ export function ProviderDetailTabs(
   }>,
 ) {
   const { state } = useAppState();
+  const details = () => props.view.providers ?? NO_PROVIDER_DETAILS;
   return (
-    <For each={DETAIL_ENTRIES}>
-      {([tab]) => (
+    <For each={details().tabs()}>
+      {tab => (
         <Show when={state.detailActiveTab() === tab}>
           <ProviderTab
             tab={tab}
             sha={props.sha}
-            providers={props.view.providers ?? {}}
+            providers={details()}
             navRef={props.view.navRef}
             mouseEnabled={props.view.mouseEnabled}
             onMouseFocus={props.view.onMouseFocus}

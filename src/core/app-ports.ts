@@ -3,26 +3,16 @@
 import type { CacheStorePort } from "./cache-store";
 import type { DashboardReader } from "./dashboard/load";
 import type { GitPort } from "./git/port";
-import type { GitHubAdapters } from "./github/service";
-import type { JenkinsAdapters } from "./jenkins/service";
-import type { OpenShiftAdapters } from "./openshift/service";
+import type { ProviderSet } from "./provider-set";
 import type { SettingsPort } from "./settings/port";
-import type { SnykAdapters } from "./snyk/service";
 import type { SystemPort } from "./system";
-
-/** What every provider gets from outside, by provider. */
-export interface ProviderAdapters {
-  github: GitHubAdapters;
-  jenkins: JenkinsAdapters;
-  openshift: OpenShiftAdapters;
-  snyk: SnykAdapters;
-}
 
 export interface AppPorts {
   settings: SettingsPort;
   git: GitPort;
   cacheStore: CacheStorePort;
-  providers: ProviderAdapters;
+  /** The providers: their definitions, and the adapters each runs on. */
+  providers: ProviderSet;
   system: SystemPort;
   dashboard: DashboardReader;
 }

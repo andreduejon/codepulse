@@ -3,6 +3,7 @@ import { useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSelector, createSignal, For, Match, onCleanup, Show, Switch } from "solid-js";
 import type { DashboardRow } from "../../core/dashboard/events";
 import { HASH_COL_WIDTH } from "../constants";
+import { useProviderModules } from "../context/provider-modules";
 import { branchColumnWidth, cutBranch } from "../dashboard/layout";
 import { KNOT } from "../dashboard/legend";
 import type { DashboardState } from "../dashboard/use-dashboard";
@@ -29,6 +30,7 @@ export function DashboardView(
   }>,
 ) {
   const t = useT();
+  const modules = useProviderModules();
   const d = props.dashboard;
   // The column's header is wider than the rope.
   const graphWidth = "Graph".length + 2;
@@ -44,7 +46,7 @@ export function DashboardView(
   const Rope = (ropeProps: { row: DashboardRow }) => {
     const knot = () => {
       const row = ropeProps.row;
-      return row.kind === "event" ? providerColors(t(), row.event.source).bg : null;
+      return row.kind === "event" ? providerColors(t(), row.event.source, modules).bg : null;
     };
     return (
       <box flexDirection="row" flexShrink={0} width={graphWidth} paddingLeft={1}>
@@ -139,7 +141,7 @@ export function DashboardView(
               const active = () => isSelected(index());
               const lit = () => active() || (isHovered(index()) && props.mouseEnabled?.() !== false);
               // The selected row is in the dashboard's color and bold, as a provider view's is; marks keep their colors.
-              const muted = () => (active() ? providerColors(t(), "dashboard").bg : t().foregroundMuted);
+              const muted = () => (active() ? providerColors(t(), "dashboard", modules).bg : t().foregroundMuted);
               /** The selected row's text is bold too, as in the graph and the provider views. */
               const strong = (text: string) => (active() ? <strong>{text}</strong> : text);
               return (
@@ -196,7 +198,7 @@ export function DashboardView(
                           <box flexGrow={1} flexShrink={1} minWidth={0} paddingLeft={1} paddingRight={2}>
                             <DashboardEventText
                               event={eventRow().event}
-                              color={active() ? providerColors(t(), "dashboard").bg : undefined}
+                              color={active() ? providerColors(t(), "dashboard", modules).bg : undefined}
                               bold={active()}
                             />
                           </box>

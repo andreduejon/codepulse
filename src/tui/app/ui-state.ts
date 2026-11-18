@@ -9,7 +9,8 @@ export type DialogId =
   /** The selected dashboard event's details, in the compact layout. */
   | "dashboard-event"
   | "job-log"
-  | "openshift-resource"
+  /** A provider's own dialog (OpenShift's resource). */
+  | "provider"
   | "debug"
   | null;
 

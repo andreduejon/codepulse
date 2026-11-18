@@ -55,7 +55,7 @@ describe("help reference", () => {
         {
           enabled: true,
           tokenEnvVar: "GITHUB_TOKEN",
-          trustedEnterpriseHost: null,
+          trustedEnterpriseHost: undefined,
           fetchDepth: 20,
           cacheLimit: 20,
           autoRefreshSeconds: 120,

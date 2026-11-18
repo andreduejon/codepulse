@@ -1,46 +1,38 @@
 import type { DebugEventSource } from "../../core/debug-events";
 import type { ProviderView } from "../../core/provider-model";
+import { moduleOf } from "../context/provider-modules";
 import type { Theme } from "../context/theme";
+import type { AnyProviderModule } from "./module";
 
 export interface ProviderColors {
   bg: string;
   fg: string;
 }
 
-export function providerColors(theme: Theme, view: ProviderView): ProviderColors {
-  switch (view) {
-    case "dashboard":
-      return { bg: theme.dashboardBg, fg: theme.dashboardFg };
-    case "git":
-      return { bg: theme.gitBg, fg: theme.background };
-    case "github-actions":
-      return { bg: theme.githubActionsBg, fg: theme.githubActionsFg };
-    case "jenkins":
-      return { bg: theme.jenkinsBg, fg: theme.jenkinsFg };
-    case "openshift":
-      return { bg: theme.openShiftBg, fg: theme.openShiftFg };
-    case "snyk":
-      return { bg: theme.snykBg, fg: theme.snykFg };
-  }
+/** A view's badge colors: the Dashboard's and Git's from the theme, a provider's from its module. */
+export function providerColors(
+  theme: Theme,
+  view: ProviderView,
+  modules: readonly AnyProviderModule[],
+): ProviderColors {
+  if (view === "dashboard") return { bg: theme.dashboardBg, fg: theme.dashboardFg };
+  if (view === "git") return { bg: theme.gitBg, fg: theme.background };
+  // A provider the theme has no colors for shows in the accent.
+  return moduleOf(modules, view)?.colors(theme) ?? { bg: theme.accent, fg: theme.background };
 }
 
-export function providerAccent(theme: Theme, view: ProviderView): string {
-  return providerColors(theme, view).bg;
+export function providerAccent(theme: Theme, view: ProviderView, modules: readonly AnyProviderModule[]): string {
+  return providerColors(theme, view, modules).bg;
 }
 
-export function debugSourceColor(theme: Theme, source: DebugEventSource, gitColor: string): string {
-  switch (source) {
-    case "Git":
-      return gitColor;
-    case "GitHub":
-      return theme.githubActionsBg;
-    case "Jenkins":
-      return theme.jenkinsBg;
-    case "OpenShift":
-      return theme.openShiftBg;
-    case "Snyk":
-      return theme.snykBg;
-    case "error":
-      return theme.error;
-  }
+/** A Debug event's source in its provider's color (the source is a provider's display name). */
+export function debugSourceColor(
+  theme: Theme,
+  source: DebugEventSource,
+  gitColor: string,
+  modules: readonly AnyProviderModule[],
+): string {
+  if (source === "Git") return gitColor;
+  if (source === "error") return theme.error;
+  return modules.find(module => module.definition.displayName === source)?.colors(theme).bg ?? theme.accent;
 }

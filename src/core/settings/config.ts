@@ -8,23 +8,12 @@ import {
   DEFAULT_DASHBOARD_SETTINGS,
 } from "../dashboard-settings";
 import { type DebugLog, debugLog } from "../debug-events";
-import { normalizeGitHubHost } from "../github/host";
-import { isValidJenkinsJobUrl, JENKINS_JOB_URL_MAX_LENGTH } from "../jenkins/validation";
-import {
-  isValidOpenShiftNamespace,
-  isValidOpenShiftServerUrl,
-  OPENSHIFT_NAMESPACE_MAX_LENGTH,
-  OPENSHIFT_SERVER_URL_MAX_LENGTH,
-  OPENSHIFT_TEXT_MAX_LENGTH,
-} from "../openshift/validation";
-import { PROVIDER_ORDER, type ProviderView } from "../provider-model";
-import {
-  isProviderAutoRefreshSeconds,
-  isProviderCacheLimit,
-  isProviderLimit,
-  PROVIDER_CACHE_LIMIT_OPTIONS,
-  type ProviderCacheLimit,
-} from "../provider-settings";
+import type { ProviderView } from "../provider-model";
+import type { ProviderDefinition } from "../provider-set";
+import { missingSettings, type SettingsSection, sectionReader } from "./provider-section";
+
+/** The providers whose sections the settings hold: their definitions, from the app's provider set. */
+type Providers = readonly ProviderDefinition[];
 
 export const GENERAL_TEXT_MAX_LENGTH = 255;
 
@@ -34,6 +23,17 @@ export const REPO_METADATA_MAX_LENGTH = 64;
  * Shape of the config file. All fields are optional —
  * missing fields fall through to CLI args or built-in defaults.
  */
+/** A provider's section as the settings hold it: what else is in it is its provider's definition's. */
+export type ProviderSection = SettingsSection & { readonly [field: string]: unknown };
+
+/** A provider's section, typed by its definition; undefined when the settings have none. */
+export function providerSettings<Settings extends SettingsSection>(
+  config: CodepulseConfig,
+  definition: ProviderDefinition<never, Settings>,
+): Partial<Settings> | undefined {
+  return config.providers?.[definition.key] as Partial<Settings> | undefined;
+}
+
 export interface CodepulseConfig {
   group?: string;
   appName?: string;
@@ -55,54 +55,17 @@ export interface CodepulseConfig {
     windowDays?: DashboardWindowDays;
     knotMinutes?: DashboardKnotMinutes;
   };
-  /** Provider-specific configuration. */
-  providers?: {
-    github?: {
-      /** Whether the GitHub Actions provider is enabled. Defaults to false. */
-      enabled?: boolean;
-      /** Name of the environment variable holding the GitHub Personal Access Token.
-       *  Defaults to "GITHUB_TOKEN". */
-      tokenEnvVar?: string;
-      /** Trusted GitHub Enterprise host for this repo. github.com is always allowed. */
-      trustedEnterpriseHost?: string;
-      fetchDepth?: 10 | 20 | 50;
-      cacheLimit?: ProviderCacheLimit;
-      autoRefreshSeconds?: 0 | 120 | 300 | 600;
-    };
-    jenkins?: {
-      enabled?: boolean;
-      username?: string;
-      tokenEnvVar?: string;
-      /** @deprecated Prefer fetchDepth. Still read as fetch-size fallback. */
-      graphBuildLimit?: 10 | 20 | 50;
-      fetchDepth?: 10 | 20 | 50;
-      cacheLimit?: ProviderCacheLimit;
-      autoRefreshSeconds?: 0 | 120 | 300 | 600;
-      jobs?: { label?: string; url: string }[];
-    };
-    openshift?: {
-      enabled?: boolean;
-      serverUrl?: string;
-      /** Web console, for opening resources in the browser (`o`). */
-      consoleUrl?: string;
-      tokenEnvVar?: string;
-      namespaces?: string[];
-      commitShaAnnotation?: string;
-      cacheLimit?: ProviderCacheLimit;
-      fetchDepth?: 10 | 20 | 50;
-      autoRefreshSeconds?: 0 | 120 | 300 | 600;
-    };
-    snyk?: {
-      enabled?: boolean;
-      tokenEnvVar?: string;
-      autoScanBranches?: string[];
-      maxCachedScans?: ProviderCacheLimit;
-    };
-  };
+  /**
+   * Each provider's section by its key (`github`, `jenkins`): what a section holds is its provider's definition's
+   * (core/<provider>/definition.ts). Read one typed with providerSettings.
+   */
+  providers?: Partial<Record<string, ProviderSection>>;
 }
 
-/** Return the built-in default config (all fields populated). */
-export function defaultConfig(): Required<Omit<CodepulseConfig, "branch" | "group" | "appName">> {
+/** Return the built-in default config (all fields populated): each provider's section from its definition. */
+export function defaultConfig(
+  providers: Providers = [],
+): Required<Omit<CodepulseConfig, "branch" | "group" | "appName">> {
   return {
     theme: "catppuccin-mocha",
     pageSize: DEFAULT_MAX_COUNT,
@@ -112,43 +75,9 @@ export function defaultConfig(): Required<Omit<CodepulseConfig, "branch" | "grou
     startView: "git",
     autoFastForward: false,
     dashboard: { ...DEFAULT_DASHBOARD_SETTINGS },
-    providers: {
-      github: {
-        enabled: false,
-        tokenEnvVar: "GITHUB_TOKEN",
-        trustedEnterpriseHost: undefined,
-        fetchDepth: 20,
-        cacheLimit: 20,
-        autoRefreshSeconds: 120,
-      },
-      jenkins: {
-        enabled: false,
-        username: undefined,
-        tokenEnvVar: "JENKINS_TOKEN",
-        graphBuildLimit: 20,
-        fetchDepth: 20,
-        cacheLimit: 20,
-        autoRefreshSeconds: 120,
-        jobs: [],
-      },
-      openshift: {
-        enabled: false,
-        serverUrl: "",
-        consoleUrl: "",
-        tokenEnvVar: "OPENSHIFT_TOKEN",
-        namespaces: [],
-        commitShaAnnotation: "dev/commit-sha",
-        cacheLimit: 20,
-        fetchDepth: 20,
-        autoRefreshSeconds: 120,
-      },
-      snyk: {
-        enabled: false,
-        tokenEnvVar: "SNYK_TOKEN",
-        autoScanBranches: [],
-        maxCachedScans: 20,
-      },
-    },
+    providers: Object.fromEntries(
+      providers.map(provider => [provider.key, { ...provider.settings.defaults } as ProviderSection]),
+    ),
   };
 }
 
@@ -191,7 +120,12 @@ export function reportConfigWarnings(warnings: readonly string[], log: DebugLog 
  * Validate and sanitize a raw config object. Unknown keys are silently ignored.
  * Invalid values for known keys produce a warning in the provided array.
  */
-export function validateConfig(raw: Record<string, unknown>, path: string, warnings: string[]): CodepulseConfig {
+export function validateConfig(
+  raw: Record<string, unknown>,
+  path: string,
+  warnings: string[],
+  providers: Providers,
+): CodepulseConfig {
   const config: CodepulseConfig = {};
 
   const parseOptionalText = (field: string, value: unknown, maxLength: number): string | undefined => {
@@ -207,20 +141,6 @@ export function validateConfig(raw: Record<string, unknown>, path: string, warni
       return undefined;
     }
     return trimmed;
-  };
-
-  const parseTrustedEnterpriseHost = (value: unknown): string | undefined => {
-    if (value === undefined) return undefined;
-    if (typeof value !== "string") {
-      warnings.push(`${path}: "providers.github.trustedEnterpriseHost" must be a host string, ignoring`);
-      return undefined;
-    }
-    const host = normalizeGitHubHost(value);
-    if (!host || host === "github.com") {
-      warnings.push(`${path}: "providers.github.trustedEnterpriseHost" must be a valid non-github.com host, ignoring`);
-      return undefined;
-    }
-    return host;
   };
 
   const group = parseOptionalText("group", raw.group, REPO_METADATA_MAX_LENGTH);
@@ -273,239 +193,15 @@ export function validateConfig(raw: Record<string, unknown>, path: string, warni
 
   if (raw.providers !== undefined) {
     if (typeof raw.providers === "object" && raw.providers !== null && !Array.isArray(raw.providers)) {
-      const providers = raw.providers as Record<string, unknown>;
+      const sections = raw.providers as Record<string, unknown>;
       config.providers = {};
-      if (typeof providers.github === "object" && providers.github !== null && !Array.isArray(providers.github)) {
-        const gh = providers.github as Record<string, unknown>;
-        config.providers.github = {};
-        if (gh.enabled !== undefined) {
-          if (typeof gh.enabled === "boolean") {
-            config.providers.github.enabled = gh.enabled;
-          } else {
-            warnings.push(`${path}: "providers.github.enabled" must be a boolean, ignoring`);
-          }
-        }
-        if (gh.tokenEnvVar !== undefined) {
-          const tokenEnvVar = parseOptionalText(
-            "providers.github.tokenEnvVar",
-            gh.tokenEnvVar,
-            GENERAL_TEXT_MAX_LENGTH,
-          );
-          if (tokenEnvVar !== undefined) config.providers.github.tokenEnvVar = tokenEnvVar;
-        }
-        const trustedEnterpriseHost = parseTrustedEnterpriseHost(gh.trustedEnterpriseHost);
-        if (trustedEnterpriseHost !== undefined) {
-          config.providers.github.trustedEnterpriseHost = trustedEnterpriseHost;
-        }
-        if (gh.cacheLimit !== undefined) {
-          if (isProviderCacheLimit(gh.cacheLimit)) config.providers.github.cacheLimit = gh.cacheLimit;
-          else
-            warnings.push(
-              `${path}: "providers.github.cacheLimit" must be one of ${PROVIDER_CACHE_LIMIT_OPTIONS.join(", ")}, ignoring`,
-            );
-        }
-        if (gh.fetchDepth !== undefined) {
-          if (isProviderLimit(gh.fetchDepth)) config.providers.github.fetchDepth = gh.fetchDepth;
-          else warnings.push(`${path}: "providers.github.fetchDepth" must be one of 10, 20, 50, ignoring`);
-        }
-        if (gh.autoRefreshSeconds !== undefined) {
-          if (isProviderAutoRefreshSeconds(gh.autoRefreshSeconds))
-            config.providers.github.autoRefreshSeconds = gh.autoRefreshSeconds;
-          else
-            warnings.push(`${path}: "providers.github.autoRefreshSeconds" must be one of 0, 120, 300, 600, ignoring`);
-        }
-      }
-      if (typeof providers.jenkins === "object" && providers.jenkins !== null && !Array.isArray(providers.jenkins)) {
-        const jenkins = providers.jenkins as Record<string, unknown>;
-        config.providers.jenkins = {};
-        if (jenkins.enabled !== undefined) {
-          if (typeof jenkins.enabled === "boolean") config.providers.jenkins.enabled = jenkins.enabled;
-          else warnings.push(`${path}: "providers.jenkins.enabled" must be a boolean, ignoring`);
-        }
-        if (jenkins.username !== undefined) {
-          const username = parseOptionalText("providers.jenkins.username", jenkins.username, GENERAL_TEXT_MAX_LENGTH);
-          if (username !== undefined) config.providers.jenkins.username = username;
-        }
-        if (jenkins.tokenEnvVar !== undefined) {
-          const tokenEnvVar = parseOptionalText(
-            "providers.jenkins.tokenEnvVar",
-            jenkins.tokenEnvVar,
-            GENERAL_TEXT_MAX_LENGTH,
-          );
-          if (tokenEnvVar !== undefined) config.providers.jenkins.tokenEnvVar = tokenEnvVar;
-        }
-        if (jenkins.graphBuildLimit !== undefined) {
-          if (isProviderLimit(jenkins.graphBuildLimit))
-            config.providers.jenkins.graphBuildLimit = jenkins.graphBuildLimit;
-          else warnings.push(`${path}: "providers.jenkins.graphBuildLimit" must be one of 10, 20, 50, ignoring`);
-        }
-        if (jenkins.cacheLimit !== undefined) {
-          if (isProviderCacheLimit(jenkins.cacheLimit)) config.providers.jenkins.cacheLimit = jenkins.cacheLimit;
-          else
-            warnings.push(
-              `${path}: "providers.jenkins.cacheLimit" must be one of ${PROVIDER_CACHE_LIMIT_OPTIONS.join(", ")}, ignoring`,
-            );
-        }
-        if (jenkins.fetchDepth !== undefined) {
-          if (isProviderLimit(jenkins.fetchDepth)) config.providers.jenkins.fetchDepth = jenkins.fetchDepth;
-          else warnings.push(`${path}: "providers.jenkins.fetchDepth" must be one of 10, 20, 50, ignoring`);
-        }
-        if (config.providers.jenkins.fetchDepth === undefined && config.providers.jenkins.graphBuildLimit !== undefined)
-          config.providers.jenkins.fetchDepth = config.providers.jenkins.graphBuildLimit;
-        if (jenkins.autoRefreshSeconds !== undefined) {
-          if (isProviderAutoRefreshSeconds(jenkins.autoRefreshSeconds))
-            config.providers.jenkins.autoRefreshSeconds = jenkins.autoRefreshSeconds;
-          else
-            warnings.push(`${path}: "providers.jenkins.autoRefreshSeconds" must be one of 0, 120, 300, 600, ignoring`);
-        }
-        if (jenkins.jobs !== undefined) {
-          if (Array.isArray(jenkins.jobs)) {
-            config.providers.jenkins.jobs = jenkins.jobs.flatMap((job, idx) => {
-              if (typeof job !== "object" || job === null || Array.isArray(job)) {
-                warnings.push(`${path}: "providers.jenkins.jobs[${idx}]" must be an object, ignoring`);
-                return [];
-              }
-              const rawJob = job as Record<string, unknown>;
-              const url = parseOptionalText(
-                `providers.jenkins.jobs[${idx}].url`,
-                rawJob.url,
-                JENKINS_JOB_URL_MAX_LENGTH,
-              );
-              if (url === undefined) {
-                return [];
-              }
-              if (!isValidJenkinsJobUrl(url)) {
-                warnings.push(`${path}: "providers.jenkins.jobs[${idx}].url" must be a valid HTTPS URL, ignoring`);
-                return [];
-              }
-              const label = parseOptionalText(
-                `providers.jenkins.jobs[${idx}].label`,
-                rawJob.label,
-                GENERAL_TEXT_MAX_LENGTH,
-              );
-              return [{ url, ...(label === undefined ? {} : { label }) }];
-            });
-          } else {
-            warnings.push(`${path}: "providers.jenkins.jobs" must be an array, ignoring`);
-          }
-        }
-      }
-      if (
-        typeof providers.openshift === "object" &&
-        providers.openshift !== null &&
-        !Array.isArray(providers.openshift)
-      ) {
-        const openshift = providers.openshift as Record<string, unknown>;
-        config.providers.openshift = {};
-        if (openshift.enabled !== undefined) {
-          if (typeof openshift.enabled === "boolean") config.providers.openshift.enabled = openshift.enabled;
-          else warnings.push(`${path}: "providers.openshift.enabled" must be a boolean, ignoring`);
-        }
-        if (openshift.serverUrl !== undefined) {
-          const value = parseOptionalText(
-            "providers.openshift.serverUrl",
-            openshift.serverUrl,
-            OPENSHIFT_SERVER_URL_MAX_LENGTH,
-          );
-          if (value !== undefined) {
-            if (isValidOpenShiftServerUrl(value)) config.providers.openshift.serverUrl = value;
-            else warnings.push(`${path}: "providers.openshift.serverUrl" must be a valid HTTPS URL, ignoring`);
-          }
-        }
-        if (openshift.consoleUrl !== undefined) {
-          const value = parseOptionalText(
-            "providers.openshift.consoleUrl",
-            openshift.consoleUrl,
-            OPENSHIFT_SERVER_URL_MAX_LENGTH,
-          );
-          if (value !== undefined) {
-            if (isValidOpenShiftServerUrl(value)) config.providers.openshift.consoleUrl = value;
-            else warnings.push(`${path}: "providers.openshift.consoleUrl" must be a valid HTTPS URL, ignoring`);
-          }
-        }
-        for (const field of ["tokenEnvVar", "commitShaAnnotation"] as const) {
-          if (openshift[field] === undefined) continue;
-          const value = parseOptionalText(`providers.openshift.${field}`, openshift[field], OPENSHIFT_TEXT_MAX_LENGTH);
-          if (value !== undefined) config.providers.openshift[field] = value;
-        }
-        if (openshift.cacheLimit !== undefined) {
-          if (isProviderCacheLimit(openshift.cacheLimit)) config.providers.openshift.cacheLimit = openshift.cacheLimit;
-          else
-            warnings.push(
-              `${path}: "providers.openshift.cacheLimit" must be one of ${PROVIDER_CACHE_LIMIT_OPTIONS.join(", ")}, ignoring`,
-            );
-        }
-        if (openshift.fetchDepth !== undefined) {
-          if (isProviderLimit(openshift.fetchDepth)) config.providers.openshift.fetchDepth = openshift.fetchDepth;
-          else warnings.push(`${path}: "providers.openshift.fetchDepth" must be one of 10, 20, 50, ignoring`);
-        }
-        if (openshift.autoRefreshSeconds !== undefined) {
-          if (isProviderAutoRefreshSeconds(openshift.autoRefreshSeconds))
-            config.providers.openshift.autoRefreshSeconds = openshift.autoRefreshSeconds;
-          else
-            warnings.push(
-              `${path}: "providers.openshift.autoRefreshSeconds" must be one of 0, 120, 300, 600, ignoring`,
-            );
-        }
-        if (openshift.namespaces !== undefined) {
-          if (Array.isArray(openshift.namespaces)) {
-            config.providers.openshift.namespaces = openshift.namespaces.flatMap((ns, idx) => {
-              const field = `providers.openshift.namespaces[${idx}]`;
-              const value = parseOptionalText(field, ns, OPENSHIFT_NAMESPACE_MAX_LENGTH);
-              if (value === undefined) return [];
-              if (!isValidOpenShiftNamespace(value)) {
-                warnings.push(`${path}: "${field}" must be a DNS-1123 label, ignoring`);
-                return [];
-              }
-              return [value];
-            });
-          } else {
-            warnings.push(`${path}: "providers.openshift.namespaces" must be an array, ignoring`);
-          }
-        }
-      }
-      if (typeof providers.snyk === "object" && providers.snyk !== null && !Array.isArray(providers.snyk)) {
-        const snyk = providers.snyk as Record<string, unknown>;
-        config.providers.snyk = {};
-        if (snyk.enabled !== undefined) {
-          if (typeof snyk.enabled === "boolean") config.providers.snyk.enabled = snyk.enabled;
-          else warnings.push(`${path}: "providers.snyk.enabled" must be a boolean, ignoring`);
-        }
-        if (snyk.tokenEnvVar !== undefined) {
-          const tokenEnvVar = parseOptionalText(
-            "providers.snyk.tokenEnvVar",
-            snyk.tokenEnvVar,
-            GENERAL_TEXT_MAX_LENGTH,
-          );
-          if (tokenEnvVar !== undefined) config.providers.snyk.tokenEnvVar = tokenEnvVar;
-        }
-        if (snyk.autoScanBranches !== undefined) {
-          if (Array.isArray(snyk.autoScanBranches)) {
-            config.providers.snyk.autoScanBranches = [
-              ...new Set(
-                snyk.autoScanBranches.flatMap((branch, idx) => {
-                  const value = parseOptionalText(
-                    `providers.snyk.autoScanBranches[${idx}]`,
-                    branch,
-                    GENERAL_TEXT_MAX_LENGTH,
-                  );
-                  return value === undefined ? [] : [value];
-                }),
-              ),
-            ];
-          } else {
-            warnings.push(`${path}: "providers.snyk.autoScanBranches" must be an array, ignoring`);
-          }
-        }
-        if (snyk.maxCachedScans !== undefined) {
-          if (isProviderCacheLimit(snyk.maxCachedScans)) {
-            config.providers.snyk.maxCachedScans = snyk.maxCachedScans;
-          } else {
-            warnings.push(
-              `${path}: "providers.snyk.maxCachedScans" must be one of ${PROVIDER_CACHE_LIMIT_OPTIONS.join(", ")}, ignoring`,
-            );
-          }
-        }
+      for (const provider of providers) {
+        const section = sections[provider.key];
+        if (typeof section !== "object" || section === null || Array.isArray(section)) continue;
+        config.providers[provider.key] = provider.settings.read(
+          section as Record<string, unknown>,
+          sectionReader(path, provider.key, warnings),
+        ) as ProviderSection;
       }
     } else {
       warnings.push(`${path}: "providers" must be an object, ignoring`);
@@ -518,9 +214,9 @@ export function validateConfig(raw: Record<string, unknown>, path: string, warni
   }
 
   if (raw.startView !== undefined) {
-    if ((PROVIDER_ORDER as readonly unknown[]).includes(raw.startView))
-      config.startView = raw.startView as ProviderView;
-    else warnings.push(`${path}: "startView" must be one of ${PROVIDER_ORDER.join(", ")}, ignoring`);
+    const views = ["dashboard", "git", ...providers.map(provider => provider.id)];
+    if (typeof raw.startView === "string" && views.includes(raw.startView)) config.startView = raw.startView;
+    else warnings.push(`${path}: "startView" must be one of ${views.join(", ")}, ignoring`);
   }
 
   if (raw.dashboard !== undefined) {
@@ -554,22 +250,12 @@ export function validateConfig(raw: Record<string, unknown>, path: string, warni
 }
 
 /** The view a repository opens in: its `startView` while that provider is turned on, else Git. */
-export function startViewFor(config: CodepulseConfig): ProviderView {
+export function startViewFor(config: CodepulseConfig, providers: Providers): ProviderView {
   const view = config.startView ?? "git";
-  switch (view) {
-    case "dashboard":
-      return config.dashboard?.enabled === false ? "git" : view;
-    case "git":
-      return view;
-    case "github-actions":
-      return config.providers?.github?.enabled === true ? view : "git";
-    case "jenkins":
-      return config.providers?.jenkins?.enabled === true ? view : "git";
-    case "openshift":
-      return config.providers?.openshift?.enabled === true ? view : "git";
-    case "snyk":
-      return config.providers?.snyk?.enabled === true ? view : "git";
-  }
+  if (view === "dashboard") return config.dashboard?.enabled === false ? "git" : view;
+  const provider = providers.find(candidate => candidate.id === view);
+  if (!provider) return "git";
+  return config.providers?.[provider.key]?.enabled === true ? view : "git";
 }
 
 /**
@@ -619,94 +305,13 @@ export function applyConfigFields(target: Record<string, unknown>, config: Codep
     };
   }
   if (config.providers !== undefined) {
-    // Deep-merge providers into existing target.providers to preserve other provider configs
-    const existingProviders =
-      typeof target.providers === "object" && target.providers !== null && !Array.isArray(target.providers)
-        ? { ...(target.providers as Record<string, unknown>) }
-        : {};
-    if (config.providers.github !== undefined) {
-      const existingGitHub =
-        typeof existingProviders.github === "object" &&
-        existingProviders.github !== null &&
-        !Array.isArray(existingProviders.github)
-          ? { ...(existingProviders.github as Record<string, unknown>) }
-          : {};
-      if (config.providers.github.enabled !== undefined) existingGitHub.enabled = config.providers.github.enabled;
-      if (config.providers.github.tokenEnvVar !== undefined)
-        existingGitHub.tokenEnvVar = config.providers.github.tokenEnvVar;
-      if (config.providers.github.trustedEnterpriseHost !== undefined)
-        existingGitHub.trustedEnterpriseHost = config.providers.github.trustedEnterpriseHost;
-      if (config.providers.github.fetchDepth !== undefined)
-        existingGitHub.fetchDepth = config.providers.github.fetchDepth;
-      if (config.providers.github.cacheLimit !== undefined)
-        existingGitHub.cacheLimit = config.providers.github.cacheLimit;
-      if (config.providers.github.autoRefreshSeconds !== undefined)
-        existingGitHub.autoRefreshSeconds = config.providers.github.autoRefreshSeconds;
-      existingProviders.github = existingGitHub;
-    }
-    if (config.providers.jenkins !== undefined) {
-      const existingJenkins =
-        typeof existingProviders.jenkins === "object" &&
-        existingProviders.jenkins !== null &&
-        !Array.isArray(existingProviders.jenkins)
-          ? { ...(existingProviders.jenkins as Record<string, unknown>) }
-          : {};
-      if (config.providers.jenkins.enabled !== undefined) existingJenkins.enabled = config.providers.jenkins.enabled;
-      if (config.providers.jenkins.username !== undefined) existingJenkins.username = config.providers.jenkins.username;
-      if (config.providers.jenkins.tokenEnvVar !== undefined)
-        existingJenkins.tokenEnvVar = config.providers.jenkins.tokenEnvVar;
-      if (config.providers.jenkins.graphBuildLimit !== undefined)
-        existingJenkins.graphBuildLimit = config.providers.jenkins.graphBuildLimit;
-      if (config.providers.jenkins.fetchDepth !== undefined)
-        existingJenkins.fetchDepth = config.providers.jenkins.fetchDepth;
-      if (config.providers.jenkins.cacheLimit !== undefined)
-        existingJenkins.cacheLimit = config.providers.jenkins.cacheLimit;
-      if (config.providers.jenkins.autoRefreshSeconds !== undefined)
-        existingJenkins.autoRefreshSeconds = config.providers.jenkins.autoRefreshSeconds;
-      if (config.providers.jenkins.jobs !== undefined) existingJenkins.jobs = config.providers.jenkins.jobs;
-      existingProviders.jenkins = existingJenkins;
-    }
-    if (config.providers.openshift !== undefined) {
-      const existingOpenShift =
-        typeof existingProviders.openshift === "object" &&
-        existingProviders.openshift !== null &&
-        !Array.isArray(existingProviders.openshift)
-          ? { ...(existingProviders.openshift as Record<string, unknown>) }
-          : {};
-      if (config.providers.openshift.enabled !== undefined)
-        existingOpenShift.enabled = config.providers.openshift.enabled;
-      if (config.providers.openshift.serverUrl !== undefined)
-        existingOpenShift.serverUrl = config.providers.openshift.serverUrl;
-      if (config.providers.openshift.consoleUrl !== undefined)
-        existingOpenShift.consoleUrl = config.providers.openshift.consoleUrl;
-      if (config.providers.openshift.tokenEnvVar !== undefined)
-        existingOpenShift.tokenEnvVar = config.providers.openshift.tokenEnvVar;
-      if (config.providers.openshift.namespaces !== undefined)
-        existingOpenShift.namespaces = config.providers.openshift.namespaces;
-      if (config.providers.openshift.commitShaAnnotation !== undefined)
-        existingOpenShift.commitShaAnnotation = config.providers.openshift.commitShaAnnotation;
-      if (config.providers.openshift.cacheLimit !== undefined)
-        existingOpenShift.cacheLimit = config.providers.openshift.cacheLimit;
-      if (config.providers.openshift.fetchDepth !== undefined)
-        existingOpenShift.fetchDepth = config.providers.openshift.fetchDepth;
-      if (config.providers.openshift.autoRefreshSeconds !== undefined)
-        existingOpenShift.autoRefreshSeconds = config.providers.openshift.autoRefreshSeconds;
-      existingProviders.openshift = existingOpenShift;
-    }
-    if (config.providers.snyk !== undefined) {
-      const existingSnyk =
-        typeof existingProviders.snyk === "object" &&
-        existingProviders.snyk !== null &&
-        !Array.isArray(existingProviders.snyk)
-          ? { ...(existingProviders.snyk as Record<string, unknown>) }
-          : {};
-      if (config.providers.snyk.enabled !== undefined) existingSnyk.enabled = config.providers.snyk.enabled;
-      if (config.providers.snyk.tokenEnvVar !== undefined) existingSnyk.tokenEnvVar = config.providers.snyk.tokenEnvVar;
-      if (config.providers.snyk.autoScanBranches !== undefined)
-        existingSnyk.autoScanBranches = config.providers.snyk.autoScanBranches;
-      if (config.providers.snyk.maxCachedScans !== undefined)
-        existingSnyk.maxCachedScans = config.providers.snyk.maxCachedScans;
-      existingProviders.snyk = existingSnyk;
+    // Each provider's fields go into its section, keeping the other providers and the fields not given.
+    const existingProviders = isRecord(target.providers) ? { ...target.providers } : {};
+    for (const [key, section] of Object.entries(config.providers)) {
+      if (section === undefined) continue;
+      const existing = isRecord(existingProviders[key]) ? { ...existingProviders[key] } : {};
+      for (const [field, value] of Object.entries(section)) if (value !== undefined) existing[field] = value;
+      existingProviders[key] = existing;
     }
     target.providers = existingProviders;
   }
@@ -743,16 +348,18 @@ export function repoSettingsIn(
   repoKey: string,
   source: string,
   warnings: string[],
+  providers: Providers,
 ): CodepulseConfig {
   const entry = reposOf(document)?.[repoKey];
-  return isRecord(entry) ? validateConfig(entry, `${source} [repos]`, warnings) : {};
+  return isRecord(entry) ? validateConfig(entry, `${source} [repos]`, warnings, providers) : {};
 }
 
 /** Every repository the document holds, with its group and app name. */
 export function knownReposIn(document: Record<string, unknown>, source: string, warnings: string[]): KnownRepoInfo[] {
   return Object.entries(reposOf(document) ?? {}).map(([path, entry]) => {
     if (!isRecord(entry)) return { path };
-    const config = validateConfig(entry, `${source} [repos]`, warnings);
+    // Only the group and the app name: no provider's section is read.
+    const config = validateConfig(entry, `${source} [repos]`, warnings, []);
     return {
       path,
       ...(config.group === undefined ? {} : { group: config.group }),
@@ -790,7 +397,7 @@ export function withoutRepoSettings(document: Record<string, unknown>, repoKey: 
  * The settings a repository lacks, from the defaults: what to write so the file shows every setting. Never a value
  * the repository already has. Null when nothing is missing.
  */
-export function missingDefaults(existing: CodepulseConfig): CodepulseConfig | null {
+export function missingDefaults(existing: CodepulseConfig, providers: Providers): CodepulseConfig | null {
   const defaults = defaultConfig();
 
   // Build a partial config containing only the fields missing from the existing entry
@@ -802,136 +409,9 @@ export function missingDefaults(existing: CodepulseConfig): CodepulseConfig | nu
   if (existing.autoRefreshSeconds === undefined) missing.autoRefreshSeconds = defaults.autoRefreshSeconds;
   if (existing.autoFetchSeconds === undefined) missing.autoFetchSeconds = defaults.autoFetchSeconds;
 
-  const existingGitHub = existing.providers?.github;
-  const defaultGh = defaults.providers.github ?? {
-    enabled: false,
-    tokenEnvVar: "GITHUB_TOKEN",
-    trustedEnterpriseHost: undefined,
-    fetchDepth: 20,
-    cacheLimit: 20,
-    autoRefreshSeconds: 120,
-  };
-  if (
-    existingGitHub?.enabled === undefined ||
-    existingGitHub?.tokenEnvVar === undefined ||
-    existingGitHub?.trustedEnterpriseHost === undefined ||
-    existingGitHub?.fetchDepth === undefined ||
-    existingGitHub?.cacheLimit === undefined ||
-    existingGitHub?.autoRefreshSeconds === undefined
-  ) {
-    missing.providers = {
-      github: {
-        ...(existingGitHub?.enabled === undefined ? { enabled: defaultGh.enabled } : {}),
-        ...(existingGitHub?.tokenEnvVar === undefined ? { tokenEnvVar: defaultGh.tokenEnvVar } : {}),
-        ...(existingGitHub?.trustedEnterpriseHost === undefined
-          ? { trustedEnterpriseHost: defaultGh.trustedEnterpriseHost }
-          : {}),
-        ...(existingGitHub?.fetchDepth === undefined ? { fetchDepth: defaultGh.fetchDepth } : {}),
-        ...(existingGitHub?.cacheLimit === undefined ? { cacheLimit: defaultGh.cacheLimit } : {}),
-        ...(existingGitHub?.autoRefreshSeconds === undefined
-          ? { autoRefreshSeconds: defaultGh.autoRefreshSeconds }
-          : {}),
-      },
-    };
-  }
-
-  const existingJenkins = existing.providers?.jenkins;
-  const defaultJenkins = defaults.providers.jenkins ?? {
-    enabled: false,
-    tokenEnvVar: "JENKINS_TOKEN",
-    fetchDepth: 20,
-    cacheLimit: 20,
-    autoRefreshSeconds: 120,
-    jobs: [],
-  };
-  const jenkinsFetchDepth = existingJenkins?.fetchDepth ?? existingJenkins?.graphBuildLimit;
-  if (
-    existingJenkins?.enabled === undefined ||
-    existingJenkins?.tokenEnvVar === undefined ||
-    jenkinsFetchDepth === undefined ||
-    existingJenkins?.cacheLimit === undefined ||
-    existingJenkins?.autoRefreshSeconds === undefined ||
-    existingJenkins?.jobs === undefined
-  ) {
-    missing.providers = {
-      ...missing.providers,
-      jenkins: {
-        ...(existingJenkins?.enabled === undefined ? { enabled: defaultJenkins.enabled } : {}),
-        ...(existingJenkins?.tokenEnvVar === undefined ? { tokenEnvVar: defaultJenkins.tokenEnvVar } : {}),
-        ...(existingJenkins?.fetchDepth === undefined
-          ? { fetchDepth: jenkinsFetchDepth ?? defaultJenkins.fetchDepth }
-          : {}),
-        ...(existingJenkins?.cacheLimit === undefined ? { cacheLimit: defaultJenkins.cacheLimit } : {}),
-        ...(existingJenkins?.autoRefreshSeconds === undefined
-          ? { autoRefreshSeconds: defaultJenkins.autoRefreshSeconds }
-          : {}),
-        ...(existingJenkins?.jobs === undefined ? { jobs: defaultJenkins.jobs } : {}),
-      },
-    };
-  }
-
-  const existingOpenShift = existing.providers?.openshift;
-  const defaultOpenShift = defaults.providers.openshift ?? {
-    enabled: false,
-    serverUrl: undefined,
-    tokenEnvVar: "OPENSHIFT_TOKEN",
-    namespaces: [],
-    commitShaAnnotation: undefined,
-    cacheLimit: 20,
-    fetchDepth: 20,
-    autoRefreshSeconds: 120,
-  };
-  if (
-    existingOpenShift?.enabled === undefined ||
-    existingOpenShift?.serverUrl === undefined ||
-    existingOpenShift?.tokenEnvVar === undefined ||
-    existingOpenShift?.namespaces === undefined ||
-    existingOpenShift?.commitShaAnnotation === undefined ||
-    existingOpenShift?.cacheLimit === undefined ||
-    existingOpenShift?.fetchDepth === undefined ||
-    existingOpenShift?.autoRefreshSeconds === undefined
-  ) {
-    missing.providers = {
-      ...missing.providers,
-      openshift: {
-        ...(existingOpenShift?.enabled === undefined ? { enabled: defaultOpenShift.enabled } : {}),
-        ...(existingOpenShift?.serverUrl === undefined ? { serverUrl: defaultOpenShift.serverUrl } : {}),
-        ...(existingOpenShift?.tokenEnvVar === undefined ? { tokenEnvVar: defaultOpenShift.tokenEnvVar } : {}),
-        ...(existingOpenShift?.namespaces === undefined ? { namespaces: defaultOpenShift.namespaces } : {}),
-        ...(existingOpenShift?.commitShaAnnotation === undefined
-          ? { commitShaAnnotation: defaultOpenShift.commitShaAnnotation }
-          : {}),
-        ...(existingOpenShift?.cacheLimit === undefined ? { cacheLimit: defaultOpenShift.cacheLimit } : {}),
-        ...(existingOpenShift?.fetchDepth === undefined ? { fetchDepth: defaultOpenShift.fetchDepth } : {}),
-        ...(existingOpenShift?.autoRefreshSeconds === undefined
-          ? { autoRefreshSeconds: defaultOpenShift.autoRefreshSeconds }
-          : {}),
-      },
-    };
-  }
-
-  const existingSnyk = existing.providers?.snyk;
-  const defaultSnyk = defaults.providers.snyk ?? {
-    enabled: false,
-    tokenEnvVar: "SNYK_TOKEN",
-    autoScanBranches: [],
-    maxCachedScans: 20,
-  };
-  if (
-    existingSnyk?.enabled === undefined ||
-    existingSnyk?.tokenEnvVar === undefined ||
-    existingSnyk?.autoScanBranches === undefined ||
-    existingSnyk?.maxCachedScans === undefined
-  ) {
-    missing.providers = {
-      ...missing.providers,
-      snyk: {
-        ...(existingSnyk?.enabled === undefined ? { enabled: defaultSnyk.enabled } : {}),
-        ...(existingSnyk?.tokenEnvVar === undefined ? { tokenEnvVar: defaultSnyk.tokenEnvVar } : {}),
-        ...(existingSnyk?.autoScanBranches === undefined ? { autoScanBranches: defaultSnyk.autoScanBranches } : {}),
-        ...(existingSnyk?.maxCachedScans === undefined ? { maxCachedScans: defaultSnyk.maxCachedScans } : {}),
-      },
-    };
+  for (const provider of providers) {
+    const section = missingSettings(provider.settings, existing.providers?.[provider.key]);
+    if (section) missing.providers = { ...missing.providers, [provider.key]: section as ProviderSection };
   }
 
   const hasAnyMissing =

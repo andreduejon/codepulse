@@ -1,21 +1,9 @@
 /**
  * One app's Dashboard events, without any UI framework or runtime: the commits on its main branch and the finished runs,
  * builds and scans its providers stored, each with the branch it was made on. Git and the stored events come in
- * through ports; src/dashboard/load.ts gives the terminal app's (the Git command line and the provider caches).
+ * through ports; adapters/dashboard/load.ts gives the terminal app's (the Git command line and the provider caches).
  */
-import type { GitHubCacheEntry } from "../github/merge";
-import type { JenkinsCacheEntry } from "../jenkins/merge";
-import type { OpenShiftCacheEntry } from "../openshift/merge";
-import type { SnykScanResult } from "../snyk/types";
-import {
-  type DashboardEvent,
-  type GitCommitEvent,
-  gitEvents,
-  githubEvents,
-  jenkinsEvents,
-  openShiftEvents,
-  snykEvents,
-} from "./events";
+import { type DashboardEvent, type GitCommitEvent, gitEvents } from "./events";
 
 /** A branch's tip: its commit, its name as the Dashboard shows it (without the remote), its full ref name. */
 export interface BranchTip {
@@ -63,13 +51,11 @@ export interface DashboardGit {
   resolveCommit: (repo: string, ref: string, signal?: AbortSignal) => Promise<string>;
 }
 
-/** What the providers stored for an app: finished runs, builds and scans, as fresh as when the app was last open. */
-export interface DashboardSources {
-  github: (app: string) => Promise<GitHubCacheEntry[]>;
-  jenkins: (app: string) => Promise<JenkinsCacheEntry[]>;
-  openshift: (app: string) => Promise<OpenShiftCacheEntry[]>;
-  snyk: (app: string) => Promise<SnykScanResult[]>;
-}
+/**
+ * What the providers stored for an app, as Dashboard events: finished runs, builds and scans, as fresh as when the app
+ * was last open. One reader per provider (the provider set's `storedEvents`).
+ */
+export type DashboardSources = readonly ((app: string) => Promise<DashboardEvent[]>)[];
 
 /** What a read of an app's events covers: from `since` (ms), until `signal` stops it. */
 export interface ReadOptions {
@@ -142,22 +128,16 @@ export async function readAppEvents(
 ): Promise<DashboardEvent[]> {
   const { git, sources } = ports;
   const { since, signal } = options;
-  const [main, github, jenkins, openshift, snyk] = await Promise.all([
+  const [main, ...stored] = await Promise.all([
     quietly(async () => {
       const branch = await git.getMainBranch(app, signal);
       return [{ branch, commits: await git.getMainBranchCommits(app, branch, since, signal) }];
     }),
-    quietly(() => sources.github(app)),
-    quietly(() => sources.jenkins(app)),
-    quietly(() => sources.openshift(app)),
-    quietly(() => sources.snyk(app)),
+    ...sources.map(source => quietly(() => source(app))),
   ]);
   const events = [
     ...main.flatMap(({ commits, branch }) => gitEvents(app, commits, branch.name)),
-    ...githubEvents(app, github),
-    ...jenkinsEvents(app, jenkins),
-    ...openShiftEvents(app, openshift),
-    ...snykEvents(app, snyk),
+    ...stored.flat(),
   ].filter(event => event.time >= since);
   const unnamed = new Set(events.filter(event => !event.branch).map(event => event.sha));
   if (unnamed.size === 0) return events;

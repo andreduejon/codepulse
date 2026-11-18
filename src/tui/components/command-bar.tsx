@@ -1,9 +1,10 @@
 import { type BoxRenderable, MouseButton } from "@opentui/core";
 import { createMemo, createSignal, For, Show } from "solid-js";
 import { isUncommittedHash } from "../../core/git/types";
-import { type EventSource, type ProviderView, providerDisplayName } from "../../core/provider-model";
+import type { EventSource, ProviderView } from "../../core/provider-model";
 import type { KnownRepoInfo } from "../../core/settings/config";
 import type { CommandBarMode } from "../app/ui-state";
+import { useProviderModules } from "../context/provider-modules";
 import { useAppState } from "../context/state";
 import type { DashboardState } from "../dashboard/use-dashboard";
 import { useT } from "../hooks/use-t";
@@ -37,6 +38,8 @@ interface CommandBarProps {
 /** Provider, project and mode rows, with an inline input for colon commands. */
 export default function CommandBar(props: Readonly<CommandBarProps>) {
   const { state, actions } = useAppState();
+  const modules = useProviderModules();
+  const providerDisplayName = (view: ProviderView) => state.providers.set.displayName(view);
   const t = useT();
   const [hoveredProvider, setHoveredProvider] = createSignal<ProviderView | null>(null);
   const [hoveredMode, setHoveredMode] = createSignal<string | null>(null);
@@ -220,7 +223,7 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
               {view => {
                 const selected = () => state.activeProviderView() === view;
                 const hovered = () => hoveredProvider() === view && props.mouseEnabled?.() !== false;
-                const colors = () => providerColors(t(), view);
+                const colors = () => providerColors(t(), view, modules);
                 return (
                   // biome-ignore lint/a11y/noStaticElementInteractions: TUI provider selection also supports Tab keyboard cycling.
                   // biome-ignore lint/a11y/useKeyWithMouseEvents: Keyboard-selected provider already uses normal badge colors.
@@ -368,7 +371,7 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
                   {source => {
                     const shown = () => !dashboard().hidden().has(source);
                     const hovered = () => hoveredSource() === source && props.mouseEnabled?.() !== false;
-                    const colors = () => providerColors(t(), source);
+                    const colors = () => providerColors(t(), source, modules);
                     return (
                       // biome-ignore lint/a11y/noStaticElementInteractions: TUI badge, a mouse-only filter.
                       // biome-ignore lint/a11y/useKeyWithMouseEvents: Hover only changes the badge text color.

@@ -13,18 +13,8 @@ import { matchCommit, type ParsedSearch } from "./search";
 /** A value the app reads, reactive where the app is: a Solid signal in the terminal app. */
 export type Accessor<T> = () => T;
 
-export type DetailTab =
-  | "files"
-  | "info"
-  | "stashes"
-  | "staged"
-  | "unstaged"
-  | "untracked"
-  | "github-actions"
-  | "jenkins"
-  | "openshift"
-  | "snyk"
-  | "snyk-deps";
+/** A detail tab: Git's own, or a provider's (its id, or a tab it adds). */
+export type DetailTab = "files" | "info" | "stashes" | "staged" | "unstaged" | "untracked" | (string & {});
 
 export type HighlightMode = "ancestry" | "path" | "search" | null;
 

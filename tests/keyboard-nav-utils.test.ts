@@ -152,7 +152,7 @@ describe("computeCascadeTarget", () => {
     expect(computeCascadeTarget({ ...base, dialog: "detail" })).toBe("detail-dialog");
   });
 
-  test.each(["diff-blame", "job-log", "openshift-resource"])(
+  test.each(["diff-blame", "job-log", "provider"])(
     "%s opened from compact details steps back to the detail dialog",
     dialog => {
       expect(computeCascadeTarget({ ...base, dialog, layoutMode: "compact", detailFocused: true })).toBe(

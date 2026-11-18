@@ -12,10 +12,12 @@ import type { JenkinsJob, JenkinsRun } from "../../core/jenkins/types";
 import type { OpenShiftResource } from "../../core/openshift/types";
 import type { ProviderDetailView } from "../../core/provider-model";
 import type { SnykScanResult } from "../../core/snyk/types";
+import { defaultProviderModules } from "../context/provider-modules";
 import { AppStateContext, createAppState, type ProviderStatus } from "../context/state";
 import { createThemeState, ThemeContext } from "../context/theme";
 import { handleDetailKey } from "../hooks/handle-detail-keys";
 import * as clipboard from "../hooks/use-clipboard";
+import { providerDetails } from "../providers/detail-entries";
 import DetailPanel from "./detail-panel";
 import type { DetailNavRef } from "./detail-types";
 import GraphView from "./graph";
@@ -178,7 +180,7 @@ async function renderSidebar(provider: ProviderDetailView | "git" = "git", snykS
                   scrollboxRef={el => (scrollbox = el)}
                   onJumpToCommit={() => {}}
                   onOpenDiff={openDiff}
-                  providers={{
+                  providers={providerDetails(defaultProviderModules(), {
                     "github-actions": {
                       getCommitData: () => ({ sha: detail.hash, runs: [run] }),
                       fetchJobsForRun: async () => ({ jobs: [job], error: null }),
@@ -217,14 +219,14 @@ async function renderSidebar(provider: ProviderDetailView | "git" = "git", snykS
                       onOpenResource: openJob,
                     },
                     snyk: {
-                      getCommitData: sha => (sha === snykScan.sha ? snykScan : null),
+                      getCommitData: (sha: string) => (sha === snykScan.sha ? snykScan : null),
                       scanCommit: async () => {
                         await reload();
                         return snykScan;
                       },
                       isScanning: busy,
                     },
-                  }}
+                  })}
                 />
               </box>
             </box>

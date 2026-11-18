@@ -6,11 +6,13 @@ import type { DetailNavRef } from "../components/detail-types";
 import { COMPACT_THRESHOLD_WIDTH, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH } from "../constants";
 import { resolvePorts } from "../context/ports";
 import { PortsProvider } from "../context/ports-provider";
+import { defaultProviderModules, ProviderModulesContext } from "../context/provider-modules";
 import { AppStateContext, createAppState } from "../context/state";
 import { ThemeContext } from "../context/theme";
 import { useAncestry } from "../hooks/use-ancestry";
 import { useKeyboardNavigation } from "../hooks/use-keyboard-navigation";
 import { providerAccent } from "../providers/colors";
+import { GraphColumnsContext } from "../providers/graph-columns-context";
 import { runAppCommand } from "./app-commands";
 import type { AppContentProps } from "./app-types";
 import { useCommandBar } from "./command-bar";
@@ -24,11 +26,16 @@ import { useRepoSession } from "./repo-session";
 import { useRepoSettings } from "./repo-settings";
 
 export function AppContent(props: Readonly<AppContentProps>) {
+  /** The ports the app runs on: given by startupProps, the registered ones otherwise. */
+  const ports = resolvePorts(props);
+  /** Each provider's terminal module: given by startupProps, the registered ones otherwise. */
+  const providerModules = props.providerModules ?? defaultProviderModules();
   const { state, actions } = createAppState(
     props.maxCount ?? DEFAULT_MAX_COUNT,
     props.autoRefreshInterval,
     props.autoFetchInterval,
     props.all,
+    ports.providers,
   );
   const themeState = props.themeState;
   const renderer = useRenderer();
@@ -36,8 +43,6 @@ export function AppContent(props: Readonly<AppContentProps>) {
   const [cacheScreenVisible, setCacheScreenVisible] = createSignal(false);
   let disposed = false;
   /** The providers' cache, as the cache screen manages it. */
-  /** The ports the app runs on: given by startupProps, the registered ones otherwise. */
-  const ports = resolvePorts(props);
   const cacheStore = ports.cacheStore;
   createEffect(() => cacheStore.setSuspended(cacheScreenVisible()));
   onCleanup(() => {
@@ -51,7 +56,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
   const gitPort = ports.git;
   const settings = useRepoSettings({
     repoPath: activeRepoPath,
-    initial: props,
+    initial: props.initialProviderSettings,
+    providers: ports.providers,
     themeState,
     state,
     actions,
@@ -62,18 +68,18 @@ export function AppContent(props: Readonly<AppContentProps>) {
   const providers = useProviderHost({
     state,
     actions,
-    adapters: ports.providers,
+    providers: ports.providers,
+    modules: providerModules,
     settings,
     suspended: cacheScreenVisible,
     onOpenJobLog: target => openJobLog(target),
-    onOpenResource: resource => handleOpenOpenShiftResource(resource),
+    onOpenDialog: render => openProviderDialog(render),
   });
-  const { snyk } = providers;
 
   // Setup screen visibility — shown when startup mode is "setup"
   const [setupVisible, setSetupVisible] = createSignal(props.startupMode.kind === "setup");
 
-  const messages = useMessageCenter({ state, actions, snyk });
+  const messages = useMessageCenter({ state, actions, providers });
   const { tabNotice, setGitNotice, showFastForward, forgetFastForward, clearScreenMessage, dismissTabNotice } =
     messages;
 
@@ -117,7 +123,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
   });
 
   const dialogs = useDialogHost({ state, layoutMode });
-  const { dialog, setDialog, openJobLog, openResource: handleOpenOpenShiftResource } = dialogs;
+  const { dialog, setDialog, openJobLog, openProviderDialog } = dialogs;
   /** The mouse works on the graph, the dashboard and their panels while no dialog covers them. */
   const _mouseEnabled = () => dialog() == null;
 
@@ -188,6 +194,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     onCacheWrite: cacheStore.onWrite,
     settings,
     providers,
+    modules: providerModules,
     dialogs: { dialog, setDialog },
     layoutMode,
     graphNavRef: detailNavRef,
@@ -302,7 +309,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
   /** Provider data and dialogs for the detail panel and the compact detail dialog. */
   const providerDetailProps = {
     memory: detailMemory,
-    providers: providers.detailSources,
+    providers: providers.details,
     get tabNotice() {
       return tabNotice();
     },
@@ -321,34 +328,38 @@ export function AppContent(props: Readonly<AppContentProps>) {
     const base = themeState.theme();
     const view = state.activeProviderView();
     // Git view keeps the theme's own accent (built-in themes set it equal to gitBg), so a custom accent applies.
-    return view === "git" ? base : { ...base, accent: providerAccent(base, view) };
+    return view === "git" ? base : { ...base, accent: providerAccent(base, view, providerModules) };
   });
 
   return (
     <PortsProvider ports={ports}>
-      <ThemeContext.Provider value={{ ...themeState, theme: providerTheme }}>
-        <AppStateContext.Provider value={{ state, actions }}>
-          <AppLayout
-            baseTheme={themeState.theme}
-            layoutMode={layoutMode}
-            repoPath={activeRepoPath}
-            configInfo={props.configInfo}
-            setup={{ visible: setupVisible, onComplete: handleSetupComplete }}
-            session={session}
-            cacheScreenVisible={cacheScreenVisible}
-            settings={settings}
-            providers={providers}
-            dialogs={dialogs}
-            messages={messages}
-            commandBar={commandBar}
-            graph={graph}
-            dashboard={dashboardController}
-            keys={{ onEnter: onFooterEnter, onEscape: onFooterEscape }}
-            run={{ reloadAll: handleReloadAll, fetchAll: handleFetchAll, pullAll: handlePullAll }}
-            detail={{ navRef: detailNavRef, providerProps: providerDetailProps }}
-          />
-        </AppStateContext.Provider>
-      </ThemeContext.Provider>
+      <ProviderModulesContext.Provider value={providerModules}>
+        <GraphColumnsContext.Provider value={providers.graphColumns}>
+          <ThemeContext.Provider value={{ ...themeState, theme: providerTheme }}>
+            <AppStateContext.Provider value={{ state, actions }}>
+              <AppLayout
+                baseTheme={themeState.theme}
+                layoutMode={layoutMode}
+                repoPath={activeRepoPath}
+                configInfo={props.configInfo}
+                setup={{ visible: setupVisible, onComplete: handleSetupComplete }}
+                session={session}
+                cacheScreenVisible={cacheScreenVisible}
+                settings={settings}
+                providers={providers}
+                dialogs={dialogs}
+                messages={messages}
+                commandBar={commandBar}
+                graph={graph}
+                dashboard={dashboardController}
+                keys={{ onEnter: onFooterEnter, onEscape: onFooterEscape }}
+                run={{ reloadAll: handleReloadAll, fetchAll: handleFetchAll, pullAll: handlePullAll }}
+                detail={{ navRef: detailNavRef, providerProps: providerDetailProps }}
+              />
+            </AppStateContext.Provider>
+          </ThemeContext.Provider>
+        </GraphColumnsContext.Provider>
+      </ProviderModulesContext.Provider>
     </PortsProvider>
   );
 }

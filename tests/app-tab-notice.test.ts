@@ -4,6 +4,7 @@ import type { ProviderView } from "../src/core/provider-model";
 import type { SnykScanResult } from "../src/core/snyk/types";
 import { isTabNoticeStatus, tabNoticeFor } from "../src/tui/app/app-tab-notice";
 import type { ProviderStatus } from "../src/tui/context/state";
+import { snykTabNotice } from "../src/tui/providers/snyk/module";
 
 const scan: SnykScanResult = {
   sha: "a".repeat(40),
@@ -33,7 +34,13 @@ const notice = (
   status: ProviderStatus,
   tab: string,
   snykScan = null as typeof scan | null,
-) => tabNoticeFor({ view: view as ProviderView, source, status, tab: tab as never, snykScan });
+) =>
+  tabNoticeFor({
+    view: view as ProviderView,
+    source,
+    status,
+    providerNotice: view === "snyk" ? snykTabNotice(snykScan, tab) : null,
+  });
 
 describe("tab notices", () => {
   test("only warnings leave the banner for the tab", () => {

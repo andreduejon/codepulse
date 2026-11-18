@@ -4,6 +4,7 @@ import { createEffect, createMemo, createSignal, onCleanup } from "solid-js";
 import type { StatusCategory } from "../../../core/status";
 import type { LogViewState } from "../../components/dialogs/log-view";
 import { LogViewer, type LogViewerNavigation } from "../../components/dialogs/log-viewer";
+import { useProviderSet } from "../../context/providers";
 import { useSystem } from "../../context/system";
 import { BUSY } from "../../utils/busy-text";
 import { stripTerminalControls } from "../../utils/terminal-text";
@@ -52,7 +53,8 @@ export interface JobLogEntry {
 
 /** What the app opens the dialog with: a provider builds it (`githubJobLogTarget`, `jenkinsBuildLogTarget`, …). */
 export interface JobLogTarget {
-  provider: "github-actions" | "jenkins";
+  /** The provider's view id. */
+  provider: string;
   job: JobLogEntry;
   run: { name: string; runNumber: number; url?: string };
   jobs: JobLogEntry[];
@@ -75,7 +77,8 @@ interface LoadedLog {
 }
 
 interface JobLogDialogProps {
-  provider: "github-actions" | "jenkins";
+  /** The provider's view id: its name leads the title. */
+  provider: string;
   job: JobLogEntry;
   jobs: JobLogEntry[];
   run: { name: string; runNumber: number; url?: string };
@@ -149,6 +152,8 @@ export function parseLogLines(raw: string): LogLine[] {
 export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
   /** The browser and the environment, through the app's system port. */
   const system = useSystem();
+  /** The providers' names, for the title. */
+  const providers = useProviderSet();
   const orderedJobs = createMemo(() => {
     const seen = new Set<string>();
     const result: JobLogEntry[] = [];
@@ -321,7 +326,7 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
     <LogViewer
       // Like the diff title: context (time, mode, then provider) goes first; the run and job shrink last.
       title={() => [
-        { text: props.provider === "jenkins" ? "Jenkins" : "GitHub", drop: 3 },
+        { text: providers.displayName(props.provider), drop: 3 },
         { text: `${props.run.name} #${props.run.runNumber}`, drop: 4 },
         { text: currentJob().name, emphasis: true, primary: true },
         { text: currentLoadedLog().detail ?? currentJob().detail ?? "", drop: 1 },

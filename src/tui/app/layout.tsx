@@ -138,8 +138,6 @@ export function AppLayout(props: Readonly<AppLayoutProps>) {
                     mouseEnabled={mouseEnabled}
                     onSelectRow={props.graph.selectRow}
                     onLoadMore={props.graph.loadMoreData}
-                    snykGetCommitData={props.providers.snyk.getCommitData}
-                    snykIsScanning={props.providers.snyk.isScanning}
                     scrollboxRef={props.graph.setGraphScrollbox}
                     suppressAutoScroll={() => props.session.pendingGraphScrollTop() != null}
                   />
@@ -245,7 +243,6 @@ export function AppLayout(props: Readonly<AppLayoutProps>) {
               dialogs={props.dialogs}
               settings={props.settings}
               dashboard={props.dashboard}
-              openShift={props.providers.openShift}
               repoPath={props.repoPath}
               configInfo={props.configInfo}
               menu={{

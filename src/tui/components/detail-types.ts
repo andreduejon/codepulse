@@ -1,7 +1,7 @@
 import type { KeyEvent, Renderable } from "@opentui/core";
 import type { Commit, CommitDetail, DiffTarget, GraphRow } from "../../core/git/types";
 import { DETAIL_PANEL_WIDTH_FRACTION } from "../constants";
-import type { ProviderDetailSources } from "../providers/detail-entries";
+import type { ProviderDetails } from "../providers/detail-entries";
 import type { FileTreeRow } from "../utils/file-tree";
 import type { DetailMemory } from "./detail-memory";
 
@@ -41,7 +41,7 @@ export interface DetailViewProps {
   /** Mutable ref object populated by the detail view with navigation callbacks */
   navRef?: DetailNavRef;
   /** What each provider hands its detail tabs (see `providers/detail-entries.ts`). */
-  providers?: Partial<ProviderDetailSources>;
+  providers?: ProviderDetails;
   /** Open folders, runs and namespaces kept while the details are not shown (see `detail-memory.ts`). */
   memory?: DetailMemory;
   /**

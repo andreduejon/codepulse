@@ -1,5 +1,5 @@
 /**
- * CI graph columns (GitHub Actions and Jenkins).
+ * CI graph columns (GitHub Actions and Jenkins, and a provider without columns of its own).
  *
  * In a CI view these replace the Author and Date columns:
  *
@@ -13,9 +13,10 @@ import { UNCOMMITTED_PLACEHOLDER } from "../../constants";
 import { useAppState } from "../../context/state";
 import { useT } from "../../hooks/use-t";
 import { formatRelativeDate } from "../../utils/date";
-import { ciBadgeCounts } from "../graph-column-widths";
-import { statusColor } from "../shared/status";
-import { providerTextColor, StatusChips, statusCountChips } from "../shared/status-chips";
+import { cachedWidths, chipColumnWidths, ciBadgeCounts } from "../graph-column-widths";
+import type { ProviderGraphColumns } from "../module";
+import { statusColor } from "./status";
+import { providerTextColor, StatusChips, statusCountChips } from "./status-chips";
 
 interface ActionsColumnProps {
   badge: GraphBadge | undefined;
@@ -79,3 +80,15 @@ export function ActionsColumnHeaders(props: Readonly<{ first: number; second: nu
     </>
   );
 }
+
+/** A CI provider's columns: its runs' counts and its last run. */
+export const CI_GRAPH_COLUMNS: ProviderGraphColumns = {
+  widths: cachedWidths(badges => chipColumnWidths(badges, ciBadgeCounts)),
+  Headers: ActionsColumnHeaders,
+  Cells: props => (
+    <>
+      <ActionsCountsColumn badge={props.badge} active={props.active} dimmed={props.dimmed} width={props.widths.first} />
+      <ActionsDateColumn badge={props.badge} active={props.active} dimmed={props.dimmed} width={props.widths.second} />
+    </>
+  ),
+};

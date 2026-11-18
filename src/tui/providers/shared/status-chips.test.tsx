@@ -6,7 +6,7 @@ import type { GraphBadge } from "../../../core/provider-model";
 import type { SnykScanResult } from "../../../core/snyk/types";
 import { AppStateContext, createAppState } from "../../context/state";
 import { createThemeState, ThemeContext } from "../../context/theme";
-import { ActionsCountsColumn } from "../github-actions/graph-columns";
+import { ActionsCountsColumn } from "../shared/ci-columns";
 import { SnykScanColumn } from "../snyk/graph-columns";
 
 const theme = createThemeState();

@@ -14,8 +14,7 @@ export interface GitHubDetailSource extends ProviderDetailSource<GitHubCommitDat
   onOpenJobLog?: (job: GitHubJob, run: GitHubWorkflowRun, jobs?: GitHubJob[], search?: string) => void;
 }
 
-export const githubDetail = detailEntry({
-  view: "github-actions",
+export const githubDetail = detailEntry<GitHubDetailSource>({
   Tab: props => (
     <ActionsDetailTab
       mouseEnabled={props.context.mouseEnabled}

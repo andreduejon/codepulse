@@ -3,6 +3,7 @@ import type { Commit } from "../src/core/git/types";
 import { UNCOMMITTED_HASH } from "../src/core/git/types";
 import type { ProviderView } from "../src/core/provider-model";
 import { getAvailableTabs, getDefaultDetailTab, getUncommittedProviderNotice } from "../src/tui/utils/tab-utils";
+import { BUILT_IN_PROVIDERS } from "./test-helpers";
 
 function commit(hash: string): Commit {
   return {
@@ -27,16 +28,16 @@ describe("getDefaultDetailTab", () => {
     const providerViews: ProviderView[] = ["github-actions", "jenkins", "openshift", "snyk"];
 
     for (const providerView of providerViews) {
-      expect(getDefaultDetailTab(uncommitted, providerView)).toBe("unstaged");
+      expect(getDefaultDetailTab(uncommitted, providerView, BUILT_IN_PROVIDERS)).toBe("unstaged");
     }
   });
 
   test("uses provider tab for committed changes", () => {
-    expect(getDefaultDetailTab(commit("a".repeat(40)), "snyk")).toBe("snyk");
+    expect(getDefaultDetailTab(commit("a".repeat(40)), "snyk", BUILT_IN_PROVIDERS)).toBe("snyk");
   });
 
   test("uses files tab for committed changes in git view", () => {
-    expect(getDefaultDetailTab(commit("a".repeat(40)), "git")).toBe("files");
+    expect(getDefaultDetailTab(commit("a".repeat(40)), "git", BUILT_IN_PROVIDERS)).toBe("files");
   });
 });
 
@@ -47,6 +48,7 @@ describe("getAvailableTabs", () => {
     commitDetail: { ...selected, files: [{ path: "file.ts", status: "M" as const, additions: 1, deletions: 0 }] },
     uncommittedDetail: null,
     stashByParent: new Map([[selected.hash, [commit("b".repeat(40))]]]),
+    providers: BUILT_IN_PROVIDERS,
   };
 
   test("includes stashes only in Git view, including the default view", () => {
@@ -104,11 +106,13 @@ describe("getAvailableTabs", () => {
 
 describe("getUncommittedProviderNotice", () => {
   test("explains provider limitation", () => {
-    expect(getUncommittedProviderNotice("snyk")).toBe("No Snyk data for uncommitted changes.");
-    expect(getUncommittedProviderNotice("github-actions")).toBe("No GitHub data for uncommitted changes.");
+    expect(getUncommittedProviderNotice("snyk", BUILT_IN_PROVIDERS)).toBe("No Snyk data for uncommitted changes.");
+    expect(getUncommittedProviderNotice("github-actions", BUILT_IN_PROVIDERS)).toBe(
+      "No GitHub data for uncommitted changes.",
+    );
   });
 
   test("is hidden in git view", () => {
-    expect(getUncommittedProviderNotice("git")).toBeNull();
+    expect(getUncommittedProviderNotice("git", BUILT_IN_PROVIDERS)).toBeNull();
   });
 });

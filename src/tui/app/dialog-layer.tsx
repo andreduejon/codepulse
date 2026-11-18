@@ -19,13 +19,10 @@ import type { UIMessage } from "../components/message-box";
 import { useSettings } from "../context/settings";
 import { useAppState } from "../context/state";
 import { useT } from "../hooks/use-t";
-import OpenShiftResourceDialog from "../providers/openshift/resource-dialog";
 import JobLogDialog from "../providers/shared/job-log-dialog";
-import type { SnykProviderConfig } from "../providers/snyk/use-snyk";
 import type { AppContentProps } from "./app-types";
 import type { DashboardController } from "./dashboard-controller";
 import type { DialogHost } from "./dialogs";
-import type { ProviderHost } from "./providers";
 import type { RepoSettings } from "./repo-settings";
 
 export function DialogLayer(
@@ -33,7 +30,6 @@ export function DialogLayer(
     dialogs: DialogHost;
     settings: RepoSettings;
     dashboard: DashboardController;
-    openShift: ProviderHost["openShift"];
     repoPath: Accessor<string>;
     configInfo: AppContentProps["configInfo"];
     /** What the Menu's actions do. */
@@ -69,7 +65,7 @@ export function DialogLayer(
     diffTarget,
     setDiffTarget,
     jobLogTarget,
-    openShiftResourceTarget,
+    providerDialog,
     openDiff: handleOpenDiff,
     openFromMenu: handleOpenDialog,
     closeToDetail,
@@ -89,16 +85,7 @@ export function DialogLayer(
           onViewBranch={props.menu.onViewBranch}
           configInfo={props.configInfo}
           onSwitchRepo={props.menu.onSwitchRepo}
-          githubConfig={settings.github()}
-          onGithubConfigChange={settings.setGithub}
-          jenkinsConfig={settings.jenkins()}
-          onJenkinsConfigChange={settings.setJenkins}
-          openshiftConfig={settings.openShift()}
-          onOpenShiftConfigChange={settings.setOpenShift}
-          {...{
-            snykConfig: settings.snyk(),
-            onSnykConfigChange: (config: SnykProviderConfig) => settings.setSnyk(config),
-          }}
+          providerSettings={settings}
           dashboardConfig={settings.dashboard()}
           onDashboardConfigChange={settings.setDashboard}
           startView={settings.startView()}
@@ -185,21 +172,8 @@ export function DialogLayer(
           />
         )}
       </Show>
-      <Show when={dialog() === "openshift-resource" && openShiftResourceTarget()}>
-        {resource => (
-          <OpenShiftResourceDialog
-            resource={resource()}
-            loadLog={async (item, force) =>
-              item.kind === "Pod" ? props.openShift.loadPodLog(item) : props.openShift.loadBuildLog(item, force)
-            }
-            followLog={props.openShift.followLog}
-            consoleUrl={settings.openShift().consoleUrl}
-            loadEvents={item => props.openShift.loadResourceEvents(item)}
-            loadObject={(item, force) => props.openShift.loadResourceObject(item, force)}
-            onClose={closeToDetail}
-          />
-        )}
-      </Show>
+      {/* A provider's own dialog (OpenShift's resource): back to the details when it closes. */}
+      <Show when={dialog() === "provider" && providerDialog()}>{render => render()(closeToDetail)}</Show>
     </>
   );
 }

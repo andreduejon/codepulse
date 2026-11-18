@@ -1,30 +1,53 @@
 /**
- * Every provider tab of the detail view, and what each provider hands it. Adding a provider: its source type here,
- * its entry in the table, and its source in `app-content.tsx`.
+ * The provider tabs of the detail view: each started provider's entries (from its module) with its source. The detail
+ * view asks here by tab, so it names no provider.
  */
 
-import type { DetailTab } from "../context/state";
-import { type GitHubDetailSource, githubDetail } from "./github-actions/detail-entry";
-import { type JenkinsDetailSource, jenkinsDetail } from "./jenkins/detail-entry";
-import { type OpenShiftDetailSource, openshiftDetail } from "./openshift/detail-entry";
-import type { DetailEntry } from "./shared/detail-entry";
-import { type SnykDetailSource, snykDependenciesDetail, snykVulnerabilitiesDetail } from "./snyk/detail-entry";
+import type { JSX } from "solid-js";
+import type { AnyProviderModule } from "./module";
+import type { DetailEntryContext, ProviderDetailSource } from "./shared/detail-entry";
+import type { LegendItem } from "./shared/detail-legend";
 
-/** What each provider hands the detail view, by provider view. */
-export interface ProviderDetailSources {
-  "github-actions": GitHubDetailSource;
-  jenkins: JenkinsDetailSource;
-  openshift: OpenShiftDetailSource;
-  snyk: SnykDetailSource;
+export interface ProviderDetails {
+  /** Every provider tab, in the providers' order. */
+  tabs: () => readonly string[];
+  /** A provider tab's content; null for a tab no provider has. */
+  render: (tab: string, context: DetailEntryContext) => JSX.Element | null;
+  /** The legend below a provider tab for a commit. */
+  legend: (tab: string, sha: string) => readonly LegendItem[] | null;
+  /** A provider view's source: its data for a commit and its status. */
+  source: (view: string) => ProviderDetailSource<unknown> | undefined;
 }
 
-/** The provider tabs: what each renders and the legend below it. */
-export const DETAIL_ENTRIES: readonly (readonly [DetailTab, DetailEntry])[] = [
-  ["github-actions", githubDetail],
-  ["jenkins", jenkinsDetail],
-  ["openshift", openshiftDetail],
-  ["snyk", snykVulnerabilitiesDetail],
-  ["snyk-deps", snykDependenciesDetail],
-];
+/** No provider tabs: a detail view rendered without the app's providers (a component's own test). */
+export const NO_PROVIDER_DETAILS: ProviderDetails = {
+  tabs: () => [],
+  render: () => null,
+  legend: () => null,
+  source: () => undefined,
+};
 
-export const detailEntryFor = (tab: DetailTab) => DETAIL_ENTRIES.find(([id]) => id === tab)?.[1] ?? null;
+/** The provider tabs of these modules, each reading its provider's source (by provider view). */
+export function providerDetails(
+  modules: readonly AnyProviderModule[],
+  sources: Readonly<Record<string, unknown>>,
+): ProviderDetails {
+  /** A tab's entry and its provider's source: its own tab, or one it adds. */
+  const find = (tab: string) => {
+    const module = modules.find(candidate => Object.hasOwn(candidate.detailEntries, tab));
+    const source = module && sources[module.definition.id];
+    return module && source !== undefined ? { entry: module.detailEntries[tab], source } : null;
+  };
+  return {
+    tabs: () => modules.flatMap(module => Object.keys(module.detailEntries)),
+    render: (tab, context) => {
+      const found = find(tab);
+      return found?.entry ? found.entry.render(found.source, context) : null;
+    },
+    legend: (tab, sha) => {
+      const found = find(tab);
+      return found?.entry ? found.entry.legend(found.source, sha) : null;
+    },
+    source: view => sources[view] as ProviderDetailSource<unknown> | undefined,
+  };
+}

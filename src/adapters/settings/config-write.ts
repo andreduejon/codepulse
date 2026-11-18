@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import type { ProviderDefinition } from "../../core/provider-set";
 import {
   type CodepulseConfig,
   missingDefaults,
@@ -18,9 +19,13 @@ import { defaultConfigPath, loadConfig } from "./config";
  * @param repoPath - The repository directory (absolute path).
  * @param configPath - Override the global config path (used by tests).
  */
-export function backfillRepoConfig(repoPath: string, configPath?: string): void {
-  const { config: existing } = loadConfig(repoPath, configPath);
-  const missing = missingDefaults(existing);
+export function backfillRepoConfig(
+  repoPath: string,
+  configPath?: string,
+  providers: readonly ProviderDefinition[] = [],
+): void {
+  const { config: existing } = loadConfig(repoPath, configPath, providers);
+  const missing = missingDefaults(existing, providers);
   if (missing) writeConfig(missing, repoPath, configPath);
 }
 

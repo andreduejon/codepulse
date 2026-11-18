@@ -52,6 +52,7 @@ export function handleDetailKey(e: KeyEvent, opts: DetailKeyOptions): boolean {
   const availableTabs = () =>
     opts.tabs?.() ??
     getAvailableTabs({
+      providers: state.providers.set,
       commit: state.selectedCommit(),
       uncommittedDetail: state.uncommittedDetail(),
       commitDetail: state.commitDetail(),

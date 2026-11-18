@@ -4,27 +4,24 @@
  */
 
 import { createSignal } from "solid-js";
-import {
-  PROVIDER_ORDER,
-  type ProviderRegistration,
-  type ProviderRegistry,
-  type ProviderView,
-} from "../../core/provider-model";
+import type { ProviderRegistration, ProviderRegistry, ProviderView } from "../../core/provider-model";
+import type { ProviderSet } from "../../core/provider-set";
 
-/** Per-app registry. Do not share across AppState instances. */
-export function createProviderRegistry(): ProviderRegistry {
+/** Per-app registry over the app's provider set. Do not share across AppState instances. */
+export function createProviderRegistry(set: ProviderSet): ProviderRegistry {
   const entries: ProviderRegistration[] = [];
   const [version, setVersion] = createSignal(0);
   const [dashboardEnabled, setDashboardEnabled] = createSignal(true);
 
   const getEnabledViews = (): ProviderView[] => {
     const registered = new Set(entries.map(p => p.id));
-    return PROVIDER_ORDER.filter(
-      view => (view === "dashboard" && dashboardEnabled()) || view === "git" || registered.has(view),
-    );
+    return set
+      .views()
+      .filter(view => (view === "dashboard" && dashboardEnabled()) || view === "git" || registered.has(view));
   };
 
   return {
+    set,
     register(p) {
       if (!entries.find(r => r.id === p.id)) {
         entries.push(p);

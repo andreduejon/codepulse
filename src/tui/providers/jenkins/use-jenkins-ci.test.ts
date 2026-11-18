@@ -157,7 +157,7 @@ test("over the branch-job limit, the graph's branches are asked for first and th
       "Jenkins branch jobs · 25 of 61 read. Branches in the graph come first. Builds on the other 36 do not show.",
   });
   // Like the other tab notices: a short headline, then a muted line on what it means.
-  expect(tabNoticeFor({ view: "jenkins", source: "Jenkins", status, tab: "jenkins", snykScan: null })).toMatchObject({
+  expect(tabNoticeFor({ view: "jenkins", source: "Jenkins", status, providerNotice: null })).toMatchObject({
     kind: "warning",
     title: "Branch jobs · 25 of 61 read",
     detail: ["Branches in the graph come first. Builds on the other 36 do not show."],

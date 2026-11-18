@@ -11,6 +11,7 @@ import type {
 import { clampCursor, highlightModeOf, sameSet, searchMatches } from "../../core/app-state";
 import type { Branch, Commit, CommitDetail, GraphRow, TagInfo, UncommittedDetail } from "../../core/git/types";
 import type { GraphBadge, ProviderView } from "../../core/provider-model";
+import type { ProviderSet } from "../../core/provider-set";
 import type { ProviderStatus } from "../../core/provider-status";
 import { providerIdle } from "../../core/provider-status";
 import { parseSearchQuery } from "../../core/search";
@@ -21,6 +22,7 @@ import {
 } from "../../core/settings/config";
 import type { MenuTab } from "../hooks/menu-items-types";
 import { createProviderRegistry } from "../providers/provider";
+import { defaultPorts } from "./ports";
 
 export type {
   DetailActions,
@@ -83,6 +85,8 @@ export function createAppState(
   initialAutoRefreshInterval?: number,
   initialAutoFetchInterval?: number,
   initialShowAllBranches: boolean = true,
+  /** The providers the app runs with; the registered ports' unless given. */
+  providerSet: ProviderSet = defaultPorts().providers,
 ) {
   // ── Repository data ───────────────────────────────────────────────
   const [commits, setCommits] = createSignal<Commit[]>([]);
@@ -93,7 +97,7 @@ export function createAppState(
   const [remoteUrl, setRemoteUrl] = createSignal("");
   const [tagDetails, setTagDetails] = createSignal<Map<string, TagInfo>>(new Map());
   const [stashByParent, setStashByParent] = createSignal<Map<string, Commit[]>>(new Map());
-  const providers = createProviderRegistry();
+  const providers = createProviderRegistry(providerSet);
 
   // ── Navigation & selection ────────────────────────────────────────
   const [cursorIndex, setCursorIndex] = createSignal(0);

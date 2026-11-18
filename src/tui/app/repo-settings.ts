@@ -7,25 +7,26 @@
 import { type Accessor, createEffect, createSignal, type Setter, untrack } from "solid-js";
 import { dashboardSettings } from "../../core/dashboard-settings";
 import type { ProviderView } from "../../core/provider-model";
-import { type CodepulseConfig, defaultConfig, reportConfigWarnings, startViewFor } from "../../core/settings/config";
+import type { ProviderDefinition, ProviderSet } from "../../core/provider-set";
+import {
+  type CodepulseConfig,
+  defaultConfig,
+  providerSettings,
+  reportConfigWarnings,
+  startViewFor,
+} from "../../core/settings/config";
 import type { SettingsPort } from "../../core/settings/port";
+import type { SettingsSection } from "../../core/settings/provider-section";
 import type { AppActions, AppState } from "../context/state";
 import type { createThemeState } from "../context/theme";
-import type { SnykProviderConfig } from "../providers/snyk/use-snyk";
-import { githubSettings, jenkinsSettings, openShiftSettings, snykSettings } from "./app-provider-config";
-import type { AppContentProps } from "./app-types";
 
 type ThemeState = ReturnType<typeof createThemeState>;
 
 export interface RepoSettings {
-  github: Accessor<ReturnType<typeof githubSettings>>;
-  setGithub: Setter<ReturnType<typeof githubSettings>>;
-  jenkins: Accessor<ReturnType<typeof jenkinsSettings>>;
-  setJenkins: Setter<ReturnType<typeof jenkinsSettings>>;
-  openShift: Accessor<ReturnType<typeof openShiftSettings>>;
-  setOpenShift: Setter<ReturnType<typeof openShiftSettings>>;
-  snyk: Accessor<SnykProviderConfig>;
-  setSnyk: Setter<SnykProviderConfig>;
+  /** A provider's settings, its defaults filled in. */
+  of: <Settings extends SettingsSection>(definition: ProviderDefinition<never, Settings>) => Accessor<Settings>;
+  /** Changes a provider's settings (the Menu saves them itself). */
+  set: <Settings extends SettingsSection>(definition: ProviderDefinition<never, Settings>, next: Settings) => void;
   dashboard: Accessor<ReturnType<typeof dashboardSettings>>;
   setDashboard: Setter<ReturnType<typeof dashboardSettings>>;
   /** The view this repository opens in, as Menu → Providers → Start in shows it. */
@@ -45,34 +46,51 @@ export interface RepoSettings {
   port: SettingsPort;
 }
 
+/** A provider's section with its defaults filled in. */
+export function resolvedSettings<Settings extends SettingsSection>(
+  definition: ProviderDefinition<never, Settings>,
+  config: CodepulseConfig,
+): Settings {
+  return { ...definition.settings.defaults, ...providerSettings(config, definition) };
+}
+
 export function useRepoSettings(opts: {
   repoPath: Accessor<string>;
-  initial: Pick<
-    AppContentProps,
-    "initialGithubConfig" | "initialJenkinsConfig" | "initialOpenShiftConfig" | "initialSnykConfig"
-  >;
+  /** The providers' settings the app started with (startupProps read them). */
+  initial: CodepulseConfig["providers"];
+  providers: ProviderSet;
   themeState: ThemeState;
   state: AppState;
   actions: AppActions;
   /** Where the settings are kept. */
   port: SettingsPort;
 }): RepoSettings {
-  const { state, actions, themeState } = opts;
+  const { state, actions, themeState, providers } = opts;
   const read = (path: string) => {
     const { config, warnings } = opts.port.load(path);
     reportConfigWarnings(warnings);
     return config;
   };
-  const [github, setGithub] = createSignal(githubSettings(opts.initial.initialGithubConfig));
-  const [jenkins, setJenkins] = createSignal(jenkinsSettings(opts.initial.initialJenkinsConfig));
-  const [openShift, setOpenShift] = createSignal(openShiftSettings(opts.initial.initialOpenShiftConfig));
-  const [snyk, setSnyk] = createSignal<SnykProviderConfig>(snykSettings(opts.initial.initialSnykConfig));
+  /** Each provider's settings by its key. */
+  const sections = new Map<string, ReturnType<typeof createSignal<SettingsSection>>>(
+    providers.definitions.map(definition => [
+      definition.key,
+      createSignal<SettingsSection>(
+        resolvedSettings(definition as ProviderDefinition<never, SettingsSection>, { providers: opts.initial }),
+      ),
+    ]),
+  );
+  const section = <Settings extends SettingsSection>(definition: ProviderDefinition<never, Settings>) => {
+    const found = sections.get(definition.key);
+    if (!found) throw new Error(`Provider "${definition.id}" is not in the app's provider set`);
+    return found;
+  };
   const startConfig = read(untrack(opts.repoPath));
   const [dashboard, setDashboard] = createSignal(dashboardSettings(startConfig.dashboard));
   const [startView, setStartView] = createSignal<ProviderView>(startConfig.startView ?? "git");
   const [autoFastForward, setAutoFastForward] = createSignal(startConfig.autoFastForward ?? false);
   const [display, setDisplay] = createSignal(opts.port.display(untrack(opts.repoPath)));
-  actions.setActiveProviderView(startViewFor(startConfig));
+  actions.setActiveProviderView(startViewFor(startConfig, providers.definitions));
 
   // Menu → Providers → Dashboard → Enabled, per repository: off, it has no tab, and leaving it shows Git.
   createEffect(() => {
@@ -85,10 +103,8 @@ export function useRepoSettings(opts: {
     const path = opts.repoPath();
     opts.port.backfill(path);
     const config = read(path);
-    setGithub(githubSettings(config.providers?.github));
-    setJenkins(jenkinsSettings(config.providers?.jenkins));
-    setOpenShift(openShiftSettings(config.providers?.openshift));
-    setSnyk(snykSettings(config.providers?.snyk));
+    for (const definition of providers.definitions)
+      section(definition)[1](resolvedSettings(definition as ProviderDefinition<never, SettingsSection>, config));
     setDashboard(dashboardSettings(config.dashboard));
     setStartView(config.startView ?? "git");
     setAutoFastForward(config.autoFastForward ?? false);
@@ -105,14 +121,9 @@ export function useRepoSettings(opts: {
   });
 
   return {
-    github,
-    setGithub,
-    jenkins,
-    setJenkins,
-    openShift,
-    setOpenShift,
-    snyk,
-    setSnyk,
+    of: <Settings extends SettingsSection>(definition: ProviderDefinition<never, Settings>) =>
+      section(definition)[0] as Accessor<Settings>,
+    set: (definition, next) => section(definition)[1](() => next),
     dashboard,
     setDashboard,
     startView,

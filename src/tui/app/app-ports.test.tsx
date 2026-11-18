@@ -9,7 +9,7 @@ import App from "./app";
 
 test("the startup project selector forgets a project in the settings the app was given", async () => {
   const remove = mock(() => true);
-  const settings: SettingsPort = { ...fileSettings(), remove };
+  const settings: SettingsPort = { ...fileSettings([]), remove };
   const registered = spyOn(configWrite, "removeRepoConfig").mockReturnValue(true);
   const setup = await testRender(
     () => (

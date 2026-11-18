@@ -2,10 +2,28 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { githubProvider } from "../../core/github/definition";
+import { jenkinsProvider } from "../../core/jenkins/definition";
+import { openShiftProvider } from "../../core/openshift/definition";
+import { createProviderSet, providerEntry } from "../../core/provider-set";
+import { snykProvider } from "../../core/snyk/definition";
 import { closeProviderCaches } from "../cache/sha-sqlite-cache";
+import { githubAdapters } from "../github/adapters";
 import { GitHubCache } from "../github/cache";
+import { jenkinsAdapters } from "../jenkins/adapters";
+import { openShiftAdapters } from "../openshift/adapters";
+import { snykAdapters } from "../snyk/adapters";
 import { SnykCache } from "../snyk/cache";
 import { loadAppEvents, loadCommitInfo } from "./load";
+
+/** The providers with their adapters on this cache folder: the Dashboard reads their stored events. */
+const providersAt = (cacheRoot: string) =>
+  createProviderSet([
+    providerEntry(githubProvider, githubAdapters(cacheRoot)),
+    providerEntry(jenkinsProvider, jenkinsAdapters(cacheRoot)),
+    providerEntry(openShiftProvider, openShiftAdapters(cacheRoot)),
+    providerEntry(snykProvider, snykAdapters(cacheRoot)),
+  ]);
 
 /** Tests that make a repository run many Git processes, which start slowly on Windows (seconds on its ARM64 runner). */
 const GIT_TIMEOUT = 30_000;
@@ -87,14 +105,16 @@ test(
       findings: [],
     });
 
-    const events = await loadAppEvents(repo, { since: Date.parse("2026-03-01T00:00:00Z"), cacheRoot });
+    const events = await loadAppEvents(repo, { since: Date.parse("2026-03-01T00:00:00Z") }, providersAt(cacheRoot));
     expect(events.map(event => [event.source, event.text]).sort()).toEqual([
       ["git", "feat(api): health"],
       ["github-actions", "CI #812 failed"],
       ["snyk", "scan · 0 vulnerabilities · 0 critical · 0 high · 0 medium · 0 low"],
     ]);
     // Older than the window: left out.
-    expect(await loadAppEvents(repo, { since: Date.parse("2026-03-03T00:00:00Z"), cacheRoot })).toEqual([]);
+    expect(await loadAppEvents(repo, { since: Date.parse("2026-03-03T00:00:00Z") }, providersAt(cacheRoot))).toEqual(
+      [],
+    );
   },
   GIT_TIMEOUT,
 );
@@ -102,7 +122,7 @@ test(
 test("a folder that is not a repository has no events instead of failing the dashboard", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "codepulse-dashboard-")));
   roots.push(root);
-  expect(await loadAppEvents(join(root, "missing"), { since: 0, cacheRoot: join(root, "cache") })).toEqual([]);
+  expect(await loadAppEvents(join(root, "missing"), { since: 0 }, providersAt(join(root, "cache")))).toEqual([]);
 });
 
 test(
@@ -183,7 +203,7 @@ test(
     await new SnykCache({ root: cacheRoot }).write(repo, scan(developed));
     await new SnykCache({ root: cacheRoot }).write(repo, scan("0".repeat(40)));
 
-    const events = await loadAppEvents(repo, { since: Date.parse("2026-03-01T00:00:00Z"), cacheRoot });
+    const events = await loadAppEvents(repo, { since: Date.parse("2026-03-01T00:00:00Z") }, providersAt(cacheRoot));
     const branchOf = (source: string, sha: string) =>
       events.find(event => event.source === source && event.sha === sha)?.branch;
     expect(branchOf("git", base)).toBe("main");

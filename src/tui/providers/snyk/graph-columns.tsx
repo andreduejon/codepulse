@@ -6,6 +6,8 @@ import type { Theme } from "../../context/theme";
 import { useT } from "../../hooks/use-t";
 import { BUSY } from "../../utils/busy-text";
 import { formatRelativeDate } from "../../utils/date";
+import { cachedWidths } from "../graph-column-widths";
+import type { ProviderGraphColumns } from "../module";
 import { providerTextColor, type StatusChip, StatusChips } from "../shared/status-chips";
 import { severityColor } from "./severity";
 
@@ -118,4 +120,32 @@ export function SnykColumnHeaders(props: Readonly<{ first: number; second: numbe
       </box>
     </>
   );
+}
+
+/** Snyk's columns: each scanned commit's findings by severity, and when it was scanned. */
+export function snykGraphColumns(scans: {
+  getCommitData: (sha: string) => SnykScanResult | null;
+  isScanning: (sha: string) => boolean;
+}): ProviderGraphColumns {
+  return {
+    widths: cachedWidths(badges => ({ first: severityColumnWidth(badges.values()), second: LAST_SCAN_COL_WIDTH })),
+    Headers: SnykColumnHeaders,
+    Cells: props => (
+      <>
+        <SnykCountsColumn
+          scan={scans.getCommitData(props.sha)}
+          active={props.active}
+          dimmed={props.dimmed}
+          width={props.widths.first}
+        />
+        <SnykScanColumn
+          scan={scans.getCommitData(props.sha)}
+          scanning={!props.uncommitted && scans.isScanning(props.sha)}
+          active={props.active}
+          dimmed={props.dimmed}
+          width={props.widths.second}
+        />
+      </>
+    ),
+  };
 }

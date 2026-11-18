@@ -5,57 +5,50 @@
  */
 
 import { providerCacheStore } from "./adapters/cache/cache-store";
-import { type CacheLocation, DEFAULT_PROVIDER_CACHE_ROOT } from "./adapters/cache/sha-sqlite-cache";
+import { DEFAULT_PROVIDER_CACHE_ROOT } from "./adapters/cache/sha-sqlite-cache";
 import * as dashboardLoad from "./adapters/dashboard/load";
 import { gitCli } from "./adapters/git/git-cli";
-import { githubAdapters } from "./adapters/github/adapters";
-import { jenkinsAdapters } from "./adapters/jenkins/adapters";
-import { openShiftAdapters } from "./adapters/openshift/adapters";
 import { fileSettings } from "./adapters/settings/settings-file";
-import { snykAdapters } from "./adapters/snyk/adapters";
 import { terminalSystem } from "./adapters/system/system-port";
-import type { AppPorts, ProviderAdapters } from "./core/app-ports";
+import type { AppPorts } from "./core/app-ports";
 import type { DashboardReader } from "./core/dashboard/load";
 import type { GitPort } from "./core/git/port";
+import type { ProviderSet } from "./core/provider-set";
+import { builtInProviders, type CacheOptions, type ProviderPlugin, providerSetOf } from "./providers";
 
-/** Where the caches live: the user's cache folder and the process's registry unless given. */
-export interface CacheOptions {
-  cacheRoot?: string;
-  registry?: CacheLocation["registry"];
-}
+export type { CacheOptions } from "./providers";
 
-/** The providers' HTTP clients, caches, scanner and environment tokens. */
-export function terminalProviderAdapters({ cacheRoot, registry }: CacheOptions = {}): ProviderAdapters {
+/** The Dashboard's reads: Git through the app's Git port, and each provider's stored events (through the module, for
+ * tests' spies). */
+export function terminalDashboard(git: GitPort, providers: ProviderSet): DashboardReader {
   return {
-    github: githubAdapters(cacheRoot, registry),
-    jenkins: jenkinsAdapters(cacheRoot, registry),
-    openshift: openShiftAdapters(cacheRoot, registry),
-    snyk: snykAdapters(cacheRoot, registry),
+    readEvents: (app, options) => dashboardLoad.loadAppEvents(app, options, providers, git),
   };
 }
 
-/** The Dashboard's reads: Git through the app's Git port, and the provider caches (through the module, for tests' spies). */
-export function terminalDashboard(git: GitPort, { cacheRoot, registry }: CacheOptions = {}): DashboardReader {
-  return {
-    readEvents: (app, options) => dashboardLoad.loadAppEvents(app, { cacheRoot, registry, ...options }, git),
-  };
-}
-
-/** The terminal app's adapters, every cache on one folder and one registry. */
-export function terminalPorts(caches: CacheOptions = {}): AppPorts {
-  return portsFrom({}, caches);
+/** The terminal app's adapters, every cache on one folder and one registry; the built-in providers unless given. */
+export function terminalPorts(
+  caches: CacheOptions = {},
+  plugins: readonly ProviderPlugin[] = builtInProviders,
+): AppPorts {
+  return portsFrom({}, caches, plugins);
 }
 
 /** The ports given, the terminal app's for the others. */
-export function portsFrom(given: Partial<AppPorts>, caches: CacheOptions = {}): AppPorts {
+export function portsFrom(
+  given: Partial<AppPorts>,
+  caches: CacheOptions = {},
+  plugins: readonly ProviderPlugin[] = builtInProviders,
+): AppPorts {
   const git = given.git ?? gitCli();
+  const providers = given.providers ?? providerSetOf(plugins, caches);
   return {
-    settings: given.settings ?? fileSettings(),
+    settings: given.settings ?? fileSettings(providers.definitions),
     git,
     cacheStore:
       given.cacheStore ?? providerCacheStore(caches.cacheRoot ?? DEFAULT_PROVIDER_CACHE_ROOT, caches.registry),
-    providers: given.providers ?? terminalProviderAdapters(caches),
+    providers,
     system: given.system ?? terminalSystem(),
-    dashboard: given.dashboard ?? terminalDashboard(git, caches),
+    dashboard: given.dashboard ?? terminalDashboard(git, providers),
   };
 }

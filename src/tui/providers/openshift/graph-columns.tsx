@@ -3,6 +3,8 @@ import type { GraphBadge, GraphStatusCounts } from "../../../core/provider-model
 import { useAppState } from "../../context/state";
 import type { Theme } from "../../context/theme";
 import { useT } from "../../hooks/use-t";
+import { cachedWidths, chipColumnWidths } from "../graph-column-widths";
+import type { ProviderGraphColumns } from "../module";
 import { statusColor } from "../shared/status";
 import { StatusChips, statusCountChips } from "../shared/status-chips";
 
@@ -61,3 +63,45 @@ export function OpenShiftColumnHeaders(props: Readonly<{ first: number; second: 
     </>
   );
 }
+
+/** OpenShift's columns: what runs each commit now (Live) and what its cache saw (Cache), and its namespaces' names. */
+export const OPENSHIFT_GRAPH_COLUMNS: ProviderGraphColumns = {
+  widths: cachedWidths(badges =>
+    chipColumnWidths(
+      badges,
+      badge => badge.lanes?.live,
+      badge => badge.lanes?.cache,
+    ),
+  ),
+  Headers: OpenShiftColumnHeaders,
+  Cells: props => (
+    <>
+      <OpenShiftCountsColumn
+        badge={props.badge}
+        lane="live"
+        active={props.active}
+        dimmed={props.dimmed}
+        width={props.widths.first}
+      />
+      <OpenShiftCountsColumn
+        badge={props.badge}
+        lane="cache"
+        active={props.active}
+        dimmed={props.dimmed}
+        width={props.widths.second}
+      />
+    </>
+  ),
+  // By name only: whether it is ready, rolling out or failing shows in the Live counts and the details.
+  refs: badge => badge?.namespaces?.map(marker => marker.namespace) ?? [],
+  // Namespaces that run a commit the graph does not show (older than the loaded history, or filtered out), named at
+  // the end of the graph since they have no row to carry the badge.
+  unseen: (shown, badges) => {
+    const parts: string[] = [];
+    for (const [sha, badge] of badges) {
+      if (!badge.namespaces || shown.has(sha.toLowerCase())) continue;
+      for (const marker of badge.namespaces) parts.push(`${marker.namespace} runs ${sha.slice(0, 7)}`);
+    }
+    return parts.length > 0 ? `Not in the graph: ${parts.join(", ")}` : null;
+  },
+};

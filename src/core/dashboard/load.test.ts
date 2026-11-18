@@ -1,6 +1,7 @@
 /** The Dashboard's reading without Git or caches: the branch walk and the events come from fakes. */
 import { expect, test } from "bun:test";
 import type { GitHubCacheEntry } from "../github/merge";
+import { githubEvents } from "./events";
 import { branchOwners, type DashboardGit, type DashboardSources, readAppEvents } from "./load";
 
 // main: m3 → m2 → m1; develop branched at m1: d2 → d1 → m1, merged into main at m3 (m3's second parent is d2).
@@ -51,8 +52,7 @@ test("an app's events: main's commits with its name, and a run's commit named by
       },
     ],
   } as unknown as GitHubCacheEntry;
-  const none = async () => [];
-  const sources: DashboardSources = { github: async () => [run], jenkins: none, openshift: none, snyk: none };
+  const sources: DashboardSources = [async app => githubEvents(app, [run])];
   const events = await readAppEvents("/repo", { since: 0 }, { git, sources });
   expect(events.map(event => [event.source, event.sha, event.branch])).toEqual([
     ["git", "m3", "main"],

@@ -16,11 +16,13 @@ import type { GitHubJob, GitHubWorkflowRun } from "../../../core/github/types";
 import type { JenkinsJob, JenkinsRun } from "../../../core/jenkins/types";
 import type { OpenShiftCommitData, OpenShiftResource } from "../../../core/openshift/types";
 import type { SnykScanResult } from "../../../core/snyk/types";
+import { defaultProviderModules } from "../../context/provider-modules";
 import { AppStateContext, createAppState, type ProviderStatus } from "../../context/state";
 import { createThemeState, ThemeContext } from "../../context/theme";
 import { handleDetailKey } from "../../hooks/handle-detail-keys";
 import * as clipboard from "../../hooks/use-clipboard";
 import { resetRepeatNav } from "../../keyboard/repeat";
+import { providerDetails } from "../../providers/detail-entries";
 import DetailPanel, { type DetailPanelProps } from "../detail-panel";
 import type { DetailNavRef } from "../detail-types";
 import { DetailDialog } from "./detail-dialog";
@@ -211,7 +213,7 @@ async function renderProvider(provider: Provider, compact = true, deferredJobs =
         onOpenDiff: () => {},
         onJumpToCommit: () => {},
         scrollboxRef: el => (scrollbox = el),
-        providers: {
+        providers: providerDetails(defaultProviderModules(), {
           "github-actions": {
             getCommitData: () => (hasData() ? { sha, runs: githubRuns } : null),
             fetchJobsForRun: githubFetchJobs,
@@ -248,7 +250,7 @@ async function renderProvider(provider: Provider, compact = true, deferredJobs =
               return status();
             },
           },
-        },
+        }),
       };
       return (
         <ThemeContext.Provider value={theme}>

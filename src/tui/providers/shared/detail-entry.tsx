@@ -1,8 +1,7 @@
 /**
  * The contract between the detail view and a provider. A provider hands the detail view a source (its data for a
- * commit, its status, what its rows open) and registers an entry per detail tab: what the tab renders and the legend
- * below it. The detail view then needs no provider-specific code; a new provider is a source and an entry
- * (`providers/detail-entries.ts`).
+ * commit, its status, what its rows open) and an entry per detail tab in its module: what the tab renders and the
+ * legend below it. The detail view then needs no provider-specific code.
  */
 
 import type { Component, JSX } from "solid-js";
@@ -10,7 +9,6 @@ import type { ProviderDetailView } from "../../../core/provider-model";
 import type { DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
 import type { ProviderStatus } from "../../context/state";
-import type { ProviderDetailSources } from "../detail-entries";
 import type { LegendItem } from "./detail-legend";
 import type { RowShortcut } from "./open-row";
 
@@ -50,34 +48,25 @@ export interface DetailEntryContext {
   readonly targetColor?: string;
 }
 
-/** A provider's detail tab: the source it reads, what it renders, and the legend below it. */
-export interface ProviderDetailEntry<V extends ProviderDetailView> {
-  view: V;
-  Tab: Component<{ source: ProviderDetailSources[V]; context: DetailEntryContext }>;
+/** A provider's detail tab: what it renders from its provider's source, and the legend below it. */
+export interface ProviderDetailEntry<Source> {
+  Tab: Component<{ source: Source; context: DetailEntryContext }>;
   /** The marks to explain below the tree, when the commit has something to explain. */
-  legend?: (source: ProviderDetailSources[V], sha: string) => readonly LegendItem[] | null;
+  legend?: (source: Source, sha: string) => readonly LegendItem[] | null;
 }
 
-/** An entry with its source type left out, so one table holds every provider's. */
-export interface DetailEntry {
-  view: ProviderDetailView;
-  render: (sources: Partial<ProviderDetailSources>, context: DetailEntryContext) => JSX.Element;
-  legend: (sources: Partial<ProviderDetailSources>, sha: string) => readonly LegendItem[] | null;
+/** A tab as the detail view draws it, from its provider's source. */
+export interface DetailEntry<Source> {
+  render: (source: Source, context: DetailEntryContext) => JSX.Element;
+  legend: (source: Source, sha: string) => readonly LegendItem[] | null;
 }
 
-export function detailEntry<V extends ProviderDetailView>(entry: ProviderDetailEntry<V>): DetailEntry {
-  const sourceOf = (sources: Partial<ProviderDetailSources>) =>
-    sources[entry.view] as ProviderDetailSources[V] | undefined;
+export function detailEntry<Source>(entry: ProviderDetailEntry<Source>): DetailEntry<Source> {
   return {
-    view: entry.view,
-    render: (sources, context) => {
-      const source = sourceOf(sources);
+    render: (source, context) => {
       const Tab = entry.Tab;
-      return source ? <Tab source={source} context={context} /> : null;
+      return <Tab source={source} context={context} />;
     },
-    legend: (sources, sha) => {
-      const source = sourceOf(sources);
-      return source && entry.legend ? entry.legend(source, sha) : null;
-    },
+    legend: (source, sha) => (entry.legend ? entry.legend(source, sha) : null),
   };
 }

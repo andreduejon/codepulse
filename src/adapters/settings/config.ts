@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import type { ProviderDefinition } from "../../core/provider-set";
 import {
   type CodepulseConfig,
   type ConfigInfo,
@@ -85,12 +86,20 @@ export function getKnownRepoInfos(configPath?: string): KnownRepoInfo[] {
  *
  * @param repoPath - The repository directory (used to look up the repo entry).
  * @param configPath - Override the global config path (used by tests).
+ * @param providers - The providers whose sections are read: the app's provider set.
  */
 
-export function loadConfig(repoPath: string, configPath?: string): { config: CodepulseConfig; warnings: string[] } {
+export function loadConfig(
+  repoPath: string,
+  configPath?: string,
+  providers: readonly ProviderDefinition[] = [],
+): { config: CodepulseConfig; warnings: string[] } {
   const warnings: string[] = [];
   const result = readRawConfig(configPath, warnings);
   if (!result) return { config: {}, warnings };
 
-  return { config: repoSettingsIn(result.parsed, resolve(repoPath), result.globalPath, warnings), warnings };
+  return {
+    config: repoSettingsIn(result.parsed, resolve(repoPath), result.globalPath, warnings, providers),
+    warnings,
+  };
 }

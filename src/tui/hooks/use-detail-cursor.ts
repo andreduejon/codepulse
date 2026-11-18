@@ -16,7 +16,6 @@ import type { Renderable } from "@opentui/core";
 import { createEffect, createMemo, onCleanup } from "solid-js";
 import type { Commit, CommitDetail, FileChange, GraphRow } from "../../core/git/types";
 import { isUncommittedHash } from "../../core/git/types";
-import { isProviderDetailView } from "../../core/provider-model";
 import type { DetailNavRef, DetailViewProps } from "../components/detail-types";
 import type { createAppState } from "../context/state";
 import { buildDiffTarget } from "../utils/diff-target";
@@ -90,8 +89,7 @@ export function useDetailCursor({
   onJumpToCommit,
   onOpenDiff,
 }: UseDetailCursorOptions) {
-  const tabOwnsCursor = () =>
-    activeTab() === "files" || activeTab() === "snyk-deps" || isProviderDetailView(activeTab());
+  const tabOwnsCursor = () => activeTab() === "files" || !!state.providers.set.providerOfTab(activeTab());
   // ── Build flat list of interactive items (tab-aware) ──
   // IMPORTANT: This memo must be defined AFTER fileTreeRows, stashEntries,
   // expandedStashes, getStashFileTreeRows, collapsedDirs, and stashCollapsedDirs

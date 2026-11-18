@@ -1,5 +1,6 @@
 import { For, type JSX, Show } from "solid-js";
 import type { DashboardEvent } from "../../core/dashboard/events";
+import { useProviderModules } from "../context/provider-modules";
 import { eventMark } from "../dashboard/legend";
 import { useT } from "../hooks/use-t";
 import { severityColor } from "../providers/snyk/severity";
@@ -15,6 +16,7 @@ export function DashboardEventText(
   props: Readonly<{ event: DashboardEvent; color?: string; wrap?: boolean; bold?: boolean }>,
 ) {
   const t = useT();
+  const modules = useProviderModules();
   const event = () => props.event;
   const counts = () => {
     const found = event().counts;
@@ -42,7 +44,7 @@ export function DashboardEventText(
       )}
     </Show>
   );
-  const mark = () => eventMark(event());
+  const mark = () => eventMark(event(), modules);
   const strong = (content: JSX.Element) => (props.bold ? <strong>{content}</strong> : content);
   /**
    * A scan's headline wraps between its parts, never inside one (`0 medium` stays whole): each part is its own text
@@ -92,7 +94,7 @@ export function DashboardEventText(
         fg={props.color ?? t().foreground}
         flexShrink={props.wrap ? 0 : undefined}
       >
-        <Show when={eventMark(event())}>
+        <Show when={eventMark(event(), modules)}>
           {mark => <span style={{ fg: mark().color(t()) }}>{`${mark().icon} `}</span>}
         </Show>
         {strong(body())}

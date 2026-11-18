@@ -18,6 +18,7 @@ import {
   relativeAgeLabel,
   startViewItem,
 } from "../src/tui/hooks/use-menu-items";
+import { BUILT_IN_PROVIDERS } from "./test-helpers";
 
 describe("buildDashboardItems, turned off", () => {
   it("is on by default; turned off it shows only Enabled, like a provider", () => {
@@ -61,7 +62,12 @@ describe("buildDashboardItems", () => {
 describe("startViewItem", () => {
   it("offers the views that are turned on, and saves the chosen one", () => {
     const saved: unknown[] = [];
-    const start = startViewItem(["dashboard", "git", "jenkins"], "jenkins", view => saved.push(view));
+    const start = startViewItem(
+      ["dashboard", "git", "jenkins"],
+      "jenkins",
+      view => saved.push(view),
+      BUILT_IN_PROVIDERS.displayName,
+    );
     if (start.kind !== "cycle") throw new Error("expected a cycle item");
     expect(start.label).toBe("Start in");
     expect(start.options).toEqual(["Dashboard", "Git", "Jenkins"]);
@@ -71,7 +77,7 @@ describe("startViewItem", () => {
   });
 
   it("shows Git when the chosen view's provider is turned off, as codepulse starts there", () => {
-    const start = startViewItem(["dashboard", "git"], "snyk", () => {});
+    const start = startViewItem(["dashboard", "git"], "snyk", () => {}, BUILT_IN_PROVIDERS.displayName);
     if (start.kind !== "cycle") throw new Error("expected a cycle item");
     expect(start.get()).toBe("Git");
   });
@@ -81,7 +87,7 @@ describe("buildGitHubProviderItems", () => {
   const baseCfg: GitHubMenuConfig = {
     enabled: true,
     tokenEnvVar: "GITHUB_TOKEN",
-    trustedEnterpriseHost: null,
+    trustedEnterpriseHost: undefined,
     fetchDepth: 20,
     cacheLimit: 20,
     autoRefreshSeconds: 120,
@@ -455,7 +461,7 @@ describe("provider menu consistency", () => {
   const github: GitHubMenuConfig = {
     enabled: true,
     tokenEnvVar: "GITHUB_TOKEN",
-    trustedEnterpriseHost: null,
+    trustedEnterpriseHost: undefined,
     fetchDepth: 20,
     cacheLimit: 20,
     autoRefreshSeconds: 120,

@@ -17,9 +17,11 @@ import { buildGraph, getMaxGraphColumns } from "../../src/core/git/graph";
 import type { Commit } from "../../src/core/git/types";
 import { startupProps } from "../../src/main";
 import { terminalPorts } from "../../src/ports";
+import { builtInProviders, modulesOf, providerSetOf } from "../../src/providers";
 import App from "../../src/tui/app/app";
 import GraphView from "../../src/tui/components/graph";
 import { setDefaultPorts } from "../../src/tui/context/ports";
+import { setDefaultProviderModules } from "../../src/tui/context/provider-modules";
 import { AppStateContext, createAppState } from "../../src/tui/context/state";
 import { createThemeState, ThemeContext } from "../../src/tui/context/theme";
 import JobLogDialog from "../../src/tui/providers/shared/job-log-dialog";
@@ -28,6 +30,7 @@ import { newestSubject } from "./repo";
 // The views a scenario mounts on their own (the graph, the log) reach the outside through the app's ports, as in the
 // app: the terminal's, in this run's home.
 setDefaultPorts(terminalPorts());
+setDefaultProviderModules(modulesOf(builtInProviders));
 
 export interface BenchRepos {
   big: string;
@@ -135,8 +138,9 @@ async function functions() {
 
   const cacheRoot = mkdtempSync(join(tmpdir(), "codepulse-bench-cache-"));
   const since = Date.now() - 7 * 86_400_000;
-  report("Dashboard read, 7 days", await timed(3, () => loadAppEvents(repo, { since, cacheRoot })), "ms");
-  report("Dashboard read, 7 days: events", (await loadAppEvents(repo, { since, cacheRoot })).length, "count");
+  const providers = providerSetOf(builtInProviders, { cacheRoot });
+  report("Dashboard read, 7 days", await timed(3, () => loadAppEvents(repo, { since }, providers)), "ms");
+  report("Dashboard read, 7 days: events", (await loadAppEvents(repo, { since }, providers)).length, "count");
 
   type Entry = { sha: string; runs: Record<string, unknown>[] };
   const cache = new ShaSqliteCache<Entry>({

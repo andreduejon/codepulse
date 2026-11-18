@@ -54,6 +54,8 @@ export interface SnykAdapters {
   scan: SnykServicePorts["scan"];
   readCache: SnykServicePorts["readCache"];
   hasToken: (envVar: string) => boolean;
+  /** Every scan its cache holds for an app, for the Dashboard. */
+  storedScans: (app: string) => Promise<SnykScanResult[]>;
 }
 
 export interface SnykServicePorts {

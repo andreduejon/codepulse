@@ -2,12 +2,11 @@ import { MouseButton, type ScrollBoxRenderable } from "@opentui/core";
 import { batch, createSignal, For, onCleanup, Show } from "solid-js";
 import type { DiffTarget } from "../../core/git/types";
 import { isUncommittedHash } from "../../core/git/types";
-import { isProviderDetailView, providerDetailTab } from "../../core/provider-model";
 import type { TabNotice } from "../app/app-tab-notice";
 import type { DetailTab } from "../context/state";
 import { useAppState } from "../context/state";
 import { useT } from "../hooks/use-t";
-import { detailEntryFor, type ProviderDetailSources } from "../providers/detail-entries";
+import type { ProviderDetails } from "../providers/detail-entries";
 import { DetailLegend } from "../providers/shared/detail-legend";
 import { scheduleScrollIntoView, scrollElementIntoView } from "../utils/scroll";
 import { getAvailableTabs } from "../utils/tab-utils";
@@ -32,7 +31,7 @@ export interface DetailPanelProps {
   onJumpToCommit: (hash: string, from: "child" | "parent") => void;
   onOpenDiff: (target: DiffTarget) => void;
   /** What each provider hands its detail tabs (see `providers/detail-entries.ts`). */
-  providers?: Partial<ProviderDetailSources>;
+  providers?: ProviderDetails;
   /** Kept by the app, so the side panel and the compact dialog show the same open folders, runs and namespaces. */
   memory?: DetailMemory;
   /** Notice pinned under the tab content ("works, but incomplete"); see `tabNoticeFor`. */
@@ -65,10 +64,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
   });
 
   /** The active provider's source, if it has one (not in the Git view). */
-  const providerSource = () => {
-    const view = state.activeProviderView();
-    return isProviderDetailView(view) ? props.providers?.[view] : undefined;
-  };
+  const providerSource = () => props.providers?.source(state.activeProviderView());
 
   const tabs = (): { id: DetailTab; label: string; disabled: boolean }[] => {
     const commit = state.selectedCommit();
@@ -78,10 +74,11 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
     const cd = state.commitDetail();
     const stashMap = state.stashByParent();
     const providerView = state.activeProviderView();
-    const providerTab = providerDetailTab(providerView);
+    const providerTab = state.providers.set.detailTab(providerView);
     const isProviderMode = providerTab != null;
     const available = new Set(
       getAvailableTabs({
+        providers: state.providers.set,
         commit,
         uncommittedDetail: ud,
         commitDetail: cd,
@@ -130,7 +127,12 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
               disabled: cd ? !available.has("files") : false,
             },
           ]),
-      ...(available.has("snyk-deps") ? [{ id: "snyk-deps" as const, label: "Dependencies", disabled: false }] : []),
+      // The tabs its provider adds after its own (Snyk's Dependencies), when the commit has something for them.
+      ...state.providers.set
+        .tabsOf(providerView)
+        .slice(1)
+        .filter(added => available.has(added.id))
+        .map(added => ({ ...added, disabled: false })),
       ...(available.has("stashes")
         ? [
             {
@@ -151,7 +153,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
   const legend = () => {
     const hash = state.selectedCommit()?.hash ?? "";
     if (isUncommittedHash(hash)) return null;
-    const items = detailEntryFor(state.detailActiveTab())?.legend(props.providers ?? {}, hash);
+    const items = props.providers?.legend(state.detailActiveTab(), hash);
     return items ? { items } : null;
   };
 

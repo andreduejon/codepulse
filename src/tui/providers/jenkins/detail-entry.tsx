@@ -22,8 +22,7 @@ export interface JenkinsDetailSource extends ProviderDetailSource<JenkinsCommitD
   onOpenTestFailure?: (run: JenkinsRun, failed: JenkinsFailedTest[], index: number) => void;
 }
 
-export const jenkinsDetail = detailEntry({
-  view: "jenkins",
+export const jenkinsDetail = detailEntry<JenkinsDetailSource>({
   Tab: props => (
     <JenkinsDetailTab
       mouseEnabled={props.context.mouseEnabled}

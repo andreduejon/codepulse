@@ -9,6 +9,8 @@ import type { Commit } from "../../core/git/types";
 import type { GraphBadge, GraphStatusCounts } from "../../core/provider-model";
 import { AppStateContext, createAppState } from "../context/state";
 import { createThemeState, ThemeContext, themes } from "../context/theme";
+import { GraphColumnsContext } from "../providers/graph-columns-context";
+import { OPENSHIFT_GRAPH_COLUMNS } from "../providers/openshift/graph-columns";
 import GraphView from "./graph";
 
 test("graph wheel preserves selection; left click selects; modal blocks mouse", async () => {
@@ -294,7 +296,13 @@ test("wide provider chips never squeeze the commit subject out at narrow widths"
           return createComponent(AppStateContext.Provider, {
             value: app,
             get children() {
-              return createComponent(GraphView, {});
+              // OpenShift's own columns, as the app's provider host gives them.
+              return createComponent(GraphColumnsContext.Provider, {
+                value: view => (view === "openshift" ? OPENSHIFT_GRAPH_COLUMNS : null),
+                get children() {
+                  return createComponent(GraphView, {});
+                },
+              });
             },
           });
         },
@@ -388,7 +396,13 @@ async function renderRefRow(
           return createComponent(AppStateContext.Provider, {
             value: app,
             get children() {
-              return createComponent(GraphView, {});
+              // OpenShift's own columns, as the app's provider host gives them.
+              return createComponent(GraphColumnsContext.Provider, {
+                value: view => (view === "openshift" ? OPENSHIFT_GRAPH_COLUMNS : null),
+                get children() {
+                  return createComponent(GraphView, {});
+                },
+              });
             },
           });
         },

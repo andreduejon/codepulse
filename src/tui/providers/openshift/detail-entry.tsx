@@ -23,8 +23,7 @@ export interface OpenShiftDetailSource extends ProviderDetailSource<OpenShiftCom
 export const liveListFrozen = (source: OpenShiftDetailSource) =>
   source.status?.kind === "error" && (source.isFrozen?.() ?? false);
 
-export const openshiftDetail = detailEntry({
-  view: "openshift",
+export const openshiftDetail = detailEntry<OpenShiftDetailSource>({
   Tab: props => (
     <OpenShiftDetailTab
       mouseEnabled={props.context.mouseEnabled}
