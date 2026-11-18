@@ -10,15 +10,18 @@ import { join } from "node:path";
 import { CliRenderer } from "@opentui/core";
 import { testRender } from "@opentui/solid";
 import { createEffect, onCleanup } from "solid-js";
-import { ProviderCacheRegistry, ShaSqliteCache } from "./adapters/cache/sha-sqlite-cache";
+import { onProviderCacheWrite, ProviderCacheRegistry, ShaSqliteCache } from "./adapters/cache/sha-sqlite-cache";
 import { fileSettings } from "./adapters/settings/settings-file";
 import { buildGraph } from "./core/git/graph";
 import type { Commit } from "./core/git/types";
 import type { ProviderDefinition } from "./core/provider-set";
 import { definedFields, type SettingsSection } from "./core/settings/provider-section";
+import { startupProps } from "./main";
 import { terminalPorts } from "./ports";
 import { builtInProviders, modulesOf, providerPlugin } from "./providers";
 import { AppContent } from "./tui/app/app-content";
+import { defaultPorts, setDefaultPorts } from "./tui/context/ports";
+import { defaultProviderModules, setDefaultProviderModules } from "./tui/context/provider-modules";
 import type { AppActions, AppState } from "./tui/context/state";
 import { createThemeState } from "./tui/context/theme";
 import * as dataLoader from "./tui/hooks/use-data-loader";
@@ -69,7 +72,7 @@ const fakeProvider: ProviderDefinition<FakeAdapters, FakeSettings> = {
 };
 
 /** What the module did, for the test to see. */
-const calls = { refreshed: 0, stopped: 0 };
+const calls = { refreshed: 0, invalidated: 0, stopped: 0 };
 
 const fakeModule = providerModule({
   definition: fakeProvider,
@@ -91,7 +94,9 @@ const fakeModule = providerModule({
     return {
       instance: null,
       getCommitData: () => null,
-      invalidate: () => {},
+      invalidate: () => {
+        calls.invalidated++;
+      },
       refresh: async () => {
         calls.refreshed++;
       },
@@ -251,10 +256,14 @@ test("a provider written only in a test joins every part of the app through the 
 
   // Its stored checks are Dashboard events, on the app's own cache; writing them told only the app's registry.
   const written: string[] = [];
+  const processWide: string[] = [];
   const stop = app.ports.cacheStore.onWrite(repo => written.push(repo));
+  const stopProcess = onProviderCacheWrite(repo => processWide.push(repo));
   await app.ports.providers.adapters(fakeProvider).checks.write(app.repo, { sha: SHA, passedAt: Date.now() - 60_000 });
   stop();
+  stopProcess();
   expect(written).toEqual([app.repo]);
+  expect(processWide).toEqual([]);
   const groups = app.ports.cacheStore.summary().groups;
   expect(groups.map(group => [group.provider, group.snapshotCount])).toEqual([["fake-ci", 1]]);
   actions.setActiveProviderView("dashboard");
@@ -268,7 +277,26 @@ test("a provider written only in a test joins every part of the app through the 
   await app.settle(() => frame().includes("fake check on c0ffee0 passed"));
   expect(frame()).toContain("fake check on c0ffee0 passed");
 
-  // Menu → Providers has its section; turning it off there saves it and takes it out of the view cycle.
+  // The cache screen lists the app by what its providers stored, this one's checks included; evicting it starts every
+  // provider over, this one too.
+  await app.command("cache");
+  await app.settle(() => frame().includes("Cache data"));
+  expect(frame()).toMatch(/repo\s.*KB/);
+  const invalidated = calls.invalidated;
+  await app.press("j");
+  await app.press("e");
+  await app.settle(() => frame().includes("Deletes its cached data"));
+  await app.press("RETURN");
+  await app.settle(() => calls.invalidated > invalidated);
+  expect(calls.invalidated).toBe(invalidated + 1);
+  expect(app.ports.cacheStore.summary().groups).toEqual([]);
+  await app.press("ESCAPE");
+  await app.settle(() => !frame().includes("Cache data"));
+
+  // Menu → Providers has its section; turning it off there, while its view is open, saves it, takes it out of the
+  // view cycle and goes back to Git.
+  actions.setActiveProviderView("fake-ci");
+  await app.setup.flush();
   await app.press("m");
   await app.setup.mockMouse.click(...point(frame(), "Providers"));
   await app.setup.flush();
@@ -283,6 +311,7 @@ test("a provider written only in a test joins every part of the app through the 
   await app.press("RETURN");
   await app.settle(() => !state.providers.getEnabledViews().includes("fake-ci"));
   expect(state.providers.getEnabledViews()).toEqual(["dashboard", "git"]);
+  expect(state.activeProviderView()).toBe("git");
   const saved = JSON.parse(await readFile(app.configPath, "utf8"));
   expect(saved.repos[app.repo].providers.fake).toMatchObject({ enabled: false, label: "nightly" });
   // Read again, its section round-trips, its unknown field still in the file but not in its settings.
@@ -329,4 +358,45 @@ test("the root's list takes a module only with the adapters it runs on", () => {
   // @ts-expect-error GitHub's module runs on GitHub's adapters (API, cache, token), not on an empty object.
   const wrong = providerPlugin(githubModule, () => ({}));
   expect(wrong.definition.id).toBe("github-actions");
+});
+
+test("startup builds the app from the same list: its module, its settings and its adapters come along", async () => {
+  const root = await mkdtemp(join(tmpdir(), "codepulse-fake-startup-"));
+  cleanup.push(() => rm(root, { recursive: true, force: true }));
+  const repo = join(root, "not-a-repository");
+  const configPath = join(root, "config.json");
+  await writeFile(configPath, JSON.stringify({ repos: { [repo]: { providers: { fake: { enabled: true } } } } }));
+  const registry = new ProviderCacheRegistry();
+  cleanup.push(() => registry.close());
+  const plugins = [...builtInProviders, fakePlugin];
+  const settings = fileSettings(
+    plugins.map(plugin => plugin.definition),
+    configPath,
+  );
+  const ports = terminalPorts({ cacheRoot: join(root, "cache"), registry }, plugins);
+  // Startup registers its ports and modules for the whole process: the other tests get theirs back.
+  const before = { ports: defaultPorts(), modules: defaultProviderModules() };
+  cleanup.push(() => {
+    setDefaultPorts(before.ports);
+    setDefaultProviderModules(before.modules);
+  });
+  const props = await startupProps(["bun", "codepulse", repo], { ...ports, settings }, plugins);
+  expect(props.providerModules?.map(module => module.definition.id)).toEqual([
+    "github-actions",
+    "jenkins",
+    "openshift",
+    "snyk",
+    "fake-ci",
+  ]);
+  expect(props.providers?.views()).toEqual([
+    "dashboard",
+    "git",
+    "github-actions",
+    "jenkins",
+    "openshift",
+    "snyk",
+    "fake-ci",
+  ]);
+  expect(props.initialProviderSettings?.fake).toEqual({ enabled: true });
+  expect(props.providers?.adapters(fakeProvider).checks).toBeInstanceOf(ShaSqliteCache);
 });
