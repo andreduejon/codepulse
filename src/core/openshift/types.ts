@@ -112,14 +112,6 @@ export interface OpenShiftCommitData {
   liveFetched: boolean;
 }
 
-/** Terminal Builds are persisted. Everything else stays in the live lane. */
-export function isCachedOpenShiftResource(resource: OpenShiftResource): boolean {
-  return (
-    resource.kind === "Build" &&
-    (resource.status === "pass" || resource.status === "fail" || resource.status === "cancelled")
-  );
-}
-
 export interface OpenShiftInventoryResult {
   data: Map<string, OpenShiftCommitData>;
   error: string | null;

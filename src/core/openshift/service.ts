@@ -20,6 +20,7 @@ import {
   commitDataFromCacheEntry,
   emptyGraphBadge,
   keepFailedLiveSlices,
+  markUnlistedBuilds,
   mergeLiveIntoCommit,
   selectOpenShiftCandidateSHAs,
 } from "./commit-data";
@@ -226,6 +227,9 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
    * Whether the commit still has what the warning is about. Known only once the live list loaded: before it, every
    * warning counts as present.
    */
+  /** Whether only the cache has the event: its namespace's last list didn't (or none was read yet). */
+  const warningIsCached = (warning: OpenShiftWarning) => !(listedIds.get(warning.namespace)?.has(warning.id) ?? false);
+
   function warningIsPresent(sha: string, warning: OpenShiftWarning): boolean {
     if (!live.listed) return true;
     return isAboutPresentResource(warning, commits.get(sha.toLowerCase()), live.listed.controllers);
@@ -276,7 +280,11 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
   function publish(): void {
     attachWarnings();
     ports.onDataChange();
-    const badges = buildOpenShiftGraphBadges(commits, warningIsPresent);
+    // The Events tab's `(cached)`: the event or the resource it is about is gone from the cluster.
+    const badges = buildOpenShiftGraphBadges(
+      commits,
+      (sha, warning) => !warningIsPresent(sha, warning) || warningIsCached(warning),
+    );
     // What each namespace runs comes from the whole live list, so a deployed commit below the window is marked too.
     const markers = live.listed
       ? buildOpenShiftNamespaceMarkers(live.listed.resources, ports.config().namespaces)
@@ -441,6 +449,18 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
       for (const sha of candidates) {
         const commit = seeds.get(sha);
         if (commit) commits.set(sha, mergeLiveIntoCommit(commit, commits.get(sha), sha));
+      }
+      // The commits it asked about: a build it no longer lists was pruned while the app ran.
+      const failedNamespaces = new Set(
+        result.failures.filter(failure => failure.kind === "Build").map(failure => failure.namespace),
+      );
+      for (const sha of window.map(entry => entry.toLowerCase())) {
+        const commit = commits.get(sha);
+        if (!commit) continue;
+        const listed = new Set(
+          (seeds.get(sha)?.namespaces ?? []).flatMap(ns => ns.builds.filter(b => !b.cacheOnly).map(b => b.id)),
+        );
+        commits.set(sha, markUnlistedBuilds(commit, listed, failedNamespaces));
       }
       // The live list may have landed first: commits this build list adds get their live resources now, not on the
       // next watch event or selection.
@@ -673,7 +693,7 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
     /** Whether the commit still has what the warning is about (the Events tab's sections, the graph's count). */
     warningIsPresent,
     /** Whether only the cache has this warning: its namespace's last list didn't (or none was read yet). */
-    warningIsCached: (warning: OpenShiftWarning) => !(listedIds.get(warning.namespace)?.has(warning.id) ?? false),
+    warningIsCached,
     /** Every warning kept about a resource, newest first: the resource dialog shows the ones OpenShift deleted. */
     warningsAboutResource: (resource: OpenShiftResource): OpenShiftWarning[] =>
       mergeWarnings(

@@ -48,10 +48,14 @@ export interface GraphBadge {
   unknownCount?: number;
   /** Total matched resources. Used by runtime providers. */
   resourceCount?: number;
-  /** Named status-count lanes (e.g. OpenShift `live` / `cache`). */
+  /** Named status-count lanes (OpenShift `live`: what the cluster lists now). */
   lanes?: Record<string, GraphStatusCounts>;
-  /** OpenShift: how many warnings Kubernetes gave about its resources (a yellow chip after the Live counts). */
+  /** OpenShift: its resources only the cache has, the cluster no longer lists them (a muted chip after the counts). */
+  cachedCount?: number;
+  /** OpenShift: the warnings the cluster still reports about its resources (a yellow chip). */
   warningCount?: number;
+  /** OpenShift: its warnings only the cache has: OpenShift deleted the event or its resource (a muted chip). */
+  cachedWarningCount?: number;
   /** OpenShift: the namespaces whose workloads run this commit now, shown with the refs in the graph. */
   namespaces?: NamespaceMarker[];
   /** Severity counts used by scan/quality providers. */

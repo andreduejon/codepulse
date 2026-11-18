@@ -1045,24 +1045,28 @@ export function openShiftWorld(state: DemoState, phase: Phase): OpenShiftWorld {
       completionTimestamp: created(401),
     },
   });
-  add("shop-dev", "Build", {
-    kind: "Build",
-    metadata: {
-      name: "shop-api-41",
-      namespace: "shop-dev",
-      uid: nextUid(),
-      labels: { [COMMIT_KEY]: s.payments },
-      creationTimestamp: created(400),
-    },
-    // A full ref, as a BuildConfig may name it.
-    spec: { source: source("refs/heads/main"), output: { to: { kind: "ImageStreamTag", name: "shop-api:41" } } },
-    status: {
-      phase: "Failed",
-      reason: "DockerBuildFailed",
-      message: "Docker build strategy has failed.",
-      completionTimestamp: created(396),
-    },
-  });
+  // By the next phase OpenShift has pruned 41: only codepulse's cache has it. Its uid is still drawn, so the objects
+  // after it keep theirs.
+  const uid41 = nextUid();
+  if (!failed)
+    add("shop-dev", "Build", {
+      kind: "Build",
+      metadata: {
+        name: "shop-api-41",
+        namespace: "shop-dev",
+        uid: uid41,
+        labels: { [COMMIT_KEY]: s.payments },
+        creationTimestamp: created(400),
+      },
+      // A full ref, as a BuildConfig may name it.
+      spec: { source: source("refs/heads/main"), output: { to: { kind: "ImageStreamTag", name: "shop-api:41" } } },
+      status: {
+        phase: "Failed",
+        reason: "DockerBuildFailed",
+        message: "Docker build strategy has failed.",
+        completionTimestamp: created(396),
+      },
+    });
   // 41 failed, its re-run 42 made the image shop-test runs.
   completeBuild("shop-api-42", s.payments, 380, "main");
   completeBuild("shop-api-43", s.readme, 50, "main");

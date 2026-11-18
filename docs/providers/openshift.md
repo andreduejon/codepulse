@@ -9,14 +9,17 @@ diagnostic conventions.
 
 ## Graph status
 
-The graph has two lanes:
+The graph has two columns, named as the detail tabs:
 
-- **Live** — Deployments, DeploymentConfigs, Pods, ImageStreamTags, and running
-  Builds currently observed from OpenShift.
-- **Cache** — terminal Builds persisted locally by commit.
+- **Resources** — what the cluster has of the commit now: Deployments,
+  DeploymentConfigs, Pods, ImageStreamTags and Builds (running or finished, as long as
+  OpenShift lists them), as fail, running, neutral (cancelled, unknown) and pass counts.
+  A muted count follows: Builds only the cache has (see Cached).
+- **Events** — the warnings the cluster still reports about the commit, in the warning
+  colour, then a muted count of the ones only the cache has (see Warnings).
 
-Both lanes show fail, running, pass, and unknown counts. Empty lanes show
-`·······`. In details, a terminal Build the cluster no longer lists (pruned, or
+A muted count is muted text on grey; the neutral chip has bright text. Empty columns
+show `·······`. In details, a finished Build the cluster no longer lists (pruned, or
 older than the fetch size) shows from the cache with `(cached)` after its name. Builds and
 ImageStreamTags poll while the OpenShift view or the Dashboard is shown. Deployments,
 DeploymentConfigs, and Pods are listed and watched until you leave both.
@@ -26,7 +29,7 @@ DeploymentConfigs, and Pods are listed and watched until you leave both.
 Next to a commit's refs, a badge in the OpenShift colour names each namespace
 that runs that commit now: its Deployments or DeploymentConfigs carry the
 commit's SHA label. The badge only names the namespace: whether it is ready,
-rolling out or failing shows in the Live counts and the details. A
+rolling out or failing shows in the Resources counts and the details. A
 Deployment scaled to 0 runs nothing, so it marks no namespace; details still
 list it with `0 replicas`. Badges
 come from the live list of the whole namespace, so a commit below the fetch size
@@ -199,8 +202,8 @@ own status.
   kept.
 - Warnings are saved in the commit's snapshot (see Cache), so they outlast the cluster's
   copy and are evicted with the snapshot by the cache limit.
-- The graph counts a commit's warnings in a yellow chip after its **Live** counts: how many
-  warnings, not how often each happened.
+- The graph's **Events** column counts a commit's warnings, not how often each happened:
+  yellow for those the cluster still reports, muted for those only the cache has.
 - In **Resources**, a resource OpenShift warned about shows `!` before its status mark.
 - The **Events** tab starts with **Reload commit** and the count (`total events`), then a
   tree: namespace, each reason newest first (in the warning colour), then the resources it
@@ -232,8 +235,10 @@ muted, in **Resources** and **Events** alike.
 - Enter on a cached pod opens its dialog on its events only: there is no log, object or
   console page for it any more. A pruned Build opens in full: its log and object are
   cached.
-- The graph's yellow count leaves out warnings about resources the cluster no longer has.
-- The graph's **Cache** column is another thing: every finished Build, still listed or not.
+- In the graph, what only the cache has is the muted count at the end of each column.
+- A finished Build OpenShift prunes while codepulse runs turns `(cached)` with the next build
+  list; one of a commit below the fetch size is never asked about, so it is always shown
+  from the cache.
 
 ## Required read permissions
 

@@ -94,17 +94,17 @@
 
 === shot 3: openshift (200x45) ===
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-  Graph                         Commit   Description                                                        Live           Cache                    Resources            Events             Info
+  Graph                         Commit   Description                                                        Resources      Events                   Resources            Events             Info
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-    █                           bf08113   dev   origin/dev   shop-dev  feat(api): export request metrics     2   1          1                 Reload commit                                       live
+    █                           bf08113   dev   origin/dev   shop-dev  feat(api): export request metrics     2   2         ·······            Reload commit                                       live
     │                                                                                                                                         total resources                                        4
     █                           e6209dd  feat(api): add a health endpoint                                   ·······        ·······            └─ ▾ shop-dev                                          4
     │                                                                                                                                            ├─ Deployments
-    █                           3447db9   v0.42.0   main   origin/…   shop-pr…   +2  docs: rewrite the RE…   4              1                    │  └─ shop-api                                      ●
+    █                           3447db9   v0.42.0   main   origin/…   shop-pr…   +2  docs: rewrite the RE…   5             ·······               │  └─ shop-api                                      ●
     │                                                                                                                                            ├─ Pods
     │ █                         6adc455   feature/payments-r…   origin/feature/pay…  wip(payments): retry…  ·······        ·······               │  ├─ shop-api-7d9f8-r2m4p                          ✓
     │ │                                                                                                                                          │  └─ shop-api-7d9f8-pull9                          ●
-    █─╯                         64ddc8a   shop-test  feat(payments): retry failed payments with exponenti…   4   1   5      1   1   1            └─ Builds
+    █─╯                         64ddc8a   shop-test  feat(payments): retry failed payments with exponenti…   5   1   2      5                    └─ Builds
     │                                                                                                                                               └─ shop-api-44                                   ✓
     █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······
     │
@@ -141,17 +141,17 @@
 
 === shot 4: openshift-events (200x45) ===
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-  Graph                         Commit   Description                                                        Live           Cache                    Resources            Events             Info
+  Graph                         Commit   Description                                                        Resources      Events                   Resources            Events             Info
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-    █                           bf08113   dev   origin/dev   shop-dev  feat(api): export request metrics     2   1          1                 Reload commit                                       live
+    █                           bf08113   dev   origin/dev   shop-dev  feat(api): export request metrics     2   2         ·······            Reload commit                                       live
     │                                                                                                                                         total events                                           5
     █                           e6209dd  feat(api): add a health endpoint                                   ·······        ·······            ├─ ▾ shop-dev                                          1
     │                                                                                                                                         │  └─ ▾ BuildFailed                                    1
-    █                           3447db9   v0.42.0   main   origin/…   shop-pr…   +2  docs: rewrite the RE…   4              1                 │     └─ shop-api-41                              2h ago
+    █                           3447db9   v0.42.0   main   origin/…   shop-pr…   +2  docs: rewrite the RE…   5             ·······            │     └─ shop-api-41                              2h ago
     │                                                                                                                                         └─ ▾ shop-test                                         4
     │ █                         6adc455   feature/payments-r…   origin/feature/pay…  wip(payments): retry…  ·······        ·······               ├─ ▾ BackOff                                        1
     │ │                                                                                                                                          │  └─ shop-api-7d9f8-x2k4q                   just now
-    █─╯                         64ddc8a   shop-test  feat(payments): retry failed payments with exponentia   4   1   5      1   1   1            ├─ ▾ Unhealthy                                      1
+    █─╯                         64ddc8a   shop-test  feat(payments): retry failed payments with exponentia   5   1   2      5                    ├─ ▾ Unhealthy                                      1
     │                                                                                                                                            │  └─ shop-api-7d9f8-x2k4q                     1m ago
     █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······               ├─ ▾ OOMKilling                                     1
     │                                                                                                                                            │  └─ shop-api-7d9f8-oom7k                    18m ago

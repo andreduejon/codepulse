@@ -264,12 +264,36 @@ test("a warning about a resource the live list no longer has is not present; the
       .sort(),
   ).toEqual(["event-1", "event-pod"]);
   expect(h.service.warningIsPresent(SHA, podWarning)).toBe(true);
-  expect(h.app.badges.get(SHA)?.warningCount).toBe(2);
+  expect(h.app.badges.get(SHA)).toMatchObject({ warningCount: 2 });
+  expect(h.app.badges.get(SHA)?.cachedWarningCount).toBeUndefined();
   // The pod was replaced by another one with the same commit.
   listed = liveList([pod("app-1-fghij", "pod-2")]);
   await liveOnce();
   expect(h.service.warningIsPresent(SHA, podWarning)).toBe(false);
   expect(h.service.warningIsPresent(SHA, buildWarning())).toBe(true);
   expect(h.service.getCommitData(SHA)?.warnings).toHaveLength(2);
-  expect(h.app.badges.get(SHA)?.warningCount).toBe(1);
+  expect(h.app.badges.get(SHA)).toMatchObject({ warningCount: 1, cachedWarningCount: 1 });
+});
+
+test("a finished build the cluster prunes while the app runs is shown from the cache from the next list on", async () => {
+  const h = harness();
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  expect(h.service.getCommitData(SHA)?.namespaces[0]?.builds[0]?.cacheOnly).toBeUndefined();
+  // A list that failed for the namespace changes nothing.
+  const answer = (failed: boolean) => ({
+    data: new Map(),
+    error: failed ? OPENSHIFT_BANNER.inventoryPartial : null,
+    failures: failed ? [{ namespace: "ns", kind: "Build", path: "/builds", error: "500" }] : [],
+    successfulRequests: 1,
+  });
+  Object.assign(h.api, { fetchOpenShiftInventory: mock(async () => answer(true)) });
+  await h.service.refresh();
+  expect(h.service.getCommitData(SHA)?.namespaces[0]?.builds[0]?.cacheOnly).toBeUndefined();
+  // OpenShift pruned it: the list answered without it.
+  Object.assign(h.api, { fetchOpenShiftInventory: mock(async () => answer(false)) });
+  await h.service.refresh();
+  expect(h.service.getCommitData(SHA)?.namespaces[0]?.builds.map(b => [b.name, b.cacheOnly])).toEqual([
+    ["app-1", true],
+  ]);
+  expect(h.app.badges.get(SHA)?.cachedCount).toBe(1);
 });

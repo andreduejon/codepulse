@@ -1,40 +1,40 @@
 === shot 1: events (200x45) ===
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-  Graph                         Commit   Description                                                        Live           Cache                    Resources            Events             Info
+  Graph                         Commit   Description                                                      Resources        Events                   Resources            Events             Info
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-    █                           bf08113   dev   origin/dev   shop-dev  feat(api): export request metrics     2   1   2      1                 Reload commit                                       live
+    █                           bf08113   dev   origin/dev   shop-dev  feat(api): export request metrics   2   2            2                 Reload commit                                       live
     │                                                                                                                                         total events                                           5
-    █                           e6209dd  feat(api): add a health endpoint                                   ·······        ·······            ├─ ▾ shop-dev                                          1
+    █                           e6209dd  feat(api): add a health endpoint                                 ·······          ·······            ├─ ▾ shop-dev                                          1
     │                                                                                                                                         │  └─ ▾ BuildFailed                                    1
-    █                           3447db9   v0.42.0   main   origin/…   shop-pr…   +2  docs: rewrite the RE…   4              1                 │     └─ shop-api-41 (cached)                     2h ago
+    █                           3447db9   v0.42.0   main   shop-prod   +3  docs: rewrite the README for…   5               ·······            │     └─ shop-api-41 (cached)                     2h ago
     │                                                                                                                                         └─ ▾ shop-test                                         4
-    │ █                         6adc455   feature/payments-r…   origin/feature/pay…  wip(payments): retry…  ·······        ·······               ├─ ▾ BackOff                                        1
+    │ █                         6adc455   feature/payments-…   origin/feature/pa…  wip(payments): retry…  ·······          ·······               ├─ ▾ BackOff                                        1
     │ │                                                                                                                                          │  └─ shop-api-7d9f8-x2k4q                   just now
-    █─╯                         64ddc8a   shop-test  feat(payments): retry failed payments with exponentia   3   2   4      1   1   1            ├─ ▾ Unhealthy                                      1
+    █─╯                         64ddc8a   shop-test  feat(payments): retry failed payments with exponent   3   1   3   1    3   2                ├─ ▾ Unhealthy                                      1
     │                                                                                                                                            │  └─ shop-api-7d9f8-x2k4q                     1m ago
-    █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······               ├─ ▾ OOMKilling                                     1
+    █                           917f7b3  perf(cart): cache price lookups                                  ·······          ·······               ├─ ▾ OOMKilling                                     1
     │                                                                                                                                            │  └─ shop-api-7d9f8-oom7k (cached)           18m ago
-    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······               └─ ▾ ProgressDeadlineExceeded                       1
+    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                    ·······          ·······               └─ ▾ ProgressDeadlineExceeded                       1
     │ │                                                                                                                                             └─ shop-api                                40m ago
-    │ █                         0166f71  feat(i18n): add French                                             ·······        ·······
+    │ █                         0166f71  feat(i18n): add French                                           ·······          ·······
     │ │
-    │ █─╮                       5245790  Merge branch 'main' into feature/i18n                              ·······        ·······
+    │ █─╮                       5245790  Merge branch 'main' into feature/i18n                            ·······          ·······
     │ │ │
-    │ █ │                       484821c  feat(i18n): add German                                             ·······        ·······
+    │ █ │                       484821c  feat(i18n): add German                                           ·······          ·······
     │ │ │
-    │ █ │                       3ad11a2  feat(i18n): extract the checkout strings                           ·······        ·······
+    │ █ │                       3ad11a2  feat(i18n): extract the checkout strings                         ·······          ·······
     │ │ │
-    █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                     ·······        ·······
+    █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                   ·······          ·······
     │ │ │ │
-    │ │ │ █                     9d1b361  fix(search): ignore accents                                        ·······        ·······
+    │ │ │ █                     9d1b361  fix(search): ignore accents                                      ·······          ·······
     │ │ │ │
-    │ │ │ █                     cce93f9  feat(search): search as you type                                   ·······        ·······
+    │ │ │ █                     cce93f9  feat(search): search as you type                                 ·······          ·······
     │ │ │ │
-    │ │ │ █─╮                   ae57e03  Merge branch 'main' into feature/search                            ·······        ·······
+    │ │ │ █─╮                   ae57e03  Merge branch 'main' into feature/search                          ·······          ·······
     │ │ │ │ │
-    │ │ │ █ │                   a89a18f  feat(search): highlight matching words                             ·······        ·······
+    │ │ │ █ │                   a89a18f  feat(search): highlight matching words                           ·······          ·······
     │ │ │ │ │
-    │ │ │ █ │                   52defc5  feat(search): rank results by popularity                           ·······        ·······
+    │ │ │ █ │                   52defc5  feat(search): rank results by popularity                         ·······          ·······
 
   │
   │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                           normal   search   path   ancestry
@@ -47,7 +47,7 @@
 
 === shot 2: dialog (200x45) ===
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-  Graph                         Commit   Description                                                        Live           Cache                    Resources            Events             Info
+  Graph                         Commit   Description                                                      Resources        Events                   Resources            Events             Info
   ──────────────────                                                                                                                                                                ──────────────────
     █                    OpenShift · Build · shop-dev · shop-api-41 · events                                                                                          esc close                   live
     │                                                                                                                                                                                                5
@@ -89,6 +89,6 @@
   │   customer-notification-service   shop   shop-web                                                                 main   86 commits       │
   │                                                                                                                                           │     No permission to list events in shop-prod   ✕
                                                                                                                                               │     The token needs list on events.
-                                                               tab Snyk · enter events · o open · esc back · ←/→ switch tab · ↑/↓ navigate    │
+                                                                        tab Snyk · enter events · esc back · ←/→ switch tab · ↑/↓ navigate    │
 
 

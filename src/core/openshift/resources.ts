@@ -1,7 +1,6 @@
 /** OpenShift resources read from the cluster's objects: their status, commit and images, the commit map and the graph's badges. */
 import type { GraphBadge, GraphStatusCounts, NamespaceMarker } from "../provider-model";
 import {
-  isCachedOpenShiftResource,
   OPENSHIFT_WATCH_KINDS,
   type OpenShiftCommitData,
   type OpenShiftControllerReference,
@@ -633,10 +632,13 @@ export function buildOpenShiftNamespaceMarkers(
   );
 }
 
-/** A commit's badges; its warning count counts the warnings `counts` accepts (by default, every one). */
+/**
+ * A commit's badges: the status counts of what the cluster lists now, and how many resources only the cache has;
+ * the warnings the cluster still reports, and how many only the cache has (`isCachedWarning`; by default none).
+ */
 export function buildOpenShiftGraphBadges(
   data: Map<string, OpenShiftCommitData>,
-  counts: (sha: string, warning: OpenShiftWarning) => boolean = () => true,
+  isCachedWarning: (sha: string, warning: OpenShiftWarning) => boolean = () => false,
 ): Map<string, GraphBadge> {
   const badges = new Map<string, GraphBadge>();
   for (const [sha, entry] of data) {
@@ -647,11 +649,12 @@ export function buildOpenShiftGraphBadges(
       ...ns.builds,
       ...ns.imageStreamTags,
     ]);
-    const warningCount = (entry.warnings ?? []).filter(warning => counts(sha, warning)).length;
-    const warned = warningCount > 0;
-    if (resources.length === 0 && !warned) continue;
-    const live = resources.filter(r => !isCachedOpenShiftResource(r));
-    const cached = resources.filter(isCachedOpenShiftResource);
+    const warnings = entry.warnings ?? [];
+    const cachedWarningCount = warnings.filter(warning => isCachedWarning(sha, warning)).length;
+    const warningCount = warnings.length - cachedWarningCount;
+    if (resources.length === 0 && warnings.length === 0) continue;
+    const listed = resources.filter(resource => !resource.cacheOnly);
+    const cachedCount = resources.length - listed.length;
     const totals = statusCounts(resources);
     const badge = worstStatus(totals);
     badges.set(sha, {
@@ -659,13 +662,12 @@ export function buildOpenShiftGraphBadges(
       badge,
       ...totals,
       resourceCount: resources.length,
-      lanes: {
-        live: statusCounts(live),
-        cache: statusCounts(cached),
-      },
+      lanes: { live: statusCounts(listed) },
       latestRunAt: "",
       latestStatus: badge,
-      ...(warned ? { warningCount } : {}),
+      ...(cachedCount > 0 ? { cachedCount } : {}),
+      ...(warningCount > 0 ? { warningCount } : {}),
+      ...(cachedWarningCount > 0 ? { cachedWarningCount } : {}),
     });
   }
   return badges;
