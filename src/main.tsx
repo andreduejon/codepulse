@@ -1,6 +1,5 @@
 import { existsSync, statSync } from "node:fs";
 import { render } from "@opentui/solid";
-import { cleanupInactiveProviderCaches } from "./adapters/cache/cache-management";
 import { closeProviderCaches } from "./adapters/cache/sha-sqlite-cache";
 import { readCustomThemesFile } from "./adapters/settings/theme-file";
 import { parseArgs } from "./cli/parse-args";
@@ -24,7 +23,7 @@ export async function startupProps(argv: string[], ports: Partial<AppPorts> = {}
   const { settings, git, cacheStore, providers, system, dashboard } = all;
   const cli = parseArgs(argv);
   try {
-    cleanupInactiveProviderCaches();
+    cacheStore.cleanupInactive();
   } catch (error) {
     const message = redactDebugValue(error instanceof Error ? error.message : String(error));
     addDebugEvent({ source: "error", status: "error", message: `Provider cache cleanup: ${message}` });

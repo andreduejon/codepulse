@@ -50,4 +50,6 @@ export interface CacheStorePort {
   onWrite: (listener: (repoPath: string) => void) => () => void;
   /** While the cache screen shows, providers write nothing. */
   setSuspended: (suspended: boolean) => void;
+  /** Removes the repositories nothing read for the inactivity time; how many. Startup calls it once. */
+  cleanupInactive: () => number;
 }

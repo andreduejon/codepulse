@@ -20,5 +20,6 @@ export function providerCacheStore(
     identity: repoPath => sqlite.repositoryIdentity(repoPath),
     onWrite: listener => registry.onWrite(listener),
     setSuspended: suspended => registry.setSuspended(suspended, root),
+    cleanupInactive: () => management.cleanupInactiveProviderCaches(root, Date.now(), registry),
   };
 }
