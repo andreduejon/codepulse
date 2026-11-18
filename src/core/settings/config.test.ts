@@ -10,6 +10,7 @@ import {
   knownReposIn,
   missingDefaults,
   repoSettingsIn,
+  validateConfig,
   withoutRepoSettings,
   withRepoSettings,
 } from "./config";
@@ -88,4 +89,27 @@ test("a provider's changed settings: what changed, and a field emptied as cleare
   // Arrays and objects compare by content: the same jobs again is no change.
   const jobs = { jobs: [{ url: "https://ci.example.com/job/a" }] };
   expect(settingsChanges(jobs, { jobs: [{ url: "https://ci.example.com/job/a" }] })).toEqual({});
+});
+
+test("several wrong values warn in the order the section lists them, as before", () => {
+  const warnings: string[] = [];
+  validateConfig(
+    {
+      providers: {
+        github: { enabled: 1, tokenEnvVar: 1, trustedEnterpriseHost: 1 },
+        snyk: { enabled: 1, tokenEnvVar: 1, autoScanBranches: 1 },
+      },
+    },
+    "file",
+    warnings,
+    PROVIDERS,
+  );
+  expect(warnings.map(warning => /"providers\.(\w+\.\w+)"/.exec(warning)?.[1])).toEqual([
+    "github.enabled",
+    "github.tokenEnvVar",
+    "github.trustedEnterpriseHost",
+    "snyk.enabled",
+    "snyk.tokenEnvVar",
+    "snyk.autoScanBranches",
+  ]);
 });

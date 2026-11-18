@@ -40,7 +40,10 @@ export const githubProvider: ProviderDefinition<GitHubAdapters, GitHubSettings> 
   settings: {
     // The service's defaults (types.ts); no host is trusted but github.com.
     defaults: { ...DEFAULT_GITHUB_CONFIG, trustedEnterpriseHost: undefined },
+    // In the section's order, so several wrong values warn in that order.
     read: (raw, reader) => {
+      const enabled = reader.boolean("enabled", raw.enabled);
+      const tokenEnvVar = reader.text("tokenEnvVar", raw.tokenEnvVar, TEXT_MAX_LENGTH);
       const trustedEnterpriseHost = (() => {
         const value = raw.trustedEnterpriseHost;
         if (value === undefined) return undefined;
@@ -56,8 +59,8 @@ export const githubProvider: ProviderDefinition<GitHubAdapters, GitHubSettings> 
         return host;
       })();
       return definedFields({
-        enabled: reader.boolean("enabled", raw.enabled),
-        tokenEnvVar: reader.text("tokenEnvVar", raw.tokenEnvVar, TEXT_MAX_LENGTH),
+        enabled,
+        tokenEnvVar,
         trustedEnterpriseHost,
         cacheLimit: reader.oneOf("cacheLimit", raw.cacheLimit, PROVIDER_CACHE_LIMIT_OPTIONS),
         fetchDepth: reader.oneOf("fetchDepth", raw.fetchDepth, PROVIDER_LIMIT_OPTIONS),

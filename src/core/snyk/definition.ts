@@ -18,11 +18,14 @@ export const snykProvider: ProviderDefinition<SnykAdapters, SnykSettings> = {
   storedEvents: async (adapters, app) => snykEvents(app, await adapters.storedScans(app)),
   settings: {
     defaults: { enabled: false, tokenEnvVar: "SNYK_TOKEN", autoScanBranches: [], maxCachedScans: 20 },
+    // In the section's order, so several wrong values warn in that order.
     read: (raw, reader) => {
+      const enabled = reader.boolean("enabled", raw.enabled);
+      const tokenEnvVar = reader.text("tokenEnvVar", raw.tokenEnvVar, TEXT_MAX_LENGTH);
       const branches = reader.list("autoScanBranches", raw.autoScanBranches);
       return definedFields({
-        enabled: reader.boolean("enabled", raw.enabled),
-        tokenEnvVar: reader.text("tokenEnvVar", raw.tokenEnvVar, TEXT_MAX_LENGTH),
+        enabled,
+        tokenEnvVar,
         autoScanBranches: branches && [
           ...new Set(
             branches.flatMap((branch, index) => {
