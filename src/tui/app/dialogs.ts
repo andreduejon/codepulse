@@ -44,6 +44,15 @@ export function useDialogHost(opts: { state: AppState; layoutMode: Accessor<Layo
     }
   });
 
+  // A closed log or provider dialog lets go of what it showed: a finished build's console can be large, and a
+  // provider's dialog holds its provider's reads.
+  createEffect(
+    on(dialog, current => {
+      if (current !== "job-log") setJobLogTarget(null);
+      if (current !== "provider") setProviderDialog(null);
+    }),
+  );
+
   // The compact details belong to the graph: the Dashboard closes them (it has its own), and back in the graph, with
   // its details still focused, they open again as they were left.
   createEffect(
