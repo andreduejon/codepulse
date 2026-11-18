@@ -853,32 +853,41 @@ describe("start view", () => {
   test("it starts in the chosen view while that provider is turned on, else in Git", () => {
     expect(startViewFor({}, PROVIDERS)).toBe("git");
     expect(startViewFor({ startView: "dashboard" }, PROVIDERS)).toBe("dashboard");
-    expect(
-      startViewFor({ startView: "dashboard", dashboard: { enabled: false } }, PROVIDERS),
-    ).toBe("git");
-    expect(
-      startViewFor({ startView: "jenkins", providers: { jenkins: { enabled: true } } }, PROVIDERS),
-    ).toBe("jenkins");
-    expect(
-      startViewFor(
-        { startView: "jenkins", providers: { jenkins: { enabled: false } } },
-        PROVIDERS,
-      ),
-    ).toBe("git");
+    expect(startViewFor({ startView: "dashboard", dashboard: { enabled: false } }, PROVIDERS)).toBe("git");
+    expect(startViewFor({ startView: "jenkins", providers: { jenkins: { enabled: true } } }, PROVIDERS)).toBe(
+      "jenkins",
+    );
+    expect(startViewFor({ startView: "jenkins", providers: { jenkins: { enabled: false } } }, PROVIDERS)).toBe("git");
     expect(startViewFor({ startView: "github-actions" }, PROVIDERS)).toBe("git");
-    expect(
-      startViewFor({ startView: "snyk", providers: { snyk: { enabled: true } } }, PROVIDERS),
-    ).toBe("snyk");
-    expect(
-      startViewFor(
-        { startView: "openshift", providers: { openshift: { enabled: true } } },
-        PROVIDERS,
-      ),
-    ).toBe("openshift");
+    expect(startViewFor({ startView: "snyk", providers: { snyk: { enabled: true } } }, PROVIDERS)).toBe("snyk");
+    expect(startViewFor({ startView: "openshift", providers: { openshift: { enabled: true } } }, PROVIDERS)).toBe(
+      "openshift",
+    );
   });
 });
 
 describe("writeConfig", () => {
+  test("a provider setting cleared is gone from the file: a host no longer trusted stays untrusted after a reload", () => {
+    const dir = makeTempDir("write-clear");
+    const configPath = join(dir, "config.json");
+    const repoPath = "/tmp/my-repo";
+    const github = { enabled: true, tokenEnvVar: "GITHUB_TOKEN", trustedEnterpriseHost: "ghe.example.com" };
+    expect(writeConfig({ providers: { github } }, repoPath, configPath)).toBe(true);
+    expect(loadConfig(repoPath, configPath, PROVIDERS).config.providers?.github?.trustedEnterpriseHost).toBe(
+      "ghe.example.com",
+    );
+    // Allow host turned off: the Menu saves the section without the host.
+    expect(
+      writeConfig({ providers: { github: { ...github, trustedEnterpriseHost: undefined } } }, repoPath, configPath),
+    ).toBe(true);
+    const reloaded = loadConfig(repoPath, configPath, PROVIDERS).config.providers?.github;
+    expect(reloaded?.trustedEnterpriseHost).toBeUndefined();
+    expect(reloaded?.enabled).toBe(true);
+    // A section given without a field keeps the field: only a field given as undefined is cleared.
+    expect(writeConfig({ providers: { github: { enabled: false } } }, repoPath, configPath)).toBe(true);
+    expect(loadConfig(repoPath, configPath, PROVIDERS).config.providers?.github?.tokenEnvVar).toBe("GITHUB_TOKEN");
+  });
+
   test("creates new config file with repo entry", () => {
     const dir = makeTempDir("write-new");
     const configPath = join(dir, "config.json");

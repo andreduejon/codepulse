@@ -42,7 +42,8 @@ export const jenkinsProvider: ProviderDefinition<JenkinsAdapters, JenkinsSetting
       enabled: false,
       username: undefined,
       tokenEnvVar: "JENKINS_TOKEN",
-      graphBuildLimit: 20,
+      // Read only as fetchDepth's fallback: never written.
+      graphBuildLimit: undefined,
       fetchDepth: 20,
       cacheLimit: 20,
       autoRefreshSeconds: 120,
