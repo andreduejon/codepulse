@@ -79,14 +79,26 @@ export interface ProviderSet {
   ) => Adapters;
 }
 
-/** The set of these providers; one with the same id or settings key twice is refused. */
+/** Git's own detail tabs: no provider may take their ids. */
+const GIT_TABS = ["files", "info", "stashes", "staged", "unstaged", "untracked"];
+
+/**
+ * The set of these providers. One that would collide with another or with the app's own is refused: the same id, the
+ * same settings key (also its `:hide` name, so not `git` or `dashboard`), or a detail tab another already has.
+ */
 export function createProviderSet(entries: readonly ProviderEntry[]): ProviderSet {
   const byId = new Map<string, ProviderEntry>();
   const byKey = new Map<string, ProviderDefinition>();
+  const tabs = new Set(GIT_TABS);
   for (const entry of entries) {
-    const { id, key } = entry.definition;
+    const { id, key, moreTabs = [] } = entry.definition;
     if (id in OWN_VIEWS || byId.has(id)) throw new Error(`Provider "${id}" is registered twice`);
+    if (key in OWN_VIEWS) throw new Error(`Provider settings key "${key}" is reserved`);
     if (byKey.has(key)) throw new Error(`Provider settings key "${key}" is registered twice`);
+    for (const tab of [id, ...moreTabs.map(added => added.id)]) {
+      if (tabs.has(tab)) throw new Error(`Detail tab "${tab}" is used twice`);
+      tabs.add(tab);
+    }
     byId.set(id, entry);
     byKey.set(key, entry.definition);
   }

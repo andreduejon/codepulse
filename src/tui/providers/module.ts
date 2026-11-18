@@ -125,6 +125,30 @@ export function providerModule<Adapters, Settings extends SettingsSection, Insta
   return module;
 }
 
+/**
+ * Each provider's module, in the set's order: exactly one per provider, carrying the definition the set has, with
+ * detail entries only for that provider's own tabs. Anything else is refused before any module starts.
+ */
+export function modulesFor(providers: ProviderSet, modules: readonly AnyProviderModule[]): AnyProviderModule[] {
+  const byId = new Map<string, AnyProviderModule>();
+  for (const module of modules) {
+    const { id } = module.definition;
+    if (byId.has(id)) throw new Error(`Provider "${id}" has two modules`);
+    const registered = providers.get(id);
+    if (!registered) throw new Error(`Provider "${id}" has a module but is not in the app's provider set`);
+    if (registered !== module.definition) throw new Error(`Provider "${id}" has a module for another definition`);
+    const tabs = new Set(providers.tabsOf(id).map(tab => tab.id));
+    for (const tab of Object.keys(module.detailEntries))
+      if (!tabs.has(tab)) throw new Error(`Provider "${id}" renders a detail tab it doesn't have: "${tab}"`);
+    byId.set(id, module);
+  }
+  return providers.definitions.map(definition => {
+    const module = byId.get(definition.id);
+    if (!module) throw new Error(`Provider "${definition.id}" has no module`);
+    return module;
+  });
+}
+
 /** Starts a module with its own adapters and settings from the app's. */
 export function startModule(
   module: AnyProviderModule,

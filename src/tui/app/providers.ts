@@ -11,6 +11,7 @@ import type { AppActions, AppState } from "../context/state";
 import { type ProviderDetails, providerDetails } from "../providers/detail-entries";
 import {
   type AnyProviderModule,
+  modulesFor,
   type ProviderGraphColumns,
   type ProviderMessage,
   type StartedProvider,
@@ -40,17 +41,9 @@ export function useProviderHost(opts: {
   onOpenDialog: (render: (close: () => void) => JSX.Element) => void;
 }) {
   const { state, providers } = opts;
-  for (const module of opts.modules)
-    if (!providers.get(module.definition.id))
-      throw new Error(`Provider "${module.definition.id}" has a module but is not in the app's provider set`);
-  for (const definition of providers.definitions)
-    if (!opts.modules.some(module => module.definition.id === definition.id))
-      throw new Error(`Provider "${definition.id}" has no module`);
-
   // Started during setup, before the app's Provider renders (AGENTS.md rule 5): state and actions come as values.
   // In the provider set's order, so the views and the Menu list them alike.
-  const hosted: Hosted[] = providers.definitions.map(definition => {
-    const module = opts.modules.find(candidate => candidate.definition.id === definition.id) as AnyProviderModule;
+  const hosted: Hosted[] = modulesFor(providers, opts.modules).map(module => {
     return {
       module,
       provider: startModule(module, {
