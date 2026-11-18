@@ -2,12 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import {
-  compareMavenVersions,
-  LocalRepositoryPoms,
-  markRemovableManaged,
-  mavenLocalRepository,
-} from "../src/adapters/snyk/maven-removable";
+import { LocalRepositoryPoms, mavenLocalRepository } from "../src/adapters/snyk/maven-removable";
+import { compareMavenVersions, markRemovableManaged } from "../src/core/snyk/maven-removable";
 import type { SnykDependencyGraph } from "../src/core/snyk/types";
 
 const roots: string[] = [];

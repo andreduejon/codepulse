@@ -7,7 +7,11 @@ import { monotonicNow } from "../../core/monotonic";
 import { ProviderError } from "../../core/provider-failure";
 import { normalizeSnykTargetFile, parseSnykDepGraphs } from "../../core/snyk/dep-graph";
 import { snykFailureReason } from "../../core/snyk/failure-reason";
+import { applyMavenManaged, mavenManagedVersions, type PomSource } from "../../core/snyk/maven-managed";
+import { markRemovableManaged } from "../../core/snyk/maven-removable";
+import { applyOverrideRules, markRemovableOverrides } from "../../core/snyk/overrides";
 import { parseSnykOutput } from "../../core/snyk/parser";
+import type { RegistryLookup } from "../../core/snyk/registry-lookup";
 import { shouldReplaceSnykResult } from "../../core/snyk/results";
 import type {
   SnykCacheLimit,
@@ -18,11 +22,12 @@ import type {
 } from "../../core/snyk/types";
 import { type ProviderCacheRegistry, repositoryIdentity } from "../cache/sha-sqlite-cache";
 import { SnykCache } from "./cache";
-import { applyMavenManaged, mavenManagedVersions, PomIndex, type PomSource } from "./maven-managed";
-import { LocalRepositoryPoms, markRemovableManaged, mavenLocalRepository } from "./maven-removable";
-import { applyOverrideRules, manifestRanges, markRemovableOverrides, projectOverrideRules } from "./overrides";
+import { PomIndex } from "./maven-managed";
+import { LocalRepositoryPoms, mavenLocalRepository } from "./maven-removable";
+import { manifestRanges, projectOverrideRules } from "./overrides";
 import { discoverSnykDependencyProjects, type SnykDependencyProjectInput } from "./projects";
-import { createRegistryLookup, RegistryCache, type RegistryLookup } from "./registry";
+import { createRegistryLookup, RegistryCache } from "./registry";
+import { bunSemver } from "./semver";
 
 export interface SnykCommandResult {
   stdout: string;
@@ -601,11 +606,11 @@ async function markOverrides(
     const rules = await projectOverrideRules(commandOptions.cwd, project);
     throwIfAborted(commandOptions.signal);
     if (rules.length === 0) continue;
-    for (const graph of project.graphs) applyOverrideRules(graph, rules);
+    for (const graph of project.graphs) applyOverrideRules(graph, rules, bunSemver);
     if (!project.graphs.some(graph => graph.packages.some(pkg => pkg.pin === "override"))) continue;
     const lookup = registry();
     if (!lookup) continue;
-    await markRemovableOverrides(project.graphs, rules, lookup, rootRanges);
+    await markRemovableOverrides(project.graphs, rules, lookup, rootRanges, bunSemver);
     throwIfAborted(commandOptions.signal);
   }
 }

@@ -1,26 +1,12 @@
 import type { Database } from "bun:sqlite";
 import { addDebugEvent } from "../../core/debug-events";
+import type { RegistryLookup } from "../../core/snyk/registry-lookup";
 import {
   DEFAULT_PROVIDER_CACHE_ROOT,
   type ProviderCacheRegistry,
   providerCacheRegistry,
 } from "../cache/sha-sqlite-cache";
 import type { SnykCommandRunner } from "./scanner";
-
-/** Ranges a published version asks for; peers apart, since they accept what other packages resolve. */
-export interface PackageRanges {
-  /** dependencies and optionalDependencies */
-  ranges: Record<string, string>;
-  peers: Record<string, string>;
-}
-
-/** Package metadata the override check needs; null when the registry could not answer. */
-export interface RegistryLookup {
-  /** Published versions of a package. */
-  versions(name: string): Promise<string[] | null>;
-  /** The ranges `name@version` asks for. */
-  dependencies(name: string, version: string): Promise<PackageRanges | null>;
-}
 
 /** Version lists change; a published version's dependencies never do. */
 const VERSIONS_TTL_MS = 24 * 60 * 60 * 1000;
