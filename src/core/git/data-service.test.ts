@@ -186,6 +186,13 @@ test("a load takes the checked-out branch from the branch list, so it asks Git o
   h.branches([branch("main", false), branch("(HEAD detached at 1a2b3c4)", true)]);
   await h.service.loadData(undefined, undefined, true, true);
   expect(h.app.currentBranch).toBe("HEAD");
+  h.branches([branch("(no branch, rebasing feature)", true)]);
+  await h.service.loadData(undefined, undefined, true, true);
+  expect(h.app.currentBranch).toBe("HEAD");
+  // A branch name may start with "(": only Git's own rows, which hold a space no branch name can, are detached.
+  h.branches([branch("(release)", true)]);
+  await h.service.loadData(undefined, undefined, true, true);
+  expect(h.app.currentBranch).toBe("(release)");
   // An empty repository lists no branch.
   h.branches([]);
   await h.service.loadData(undefined, undefined, true, true);

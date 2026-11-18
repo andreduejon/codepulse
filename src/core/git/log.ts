@@ -132,12 +132,13 @@ export function buildCommitLogArgs(options: {
 
 /**
  * The checked-out branch from the branch list, as `git rev-parse --abbrev-ref HEAD` names it: `HEAD` when detached or
- * mid-rebase (Git lists "(HEAD detached at …)" as current), "" before the first commit.
+ * mid-rebase (Git lists "(HEAD detached at …)" or "(no branch, rebasing …)" as current), "" before the first commit.
+ * A branch name may start with "(" but holds no space, so only Git's own rows match.
  */
 export function currentBranchOf(branches: readonly Branch[]): string {
   const current = branches.find(branch => branch.isCurrent && !branch.isRemote);
   if (!current) return "";
-  return current.name.startsWith("(") ? "HEAD" : current.name;
+  return current.name.startsWith("(") && current.name.includes(" ") ? "HEAD" : current.name;
 }
 
 /**
