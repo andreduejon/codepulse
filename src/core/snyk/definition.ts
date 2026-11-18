@@ -1,8 +1,9 @@
 /** Snyk as core knows it: its names, its second detail tab and its settings. */
-import { snykEvents } from "../dashboard/events";
+
 import type { ProviderDefinition } from "../provider-set";
 import { PROVIDER_CACHE_LIMIT_OPTIONS } from "../provider-settings";
 import { definedFields } from "../settings/provider-section";
+import { snykEvents } from "./events";
 import type { SnykAdapters, SnykSettings } from "./service";
 
 const TEXT_MAX_LENGTH = 255;

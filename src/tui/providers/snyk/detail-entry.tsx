@@ -1,10 +1,10 @@
 import { createMemo } from "solid-js";
 import type { SnykScanResult } from "../../../core/snyk/types";
 import { useAppState } from "../../context/state";
-import { SNYK_SEVERITY_LEGEND } from "../legends";
 import { type DetailEntryContext, detailEntry, type ProviderDetailSource } from "../shared/detail-entry";
 import { SnykDependenciesTab } from "./deps-tab";
 import { SnykDetailTab } from "./detail-tab";
+import { SNYK_SEVERITY_LEGEND } from "./legend";
 import { findSnykBaseline } from "./scan-diff";
 import type { SnykViewMemory } from "./view-memory";
 import { VULNERABILITY_LEGEND } from "./vulnerabilities-model";
@@ -52,7 +52,8 @@ function snykTabProps(props: SnykTabProps) {
 }
 
 function VulnerabilitiesTab(props: SnykTabProps) {
-  const { state, actions } = useAppState();
+  const { state } = useAppState();
+  const tab = snykTabProps(props);
   /** First parent of each loaded commit, to walk back to the nearest scanned one. */
   const firstParents = createMemo(
     () => new Map(state.graphRows().map(row => [row.commit.hash, row.commit.parents[0]] as const)),
@@ -66,11 +67,11 @@ function VulnerabilitiesTab(props: SnykTabProps) {
     );
   return (
     <SnykDetailTab
-      {...snykTabProps(props)}
+      {...tab}
       active={() => state.detailActiveTab() === "snyk"}
       takePendingFilter={() => {
-        const query = state.snykPendingFilter();
-        actions.setSnykPendingFilter(null);
+        const query = tab.memory.pendingFilter ?? null;
+        tab.memory.pendingFilter = undefined;
         return query;
       }}
       baseline={baseline()}
@@ -80,13 +81,14 @@ function VulnerabilitiesTab(props: SnykTabProps) {
 
 function DependenciesTab(props: SnykTabProps) {
   const { state, actions } = useAppState();
+  const tab = snykTabProps(props);
   return (
     <SnykDependenciesTab
-      {...snykTabProps(props)}
+      {...tab}
       setDetailCursorShortcut={shortcut => props.context.cursor.setDetailCursorShortcut?.(shortcut)}
       active={() => state.detailActiveTab() === "snyk-deps"}
       onShowVulnerabilities={query => {
-        actions.setSnykPendingFilter(query);
+        tab.memory.pendingFilter = query;
         actions.setDetailCursorAction(null);
         actions.setDetailActiveTab("snyk");
         actions.setDetailCursorIndex(0);

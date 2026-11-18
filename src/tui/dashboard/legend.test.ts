@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test";
 import type { DashboardEvent } from "../../core/dashboard/events";
 import { defaultProviderModules } from "../context/provider-modules";
 import { themes } from "../context/theme";
-import { GITHUB_LEGEND, JENKINS_LEGEND, OPENSHIFT_LEGEND, SNYK_SEVERITY_LEGEND } from "../providers/legends";
+import { GITHUB_LEGEND } from "../providers/github-actions/legend";
+import { JENKINS_LEGEND } from "../providers/jenkins/legend";
+import { OPENSHIFT_LEGEND } from "../providers/openshift/legend";
+import { SNYK_SEVERITY_LEGEND } from "../providers/snyk/legend";
 import { eventMark, markLegend } from "./legend";
 
 const modules = defaultProviderModules();

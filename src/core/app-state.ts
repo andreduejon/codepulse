@@ -75,8 +75,6 @@ export interface DetailState {
   detailLoading: Accessor<boolean>;
   detailCursorAction: Accessor<string | null>;
   detailActiveTab: Accessor<DetailTab>;
-  /** Filter Vulnerabilities applies when it opens next (set by the Dependencies jump). */
-  snykPendingFilter: Accessor<string | null>;
   uncommittedDetail: Accessor<UncommittedDetail | null>;
   /** Counts the refreshes that read a dirty working tree: the selected uncommitted row reloads its files on each. */
   workingTreeReads: Accessor<number>;
@@ -148,7 +146,6 @@ export interface DetailActions {
   setDetailLoading: (loading: boolean) => void;
   setDetailCursorAction: (action: string | null) => void;
   setDetailActiveTab: (tab: DetailTab) => void;
-  setSnykPendingFilter: (query: string | null) => void;
   setUncommittedDetail: (detail: UncommittedDetail | null) => void;
   noteWorkingTreeRead: () => void;
 }

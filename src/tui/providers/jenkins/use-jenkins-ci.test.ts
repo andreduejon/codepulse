@@ -7,9 +7,9 @@ import { closeProviderCaches } from "../../../adapters/cache/sha-sqlite-cache";
 import { jenkinsAdapters } from "../../../adapters/jenkins/adapters";
 import * as api from "../../../adapters/jenkins/api";
 import { JenkinsCache } from "../../../adapters/jenkins/cache";
-import { BANNER } from "../../../core/banner";
 import { buildGraph } from "../../../core/git/graph";
 import type { Commit } from "../../../core/git/types";
+import { JENKINS_BANNER } from "../../../core/jenkins/banner";
 import type { JenkinsRun } from "../../../core/jenkins/types";
 import * as monotonic from "../../../core/monotonic";
 import type { ProviderFailure } from "../../../core/provider-failure";
@@ -188,9 +188,9 @@ test("a per-commit reload reports its error instead of finishing silently", asyn
   const { jenkins, state, full } = await mountJenkins();
   await jenkins.refresh();
   await settle();
-  full.mockResolvedValueOnce(result([], BANNER.jenkins.fetchFailed));
+  full.mockResolvedValueOnce(result([], JENKINS_BANNER.fetchFailed));
   await jenkins.fetchCommitDataForSHA(SHA, true);
-  expect(state.providerStatusFor("jenkins")).toEqual({ kind: "error", message: BANNER.jenkins.fetchFailed });
+  expect(state.providerStatusFor("jenkins")).toEqual({ kind: "error", message: JENKINS_BANNER.fetchFailed });
   await jenkins.fetchCommitDataForSHA(SHA, true);
   expect(state.providerStatusFor("jenkins").kind).not.toBe("error");
 });
@@ -217,10 +217,10 @@ test("after a 401, entering the view again stays frozen; only Reload retries", a
   const running = spyOn(api, "fetchJenkinsRunsForBuilds").mockResolvedValue({ data: [], error: null });
   cleanup.push(() => running.mockRestore());
   // A running build arrives with the 401, so re-entering the view would normally re-check it.
-  graph.mockResolvedValue(result([run({ status: "running", conclusion: null })], BANNER.jenkins.tokenExpired, "auth"));
+  graph.mockResolvedValue(result([run({ status: "running", conclusion: null })], JENKINS_BANNER.tokenExpired, "auth"));
   await jenkins.refresh();
   await settle();
-  expect(state.providerStatusFor("jenkins")).toEqual({ kind: "error", message: BANNER.jenkins.tokenExpired });
+  expect(state.providerStatusFor("jenkins")).toEqual({ kind: "error", message: JENKINS_BANNER.tokenExpired });
   const calls = graph.mock.calls.length;
   // Come back after the stale threshold: an automatic fetch, which must not lift the freeze.
   const clock = spyOn(monotonic, "monotonicNow").mockReturnValue(monotonic.monotonicNow() + 120_000);
@@ -231,7 +231,7 @@ test("after a 401, entering the view again stays frozen; only Reload retries", a
     expect(graph.mock.calls.length).toBe(calls);
     expect(running).not.toHaveBeenCalled();
     // Jobs are not requested while frozen either; the reason is shown instead.
-    expect(await jenkins.fetchJobsForRun(run(), undefined)).toEqual({ jobs: [], error: BANNER.jenkins.tokenExpired });
+    expect(await jenkins.fetchJobsForRun(run(), undefined)).toEqual({ jobs: [], error: JENKINS_BANNER.tokenExpired });
   } finally {
     clock.mockRestore();
   }

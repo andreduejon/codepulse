@@ -11,8 +11,8 @@ import { useSettings } from "../context/settings";
 import { useAppState } from "../context/state";
 import { useSystem } from "../context/system";
 import type { Theme } from "../context/theme";
+import { buildDashboardItems } from "./menu-dashboard-items";
 import { COPYABLE_VISIBLE_WIDTH, type MenuTab, type SettingItem } from "./menu-items-types";
-import { buildDashboardItems } from "./menu-provider-items";
 
 /** `5s ago`, `3h ago`; a time the clock puts ahead of now (a clock that is off) is `just now`. */
 export const relativeAgeLabel = (time: Date): string => {
@@ -106,7 +106,7 @@ export interface MenuItemsResult {
 /**
  * Owns all data, logic, and cursor state for the MenuDialog.
  * The dialog keeps tab state, scroll refs and token editing; rows render from menu-rows.tsx and provider rows
- * come from menu-provider-items.ts.
+ * come from each provider's module (providers/<provider>/menu-items.ts).
  */
 export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
   /** The browser and the environment, through the app's system port. */

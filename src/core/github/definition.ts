@@ -1,5 +1,5 @@
 /** GitHub Actions as core knows it: its names and its settings. */
-import { githubEvents } from "../dashboard/events";
+
 import type { ProviderDefinition } from "../provider-set";
 import {
   DEFAULT_PROVIDER_CACHE_LIMIT,
@@ -11,8 +11,10 @@ import {
   type ProviderLimit,
 } from "../provider-settings";
 import { definedFields, type SettingsSection } from "../settings/provider-section";
+import { githubEvents } from "./events";
 import { normalizeGitHubHost } from "./host";
 import type { GitHubAdapters } from "./service";
+import { DEFAULT_GITHUB_CONFIG } from "./types";
 
 const TEXT_MAX_LENGTH = 255;
 
@@ -36,14 +38,8 @@ export const githubProvider: ProviderDefinition<GitHubAdapters, GitHubSettings> 
   storedEvents: async (adapters, app) =>
     githubEvents(app, await adapters.cache(DEFAULT_PROVIDER_CACHE_LIMIT).peekAll(app)),
   settings: {
-    defaults: {
-      enabled: false,
-      tokenEnvVar: "GITHUB_TOKEN",
-      trustedEnterpriseHost: undefined,
-      fetchDepth: 20,
-      cacheLimit: 20,
-      autoRefreshSeconds: 120,
-    },
+    // The service's defaults (types.ts); no host is trusted but github.com.
+    defaults: { ...DEFAULT_GITHUB_CONFIG, trustedEnterpriseHost: undefined },
     read: (raw, reader) => {
       const trustedEnterpriseHost = (() => {
         const value = raw.trustedEnterpriseHost;

@@ -1,73 +1,30 @@
 import { addDebugEvent, type DebugEventSource, redactDebugValue } from "./debug-events";
 
+/** The messages the app shows as they are, without a fallback: each group's, as it is defined. */
+const KNOWN_BANNERS = new Set<string>();
+
+/**
+ * A group of banners: its fixed sentences become known, so a failure carrying one shows it as it is. A provider's
+ * group is in its own folder (core/<provider>/banner.ts); a banner can only be thrown once its group is loaded.
+ */
+export function banners<T extends Record<string, string | ((...args: never[]) => string)>>(group: T): T {
+  for (const value of Object.values(group)) if (typeof value === "string") KNOWN_BANNERS.add(value);
+  return group;
+}
+
 export const BANNER = {
-  git: {
+  git: banners({
     logFailed: "Git log failed.",
     fetchFailed: "Git fetch failed.",
     fetchTimedOut: "Git fetch timed out.",
     unreachable: "Git remote unreachable.",
     authFailed: "Git authentication failed.",
     detailFailed: "Git detail failed.",
-  },
-  github: {
-    disabled: "GitHub is disabled.",
-    noRemote: "GitHub unavailable. No remote.",
-    untrustedHost: "GitHub unavailable. Untrusted host.",
-    missingToken: (envVar: string) => `GitHub unavailable. Missing ${envVar}.`,
-    unavailable: "GitHub unavailable.",
-    rateLimit: "GitHub rate limit exceeded.",
-    fetchFailed: "GitHub fetch failed.",
-    tokenExpired: "GitHub token expired. Live data unavailable. Reload to retry.",
-    jobsFailed: "GitHub jobs failed.",
-    incomplete: "GitHub data incomplete. Page limit reached.",
-    logFailed: "GitHub log failed.",
-    timeout: "GitHub request timed out.",
-  },
-  jenkins: {
-    noJobs: "Jenkins unavailable. No jobs configured.",
-    noUsername: "Jenkins unavailable. Username not configured.",
-    missingToken: (envVar: string) => `Jenkins unavailable. Missing ${envVar}.`,
-    authFailed: "Jenkins authentication failed. Live data unavailable. Reload to retry.",
-    tokenExpired: "Jenkins token expired. Live data unavailable. Reload to retry.",
-    fetchFailed: "Jenkins fetch failed.",
-    /** A headline with the counts, then what it means, like the other tab notices. */
-    branchLimit: (shown: number, total: number) =>
-      `Jenkins branch jobs · ${shown} of ${total} read. Branches in the graph come first. Builds on the other ${total - shown} do not show.`,
-    invalidJobUrl: "Jenkins job URL invalid.",
-    logFailed: "Jenkins log failed.",
-    stagesFailed: "Jenkins stages failed.",
-    timeout: "Jenkins request timed out.",
-  },
-  openshift: {
-    noServer: "OpenShift unavailable. Server URL not configured.",
-    noNamespaces: "OpenShift unavailable. No namespaces configured.",
-    missingToken: (envVar: string) => `OpenShift unavailable. Missing ${envVar}.`,
-    tokenExpired: "OpenShift token expired. Live data unavailable. Reload to retry.",
-    unavailable: "OpenShift unavailable.",
-    inventoryFailed: "OpenShift inventory failed.",
-    inventoryPartial: "OpenShift inventory partially failed.",
-    invalidNamespace: "OpenShift namespace invalid.",
-    timeout: "OpenShift request timed out.",
-    watchDenied: "OpenShift watch denied. Resource data might be stale. Reload to refresh.",
-  },
-  snyk: {
-    disabled: "Snyk is disabled.",
-    missingToken: (envVar: string) => `Snyk unavailable. Missing ${envVar}.`,
-    exactCommit: "Snyk scan requires an exact commit SHA.",
-    partialRescan: "Partial scan. Kept last complete snapshot.",
-    noDependencyProject:
-      "No supported dependency project. Dependency graphs support Bun, npm, pnpm, Yarn, and Maven projects.",
-  },
+  } as const),
 } as const;
 
-const STATIC_BANNERS = new Set<string>(
-  Object.values(BANNER).flatMap(group =>
-    Object.values(group).filter((value): value is string => typeof value === "string"),
-  ),
-);
-
 export function isBanner(message: string): boolean {
-  return STATIC_BANNERS.has(message);
+  return KNOWN_BANNERS.has(message);
 }
 
 export function debugError(source: DebugEventSource, detail: unknown): void {

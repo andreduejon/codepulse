@@ -6,11 +6,11 @@
 
 import type { Accessor } from "solid-js";
 import { createEffect, createSignal, onCleanup, untrack } from "solid-js";
-import { BANNER } from "../../../core/banner";
+import { SNYK_BANNER } from "../../../core/snyk/banner";
+import { snykProvider } from "../../../core/snyk/definition";
 import type { SnykAdapters } from "../../../core/snyk/service";
 import { createSnykService, EXACT_SHA, type SnykSettings } from "../../../core/snyk/service";
 import type { SnykScanResult } from "../../../core/snyk/types";
-import { DEFAULT_SNYK_CACHE_LIMIT } from "../../../core/snyk/types";
 import type { AppActions, AppState } from "../../context/state";
 import { providerIdle, providerUnavailable } from "../../context/state";
 import { providerAppPort } from "../shared/app-port";
@@ -20,12 +20,8 @@ export { collectSnykAutoScanTips, selectSnykCacheProbes } from "../../../core/sn
 /** Snyk's settings, merged with the defaults. */
 export type SnykProviderConfig = SnykSettings;
 
-export const DEFAULT_SNYK_PROVIDER_CONFIG: SnykProviderConfig = {
-  enabled: false,
-  tokenEnvVar: "SNYK_TOKEN",
-  autoScanBranches: [],
-  maxCachedScans: DEFAULT_SNYK_CACHE_LIMIT,
-};
+/** Snyk's settings when the file has none: its definition's. */
+export const DEFAULT_SNYK_PROVIDER_CONFIG: SnykProviderConfig = snykProvider.settings.defaults;
 
 export interface UseSnykResult {
   getCommitData: (sha: string) => SnykScanResult | null;
@@ -91,7 +87,7 @@ export function useSnyk(opts: {
         "snyk",
         hasToken(current.tokenEnvVar)
           ? providerIdle()
-          : providerUnavailable(BANNER.snyk.missingToken(current.tokenEnvVar)),
+          : providerUnavailable(SNYK_BANNER.missingToken(current.tokenEnvVar)),
       );
     } else {
       state.providers.unregister("snyk");

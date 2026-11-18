@@ -29,9 +29,11 @@ export interface SnykVulnerabilitiesMemory extends SnykTabMemory {
 export interface SnykViewMemory {
   dependencies?: SnykDependenciesMemory;
   vulnerabilities?: SnykVulnerabilitiesMemory;
+  /** The filter Vulnerabilities applies when it opens next (set by the Dependencies jump, taken once). */
+  pendingFilter?: string;
 }
 
-type TabKey = keyof SnykViewMemory;
+type TabKey = "dependencies" | "vulnerabilities";
 type TabMemory<K extends TabKey> = NonNullable<SnykViewMemory[K]>;
 
 /**

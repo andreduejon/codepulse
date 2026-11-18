@@ -1,4 +1,5 @@
-import { BANNER, bannerOrFallback, debugError } from "../../core/banner";
+import { bannerOrFallback, debugError } from "../../core/banner";
+import { GITHUB_BANNER } from "../../core/github/banner";
 import type {
   GitHubAnnotation,
   GitHubApiJob,
@@ -31,7 +32,7 @@ const GITHUB_HTTP_POLICY = {
   timeoutMs: GITHUB_REQUEST_TIMEOUT_MS,
   attempts: 2,
   retryDelayMs: 500,
-  timeoutMessage: BANNER.github.timeout,
+  timeoutMessage: GITHUB_BANNER.timeout,
 };
 
 function createHeaders(token: string): Record<string, string> {
@@ -69,11 +70,11 @@ function httpFailure(res: Response): { failure?: "auth" } {
 }
 
 function githubHttpBanner(res: Response, kind: "fetch" | "jobs" | "logs"): string {
-  if (res.status === 401) return BANNER.github.tokenExpired;
-  if (isGitHubRateLimit(res)) return BANNER.github.rateLimit;
-  if (kind === "jobs") return BANNER.github.jobsFailed;
-  if (kind === "logs") return BANNER.github.logFailed;
-  return BANNER.github.fetchFailed;
+  if (res.status === 401) return GITHUB_BANNER.tokenExpired;
+  if (isGitHubRateLimit(res)) return GITHUB_BANNER.rateLimit;
+  if (kind === "jobs") return GITHUB_BANNER.jobsFailed;
+  if (kind === "logs") return GITHUB_BANNER.logFailed;
+  return GITHUB_BANNER.fetchFailed;
 }
 
 function debugGitHubHttp(res: Response, kind: "fetch" | "jobs" | "logs", detail: string): string {
@@ -395,7 +396,7 @@ async function fetchCIDataForSHAsOnce(
         includeJobs = false;
       } else {
         debugError("GitHub", [...new Set(json.errors.map(e => e.message))].join(". "));
-        return { ...empty, error: BANNER.github.fetchFailed };
+        return { ...empty, error: GITHUB_BANNER.fetchFailed };
       }
     }
 
@@ -433,7 +434,7 @@ async function fetchCIDataForSHAsOnce(
           includeJobs = false;
         } else {
           debugError("GitHub", [...new Set(pageJson.errors.map(e => e.message))].join(". "));
-          return { data: runs, jobs, error: BANNER.github.fetchFailed, jobsUnsupported: jobsUnsupported || undefined };
+          return { data: runs, jobs, error: GITHUB_BANNER.fetchFailed, jobsUnsupported: jobsUnsupported || undefined };
         }
       }
       pending = collectRunsFromRepoData(
@@ -457,7 +458,7 @@ async function fetchCIDataForSHAsOnce(
     return {
       data: runs,
       jobs,
-      error: bannerOrFallback(err, BANNER.github.fetchFailed, "GitHub"),
+      error: bannerOrFallback(err, GITHUB_BANNER.fetchFailed, "GitHub"),
       jobsUnsupported: jobsUnsupported || undefined,
     };
   }
@@ -495,7 +496,7 @@ export async function fetchCIDataForSHAs(
     return result;
   } catch (err) {
     if (opts.signal?.aborted) throw err;
-    return { ...empty, error: bannerOrFallback(err, BANNER.github.fetchFailed, "GitHub") };
+    return { ...empty, error: bannerOrFallback(err, GITHUB_BANNER.fetchFailed, "GitHub") };
   }
 }
 
@@ -549,12 +550,12 @@ export async function fetchRunJobs(
     }
     if (url) {
       debugError("GitHub", `Jobs for run ${runId} truncated after ${MAX_JOB_PAGES} pages`);
-      return { jobs, error: BANNER.github.incomplete };
+      return { jobs, error: GITHUB_BANNER.incomplete };
     }
     return { jobs, error: null };
   } catch (err) {
     if (signal?.aborted) throw err;
-    return { jobs: [], error: bannerOrFallback(err, BANNER.github.jobsFailed, "GitHub") };
+    return { jobs: [], error: bannerOrFallback(err, GITHUB_BANNER.jobsFailed, "GitHub") };
   }
 }
 
@@ -638,6 +639,6 @@ export async function fetchJobLog(
     return await res.text();
   } catch (err) {
     if (signal?.aborted) throw err;
-    throw new Error(bannerOrFallback(err, BANNER.github.logFailed, "GitHub"));
+    throw new Error(bannerOrFallback(err, GITHUB_BANNER.logFailed, "GitHub"));
   }
 }

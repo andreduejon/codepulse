@@ -1,23 +1,19 @@
 import { describe, expect, it, test } from "bun:test";
-import type {
-  GitHubMenuConfig,
-  JenkinsMenuConfig,
-  OpenShiftMenuConfig,
-  SnykMenuConfig,
-} from "../src/tui/hooks/menu-items-types";
-import {
-  buildDashboardItems,
-  buildGitHubProviderItems,
-  buildJenkinsProviderItems,
-  buildOpenShiftProviderItems,
-  buildSnykProviderItems,
-} from "../src/tui/hooks/menu-provider-items";
+import type { GitHubSettings as GitHubMenuConfig } from "../src/core/github/definition";
+import type { JenkinsSettings as JenkinsMenuConfig } from "../src/core/jenkins/definition";
+import type { OpenShiftSettings as OpenShiftMenuConfig } from "../src/core/openshift/definition";
+import type { SnykSettings as SnykMenuConfig } from "../src/core/snyk/service";
+import { buildDashboardItems } from "../src/tui/hooks/menu-dashboard-items";
 import {
   isOptionalRepoMetadataValid,
   optionalRepoMetadataValue,
   relativeAgeLabel,
   startViewItem,
 } from "../src/tui/hooks/use-menu-items";
+import { buildGitHubProviderItems } from "../src/tui/providers/github-actions/menu-items";
+import { buildJenkinsProviderItems } from "../src/tui/providers/jenkins/menu-items";
+import { buildOpenShiftProviderItems } from "../src/tui/providers/openshift/menu-items";
+import { buildSnykProviderItems } from "../src/tui/providers/snyk/menu-items";
 import { BUILT_IN_PROVIDERS } from "./test-helpers";
 
 describe("buildDashboardItems, turned off", () => {

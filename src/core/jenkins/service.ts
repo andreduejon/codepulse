@@ -6,7 +6,7 @@
  * Everything outside comes through ports; the Solid hook (providers/jenkins/use-jenkins-ci.ts) builds them.
  */
 
-import { BANNER, bannerOrFallback } from "../banner";
+import { bannerOrFallback } from "../banner";
 import type { ProviderFetchArgs } from "../fetch-lifecycle";
 import { failureOf, type ProviderFailure } from "../provider-failure";
 import type { ProviderAppPort, ProviderLifecycle } from "../provider-ports";
@@ -14,6 +14,7 @@ import type { ProviderCacheLimit } from "../provider-settings";
 import { providerError, providerIdle, providerLoading, providerUnavailable, providerWarning } from "../provider-status";
 import { collectRunningSHAs, collectTopSHAs } from "../sha-selection";
 import { jobsSettled } from "../status";
+import { JENKINS_BANNER } from "./banner";
 import { buildJenkinsCommitDataMap, buildJenkinsGraphBadges } from "./commit-data";
 import {
   isTerminalJenkinsRun,
@@ -138,7 +139,7 @@ export function createJenkinsService(ports: JenkinsServicePorts) {
 
   const settledStatus = () =>
     discoveryTruncated
-      ? providerWarning(BANNER.jenkins.branchLimit(branchJobs.shown, branchJobs.total))
+      ? providerWarning(JENKINS_BANNER.branchLimit(branchJobs.shown, branchJobs.total))
       : providerIdle();
   /** Branch names in the loaded graph (local, and remote without the remote's name): their jobs are read first. */
   const graphBranches = () => {
@@ -298,9 +299,9 @@ export function createJenkinsService(ports: JenkinsServicePorts) {
   const reportUnavailable = (showStatus: boolean) => {
     if (!showStatus) return;
     const config = ports.config();
-    if (config.jobs.length === 0) app.setStatus(providerUnavailable(BANNER.jenkins.noJobs));
-    else if (!config.username?.trim()) app.setStatus(providerUnavailable(BANNER.jenkins.noUsername));
-    else app.setStatus(providerUnavailable(BANNER.jenkins.missingToken(config.tokenEnvVar)));
+    if (config.jobs.length === 0) app.setStatus(providerUnavailable(JENKINS_BANNER.noJobs));
+    else if (!config.username?.trim()) app.setStatus(providerUnavailable(JENKINS_BANNER.noUsername));
+    else app.setStatus(providerUnavailable(JENKINS_BANNER.missingToken(config.tokenEnvVar)));
   };
 
   const onCancelledStatus = () => {
@@ -411,10 +412,10 @@ export function createJenkinsService(ports: JenkinsServicePorts) {
     if (cached && jobsSettled(cached.jobs) && reportsKnown(cached.jobs)) return cached;
     if (!lifecycle().isCurrent(epoch, repoPath)) return { jobs: [], error: null };
     // Frozen after an auth failure: no requests until Reload; say why instead of asking Jenkins again.
-    if (authFrozen) return { jobs: [], error: authError ?? BANNER.jenkins.tokenExpired };
+    if (authFrozen) return { jobs: [], error: authError ?? JENKINS_BANNER.tokenExpired };
     const config = ports.config();
     const token = ports.token(config.tokenEnvVar);
-    if (!token) return { jobs: [], error: BANNER.jenkins.missingToken(config.tokenEnvVar) };
+    if (!token) return { jobs: [], error: JENKINS_BANNER.missingToken(config.tokenEnvVar) };
     const result = await lifecycle().runRequest(
       signal => ports.api.fetchJenkinsRunJobs(run, config.username, token, signal),
       signal,
@@ -443,7 +444,7 @@ export function createJenkinsService(ports: JenkinsServicePorts) {
     }
     const config = ports.config();
     const token = ports.token(config.tokenEnvVar);
-    if (!token) throw new Error(BANNER.jenkins.missingToken(config.tokenEnvVar));
+    if (!token) throw new Error(JENKINS_BANNER.missingToken(config.tokenEnvVar));
     const log = await lifecycle().runRequest(
       signal => ports.api.fetchJenkinsConsoleLog(run, config.username, token, signal),
       signal,
@@ -475,7 +476,7 @@ export function createJenkinsService(ports: JenkinsServicePorts) {
       failure = result.failure;
     } catch (err) {
       if (!lifecycle().isCurrent(epoch, repoPath) || (err instanceof Error && err.name === "AbortError")) return;
-      firstError = bannerOrFallback(err, BANNER.jenkins.fetchFailed, "Jenkins");
+      firstError = bannerOrFallback(err, JENKINS_BANNER.fetchFailed, "Jenkins");
       failure = failureOf(err);
     }
     rememberAuthError(firstError, failure);

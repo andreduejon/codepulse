@@ -1,5 +1,5 @@
 /** OpenShift as core knows it: its names and its settings. */
-import { openShiftEvents } from "../dashboard/events";
+
 import type { ProviderDefinition } from "../provider-set";
 import {
   DEFAULT_PROVIDER_CACHE_LIMIT,
@@ -11,7 +11,9 @@ import {
   type ProviderLimit,
 } from "../provider-settings";
 import { definedFields, type SettingsReader, type SettingsSection } from "../settings/provider-section";
+import { openShiftEvents } from "./events";
 import type { OpenShiftAdapters } from "./service";
+import { DEFAULT_OPENSHIFT_CONFIG } from "./types";
 import {
   isValidOpenShiftNamespace,
   isValidOpenShiftServerUrl,
@@ -50,17 +52,8 @@ export const openShiftProvider: ProviderDefinition<OpenShiftAdapters, OpenShiftS
   storedEvents: async (adapters, app) =>
     openShiftEvents(app, await adapters.cache(DEFAULT_PROVIDER_CACHE_LIMIT).peekAll(app)),
   settings: {
-    defaults: {
-      enabled: false,
-      serverUrl: "",
-      consoleUrl: "",
-      tokenEnvVar: "OPENSHIFT_TOKEN",
-      namespaces: [],
-      commitShaAnnotation: "dev/commit-sha",
-      cacheLimit: 20,
-      fetchDepth: 20,
-      autoRefreshSeconds: 120,
-    },
+    // The service's defaults (types.ts).
+    defaults: DEFAULT_OPENSHIFT_CONFIG,
     read: (raw, reader) =>
       definedFields({
         enabled: reader.boolean("enabled", raw.enabled),

@@ -1,12 +1,13 @@
 /** GitHub Actions as a provider module. */
-import { githubEvents } from "../../../core/dashboard/events";
+
 import { githubProvider } from "../../../core/github/definition";
+import { githubEvents } from "../../../core/github/events";
 import type { GitHubJob, GitHubWorkflowRun } from "../../../core/github/types";
-import { buildGitHubProviderItems } from "../../hooks/menu-provider-items";
-import { GITHUB_LEGEND } from "../legends";
 import { providerModule } from "../module";
 import { type GitHubDetailSource, githubDetail } from "./detail-entry";
+import { GITHUB_LEGEND } from "./legend";
 import { githubJobLogTarget } from "./log-target";
+import { buildGitHubProviderItems } from "./menu-items";
 import { useGitHubCI } from "./use-github-ci";
 
 export const githubModule = providerModule({

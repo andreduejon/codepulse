@@ -16,10 +16,12 @@ import * as jenkinsApi from "../../../adapters/jenkins/api";
 import { openShiftAdapters } from "../../../adapters/openshift/adapters";
 import * as openShiftApi from "../../../adapters/openshift/api";
 import type { OpenShiftCachedBuild } from "../../../adapters/openshift/cache";
-import { BANNER } from "../../../core/banner";
 import { buildGraph } from "../../../core/git/graph";
+import { GITHUB_BANNER } from "../../../core/github/banner";
 import type { GitHubWorkflowRun } from "../../../core/github/types";
+import { JENKINS_BANNER } from "../../../core/jenkins/banner";
 import type { JenkinsRun } from "../../../core/jenkins/types";
+import { OPENSHIFT_BANNER } from "../../../core/openshift/banner";
 import type { OpenShiftWatchResult } from "../../../core/openshift/types";
 import { createAppState } from "../../context/state";
 import { useGitHubCI } from "../github-actions/use-github-ci";
@@ -136,7 +138,7 @@ const githubRun = {
 const github: ContractFixture = {
   name: "GitHub",
   view: "github-actions",
-  tokenExpired: BANNER.github.tokenExpired,
+  tokenExpired: GITHUB_BANNER.tokenExpired,
   mount(options) {
     const tokenEnv = "CODEPULSE_CONTRACT_GITHUB_TOKEN";
     let repoPath = () => options.repo;
@@ -144,7 +146,7 @@ const github: ContractFixture = {
       options.backend.request(untrack(repoPath), opts.signal, (hasData, failure) => ({
         data: hasData && !failure ? [githubRun] : [],
         jobs: new Map(),
-        error: errorFor(failure, { auth: BANNER.github.tokenExpired, server: BANNER.github.fetchFailed }),
+        error: errorFor(failure, { auth: GITHUB_BANNER.tokenExpired, server: GITHUB_BANNER.fetchFailed }),
         failure: kindFor(failure),
       })),
     );
@@ -190,7 +192,7 @@ const jenkinsRun: JenkinsRun = {
 const jenkins: ContractFixture = {
   name: "Jenkins",
   view: "jenkins",
-  tokenExpired: BANNER.jenkins.tokenExpired,
+  tokenExpired: JENKINS_BANNER.tokenExpired,
   mount(options) {
     const tokenEnv = "CODEPULSE_CONTRACT_JENKINS_TOKEN";
     let repoPath = () => options.repo;
@@ -199,7 +201,7 @@ const jenkins: ContractFixture = {
         const data = hasData && !failure ? [jenkinsRun] : [];
         return {
           data,
-          error: errorFor(failure, { auth: BANNER.jenkins.tokenExpired, server: BANNER.jenkins.fetchFailed }),
+          error: errorFor(failure, { auth: JENKINS_BANNER.tokenExpired, server: JENKINS_BANNER.fetchFailed }),
           failure: kindFor(failure),
           jobUrls: [JOB_URL],
           discoveryComplete: true,
@@ -269,14 +271,14 @@ const listedCommit = (() => {
 const openshift: ContractFixture = {
   name: "OpenShift",
   view: "openshift",
-  tokenExpired: BANNER.openshift.tokenExpired,
+  tokenExpired: OPENSHIFT_BANNER.tokenExpired,
   mount(options) {
     const tokenEnv = "CODEPULSE_CONTRACT_OPENSHIFT_TOKEN";
     let repoPath = () => options.repo;
     const inventory = spyOn(openShiftApi, "fetchOpenShiftInventory").mockImplementation((_config, _token, signal) =>
       options.backend.request(untrack(repoPath), signal, (hasData, failure) => ({
         data: hasData && !failure ? new Map([[SHA, listedCommit]]) : new Map(),
-        error: errorFor(failure, { auth: BANNER.openshift.tokenExpired, server: BANNER.openshift.inventoryFailed }),
+        error: errorFor(failure, { auth: OPENSHIFT_BANNER.tokenExpired, server: OPENSHIFT_BANNER.inventoryFailed }),
         failure: kindFor(failure),
         failures: [],
         successfulRequests: failure ? 0 : 1,

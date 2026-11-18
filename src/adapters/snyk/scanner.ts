@@ -1,10 +1,10 @@
 import { lstat, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, posix, relative, resolve } from "node:path";
-import { BANNER } from "../../core/banner";
 import { addDebugEvent, redactDebugValue } from "../../core/debug-events";
 import { monotonicNow } from "../../core/monotonic";
 import { ProviderError } from "../../core/provider-failure";
+import { SNYK_BANNER } from "../../core/snyk/banner";
 import { normalizeSnykTargetFile, parseSnykDepGraphs } from "../../core/snyk/dep-graph";
 import { snykFailureReason } from "../../core/snyk/failure-reason";
 import { applyMavenManaged, mavenManagedVersions, type PomSource } from "../../core/snyk/maven-managed";
@@ -153,7 +153,7 @@ function throwScanFailure(
   const detail = outputError(stdout, stderr);
   if (detail) addDebugEvent({ source: "Snyk", message: detail, status: "error" });
   // Same words as the Dependencies tab, with the supported managers, so the banner says what would work.
-  if (exitCode === 3) throw new Error(BANNER.snyk.noDependencyProject);
+  if (exitCode === 3) throw new Error(SNYK_BANNER.noDependencyProject);
   // Every project failed: name them with Snyk's reasons, as a partial scan does.
   const failures = parseSnykProjectFailures(detail, roots);
   if (failures.targets.length > 0)
@@ -777,7 +777,7 @@ export async function scanSnykCommit(
     const existing = await cache.read(options.repoPath, sha);
     throwIfAborted(options.signal);
     if (!shouldReplaceSnykResult(existing ?? undefined, result, options.force)) {
-      throw new ProviderError(BANNER.snyk.partialRescan, "partial");
+      throw new ProviderError(SNYK_BANNER.partialRescan, "partial");
     }
     await cache.write(options.repoPath, result);
     return result;

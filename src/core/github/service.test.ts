@@ -2,12 +2,12 @@
  * The GitHub service with its lifecycle, without Solid: the app is a plain object, GitHub and the cache are fakes.
  */
 import { expect, mock, test } from "bun:test";
-import { BANNER } from "../banner";
 import { FetchLifecycle } from "../fetch-lifecycle";
 import type { GraphRow } from "../git/types";
 import type { ProviderFailure } from "../provider-failure";
 import type { GraphBadge } from "../provider-model";
 import type { ProviderStatus } from "../provider-status";
+import { GITHUB_BANNER } from "./banner";
 import type { GitHubCacheEntry } from "./merge";
 import { createGitHubService, type GitHubApiPort, type GitHubCachePort } from "./service";
 import type { GitHubJob, GitHubRepo, GitHubWorkflowRun } from "./types";
@@ -133,9 +133,9 @@ test("a first fetch asks GitHub about the graph's commits, shows their runs and 
 
 test("an expired token stops automatic requests until a Reload", async () => {
   const h = harness();
-  h.answer({ data: [], error: BANNER.github.tokenExpired, failure: "auth" });
+  h.answer({ data: [], error: GITHUB_BANNER.tokenExpired, failure: "auth" });
   await h.lifecycle.fetchInitial(undefined, undefined, true);
-  expect(h.app.status).toEqual({ kind: "error", message: BANNER.github.tokenExpired });
+  expect(h.app.status).toEqual({ kind: "error", message: GITHUB_BANNER.tokenExpired });
   h.answer({ data: [run()], error: null });
   // Automatic: frozen, GitHub is not asked.
   await h.lifecycle.fetchRefresh(undefined, true, false);

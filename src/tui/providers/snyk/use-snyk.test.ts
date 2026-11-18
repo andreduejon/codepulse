@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createRoot, createSignal } from "solid-js";
 import { snykAdapters } from "../../../adapters/snyk/adapters";
-import { BANNER } from "../../../core/banner";
 import { buildGraph } from "../../../core/git/graph";
 import { ProviderError } from "../../../core/provider-failure";
+import { SNYK_BANNER } from "../../../core/snyk/banner";
 import type { SnykAdapters } from "../../../core/snyk/service";
 import type { SnykScanOptions, SnykScanResult } from "../../../core/snyk/types";
 import type { AppActions, AppState } from "../../context/state";
@@ -168,11 +168,11 @@ describe("useSnyk", () => {
   test("a partial scan that kept the complete snapshot is a warning for the tab notice", async () => {
     const { state, snyk } = mountSnyk({
       scan: async () => {
-        throw new ProviderError(BANNER.snyk.partialRescan, "partial");
+        throw new ProviderError(SNYK_BANNER.partialRescan, "partial");
       },
     });
     await snyk.scanCommit(SHA_A);
-    expect(state.providerStatusFor("snyk")).toEqual({ kind: "warning", message: BANNER.snyk.partialRescan });
+    expect(state.providerStatusFor("snyk")).toEqual({ kind: "warning", message: SNYK_BANNER.partialRescan });
   });
 
   test("reports scanning as background activity while scans run or wait", async () => {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { BANNER } from "../../core/banner";
 import { clearDebugEvents, getDebugEvents } from "../../core/debug-events";
+import { JENKINS_BANNER } from "../../core/jenkins/banner";
 import { buildJenkinsCommitDataMap, buildJenkinsGraphBadges } from "../../core/jenkins/commit-data";
 import type { JenkinsRun } from "../../core/jenkins/types";
 import { isSafeJenkinsRequestUrl, isValidJenkinsJobUrl } from "../../core/jenkins/validation";
@@ -586,7 +586,7 @@ describe("fetchJenkinsGraphDataForSHAs", () => {
         ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
       );
       expect(result.data).toHaveLength(0);
-      expect(result.error).toBe(BANNER.jenkins.authFailed);
+      expect(result.error).toBe(JENKINS_BANNER.authFailed);
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -624,7 +624,7 @@ describe("fetchJenkinsDataForSHAs", () => {
       ]);
       expect(result.data).toHaveLength(1);
       expect(result.data[0].runNumber).toBe(1);
-      expect(result.error).toBe(BANNER.jenkins.fetchFailed);
+      expect(result.error).toBe(JENKINS_BANNER.fetchFailed);
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -873,7 +873,7 @@ describe("resolveJenkinsJobs", () => {
         "token",
       );
       expect(result.jobs).toEqual([direct]);
-      expect(result.error).toBe(BANNER.jenkins.fetchFailed);
+      expect(result.error).toBe(JENKINS_BANNER.fetchFailed);
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -1010,7 +1010,7 @@ describe("fetchJenkinsGraphDataForSHAs auth", () => {
         "token",
         ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
       );
-      expect(result.error).toBe(BANNER.jenkins.tokenExpired);
+      expect(result.error).toBe(JENKINS_BANNER.tokenExpired);
       expect(result.data).toEqual([]);
     } finally {
       globalThis.fetch = originalFetch;
@@ -1129,9 +1129,9 @@ describe("fetchJenkinsConsoleLog failures", () => {
     const originalFetch = globalThis.fetch;
     try {
       globalThis.fetch = (async () => new Response("nope", { status: 401 })) as unknown as typeof fetch;
-      await expect(fetchJenkinsConsoleLog(run, "user", "token")).rejects.toThrow(BANNER.jenkins.tokenExpired);
+      await expect(fetchJenkinsConsoleLog(run, "user", "token")).rejects.toThrow(JENKINS_BANNER.tokenExpired);
       globalThis.fetch = (async () => new Response("boom", { status: 500 })) as unknown as typeof fetch;
-      await expect(fetchJenkinsConsoleLog(run, "user", "token")).rejects.toThrow(BANNER.jenkins.logFailed);
+      await expect(fetchJenkinsConsoleLog(run, "user", "token")).rejects.toThrow(JENKINS_BANNER.logFailed);
       globalThis.fetch = (async () => new Response("", { status: 200 })) as unknown as typeof fetch;
       expect(await fetchJenkinsConsoleLog(run, "user", "token")).toBe("");
     } finally {
@@ -1160,7 +1160,7 @@ describe("fetchJenkinsRunJobs failures", () => {
         jobLabel: "app",
         jobUrl: "https://jenkins.example.com/job/app",
       };
-      expect((await fetchJenkinsRunJobs(run, "user", "token")).error).toBe(BANNER.jenkins.stagesFailed);
+      expect((await fetchJenkinsRunJobs(run, "user", "token")).error).toBe(JENKINS_BANNER.stagesFailed);
     } finally {
       globalThis.fetch = originalFetch;
     }

@@ -7,11 +7,11 @@
  * service what changed (the graph's commits, the branches, suspension, another repository).
  */
 
-import { BANNER } from "../banner";
 import { failureOf } from "../provider-failure";
 import type { ProviderAppPort } from "../provider-ports";
 import { providerError, providerIdle, providerLoading, providerUnavailable, providerWarning } from "../provider-status";
 import { buildSnykGraphBadges } from "./badges";
+import { SNYK_BANNER } from "./banner";
 import { shouldReplaceSnykResult } from "./results";
 import type { SnykCacheLimit, SnykScanOptions, SnykScanResult } from "./types";
 
@@ -160,7 +160,7 @@ export function createSnykService(ports: SnykServicePorts) {
     const settings = ports.config();
     app.setStatus(
       settings.enabled && !ports.hasToken(settings.tokenEnvVar)
-        ? providerUnavailable(BANNER.snyk.missingToken(settings.tokenEnvVar))
+        ? providerUnavailable(SNYK_BANNER.missingToken(settings.tokenEnvVar))
         : providerIdle(),
     );
     ports.onWorkChange();
@@ -236,13 +236,13 @@ export function createSnykService(ports: SnykServicePorts) {
     if (disposed || app.suspended()) return Promise.resolve(null);
     const normalizedSHA = sha.trim().toLowerCase();
     if (!EXACT_SHA.test(normalizedSHA)) {
-      app.setStatus(providerError(BANNER.snyk.exactCommit));
+      app.setStatus(providerError(SNYK_BANNER.exactCommit));
       return Promise.resolve(null);
     }
     if (!isAvailable()) {
       const settings = ports.config();
       app.setStatus(
-        providerUnavailable(settings.enabled ? BANNER.snyk.missingToken(settings.tokenEnvVar) : BANNER.snyk.disabled),
+        providerUnavailable(settings.enabled ? SNYK_BANNER.missingToken(settings.tokenEnvVar) : SNYK_BANNER.disabled),
       );
       return Promise.resolve(null);
     }

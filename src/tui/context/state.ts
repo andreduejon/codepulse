@@ -154,7 +154,6 @@ export function createAppState(
     dashboard: makeDetailSlot("info"),
   };
   const [detailLoading, setDetailLoading] = createSignal(false);
-  const [snykPendingFilter, setSnykPendingFilter] = createSignal<string | null>(null);
   const [uncommittedDetail, setUncommittedDetail] = createSignal<UncommittedDetail | null>(null);
   const [workingTreeReads, setWorkingTreeReads] = createSignal(0);
 
@@ -286,7 +285,6 @@ export function createAppState(
     detailActiveTab: () => shownDetail().state.detailActiveTab(),
     detailCursorShortcut: () => shownDetail().state.detailCursorShortcut(),
     detailFor: owner => detailSlots[owner].state,
-    snykPendingFilter,
     uncommittedDetail,
     workingTreeReads,
     viewingBranch,
@@ -340,7 +338,6 @@ export function createAppState(
     setDetailActiveTab: value => changedDetail().actions.setDetailActiveTab(value),
     setDetailCursorShortcut: value => changedDetail().actions.setDetailCursorShortcut(value),
     detailFor: owner => detailSlots[owner].actions,
-    setSnykPendingFilter,
     setUncommittedDetail,
     noteWorkingTreeRead: () => setWorkingTreeReads(count => count + 1),
     setViewingBranch,

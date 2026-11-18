@@ -3,8 +3,8 @@ import { createRoot, createSignal } from "solid-js";
 import { openShiftAdapters } from "../../../adapters/openshift/adapters";
 import * as api from "../../../adapters/openshift/api";
 import { OpenShiftCache, type OpenShiftCacheEntry } from "../../../adapters/openshift/cache";
-import { BANNER } from "../../../core/banner";
 import { buildGraph } from "../../../core/git/graph";
+import { OPENSHIFT_BANNER } from "../../../core/openshift/banner";
 import type {
   OpenShiftCommitData,
   OpenShiftListedInventory,
@@ -438,12 +438,12 @@ describe("OpenShift live list failures", () => {
     await Bun.sleep(0);
     await mounted.openShift.fetchCommitDataForSHA(SHA);
     expect(pods(mounted)).toHaveLength(1);
-    mounted.live.mockResolvedValueOnce(failedList(0, BANNER.openshift.inventoryFailed));
+    mounted.live.mockResolvedValueOnce(failedList(0, OPENSHIFT_BANNER.inventoryFailed));
     await mounted.openShift.fetchCommitDataForSHA(SHA, true);
     for (let i = 0; i < 20 && mounted.state.providerStatusFor("openshift").kind !== "error"; i++) await Bun.sleep(5);
     expect(mounted.state.providerStatusFor("openshift")).toEqual({
       kind: "error",
-      message: BANNER.openshift.inventoryFailed,
+      message: OPENSHIFT_BANNER.inventoryFailed,
     });
     expect(pods(mounted)).toHaveLength(1);
   });
@@ -453,12 +453,12 @@ describe("OpenShift live list failures", () => {
     await Bun.sleep(0);
     await mounted.openShift.fetchCommitDataForSHA(SHA);
     expect(pods(mounted)).toHaveLength(1);
-    mounted.live.mockResolvedValueOnce(failedList(2, BANNER.openshift.inventoryPartial));
+    mounted.live.mockResolvedValueOnce(failedList(2, OPENSHIFT_BANNER.inventoryPartial));
     await mounted.openShift.fetchCommitDataForSHA(SHA, true);
     for (let i = 0; i < 20 && mounted.state.providerStatusFor("openshift").kind !== "warning"; i++) await Bun.sleep(5);
     expect(mounted.state.providerStatusFor("openshift")).toEqual({
       kind: "warning",
-      message: BANNER.openshift.inventoryPartial,
+      message: OPENSHIFT_BANNER.inventoryPartial,
     });
     expect(pods(mounted)).toHaveLength(1);
   });
@@ -475,7 +475,7 @@ describe("OpenShift live list recovery", () => {
       controllers: [],
       failures: [{ namespace: "ns", kind: "Pod", path: "/api/v1/namespaces/ns/pods", error: "boom" }],
       successfulRequests: 2,
-      error: BANNER.openshift.inventoryPartial,
+      error: OPENSHIFT_BANNER.inventoryPartial,
       resourceVersions: new Map(),
     });
     await mounted.openShift.fetchCommitDataForSHA(SHA, true);
@@ -492,7 +492,7 @@ describe("OpenShift live list recovery", () => {
     // Reload: the inventory fails, then the live list (restarted by the same reload) succeeds.
     mounted.inventory.mockResolvedValueOnce({
       data: new Map(),
-      error: BANNER.openshift.inventoryFailed,
+      error: OPENSHIFT_BANNER.inventoryFailed,
       failures: [],
       successfulRequests: 0,
     });
@@ -501,7 +501,7 @@ describe("OpenShift live list recovery", () => {
     expect(mounted.live.mock.calls.length).toBeGreaterThan(1);
     expect(mounted.state.providerStatusFor("openshift")).toEqual({
       kind: "error",
-      message: BANNER.openshift.inventoryFailed,
+      message: OPENSHIFT_BANNER.inventoryFailed,
     });
   });
 });
@@ -515,7 +515,7 @@ describe("OpenShift expired token", () => {
       controllers: [],
       failures: [],
       successfulRequests: 0,
-      error: BANNER.openshift.tokenExpired,
+      error: OPENSHIFT_BANNER.tokenExpired,
       failure: "auth" as const,
       resourceVersions: new Map(),
     };
@@ -552,7 +552,7 @@ describe("OpenShift auth recovery", () => {
     controllers: [],
     failures: [],
     successfulRequests: 0,
-    error: BANNER.openshift.tokenExpired,
+    error: OPENSHIFT_BANNER.tokenExpired,
     failure: "auth" as const,
     resourceVersions: new Map(),
   };
@@ -576,7 +576,7 @@ describe("OpenShift auth recovery", () => {
     // The view-entry inventory reaches the API after reading the disk cache, so this answer is the first one.
     mounted.inventory.mockResolvedValueOnce({
       data: new Map(),
-      error: BANNER.openshift.tokenExpired,
+      error: OPENSHIFT_BANNER.tokenExpired,
       failure: "auth" as const,
       failures: [],
       successfulRequests: 0,
@@ -584,7 +584,7 @@ describe("OpenShift auth recovery", () => {
     await Bun.sleep(40);
     expect(mounted.state.providerStatusFor("openshift")).toEqual({
       kind: "error",
-      message: BANNER.openshift.tokenExpired,
+      message: OPENSHIFT_BANNER.tokenExpired,
     });
     expect(mounted.watches.length).toBeGreaterThan(0);
     expect(mounted.watches.every(watch => watch.signal.aborted)).toBe(true);
@@ -594,13 +594,13 @@ describe("OpenShift auth recovery", () => {
     const mounted = mountOpenShift();
     await Bun.sleep(30);
     // 1. The live list fails with inventoryFailed: that status is the live list's own.
-    mounted.live.mockResolvedValueOnce({ ...expiredList, error: BANNER.openshift.inventoryFailed });
+    mounted.live.mockResolvedValueOnce({ ...expiredList, error: OPENSHIFT_BANNER.inventoryFailed });
     await mounted.openShift.fetchCommitDataForSHA(SHA, true);
     await Bun.sleep(40);
     // 2. Reload: the inventory fails with the same words, then the live list recovers.
     mounted.inventory.mockResolvedValueOnce({
       data: new Map(),
-      error: BANNER.openshift.inventoryFailed,
+      error: OPENSHIFT_BANNER.inventoryFailed,
       failures: [],
       successfulRequests: 0,
     });
@@ -608,7 +608,7 @@ describe("OpenShift auth recovery", () => {
     await Bun.sleep(40);
     expect(mounted.state.providerStatusFor("openshift")).toEqual({
       kind: "error",
-      message: BANNER.openshift.inventoryFailed,
+      message: OPENSHIFT_BANNER.inventoryFailed,
     });
   });
 });
@@ -619,7 +619,7 @@ describe("OpenShift auth recovery across inventory and live list", () => {
     controllers: [],
     failures: [],
     successfulRequests: 0,
-    error: BANNER.openshift.tokenExpired,
+    error: OPENSHIFT_BANNER.tokenExpired,
     failure: "auth" as const,
     resourceVersions: new Map(),
   };
@@ -640,14 +640,14 @@ describe("OpenShift auth recovery across inventory and live list", () => {
     await Bun.sleep(10);
     expect(mounted.state.providerStatusFor("openshift")).toEqual({
       kind: "error",
-      message: BANNER.openshift.tokenExpired,
+      message: OPENSHIFT_BANNER.tokenExpired,
     });
     release();
     await Bun.sleep(30);
     // Live requests stay frozen, so the banner must stay until a retry.
     expect(mounted.state.providerStatusFor("openshift")).toEqual({
       kind: "error",
-      message: BANNER.openshift.tokenExpired,
+      message: OPENSHIFT_BANNER.tokenExpired,
     });
   });
 
@@ -666,14 +666,14 @@ describe("OpenShift auth recovery across inventory and live list", () => {
     await Bun.sleep(10);
     expect(mounted.state.providerStatusFor("openshift")).toEqual({
       kind: "warning",
-      message: BANNER.openshift.watchDenied,
+      message: OPENSHIFT_BANNER.watchDenied,
     });
     release();
     await Bun.sleep(30);
     // The watches stay stopped, so the data can go stale: the warning must stay until a reload.
     expect(mounted.state.providerStatusFor("openshift")).toEqual({
       kind: "warning",
-      message: BANNER.openshift.watchDenied,
+      message: OPENSHIFT_BANNER.watchDenied,
     });
   });
 

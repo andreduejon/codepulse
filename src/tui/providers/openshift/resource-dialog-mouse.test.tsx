@@ -4,7 +4,7 @@ import { MouseButtons } from "@opentui/core/testing";
 import { testRender } from "@opentui/solid";
 import { createSignal, Show } from "solid-js";
 import * as browser from "../../../adapters/system/open-url";
-import { BANNER } from "../../../core/banner";
+import { OPENSHIFT_BANNER } from "../../../core/openshift/banner";
 import type { OpenShiftEvent, OpenShiftResource } from "../../../core/openshift/types";
 import { createThemeState, ThemeContext } from "../../context/theme";
 import OpenShiftResourceDialog from "./resource-dialog";
@@ -332,7 +332,7 @@ test("native wheel and keyboard share scroll position and suspend/resume sticky 
 test("a failed log shows its reason in an error box, and an empty log says so, neither as numbered lines", async () => {
   const d = await renderResource("Build");
   try {
-    d.loadLog.mockRejectedValueOnce(new Error(BANNER.openshift.tokenExpired));
+    d.loadLog.mockRejectedValueOnce(new Error(OPENSHIFT_BANNER.tokenExpired));
     await d.key("r");
     await d.flush();
     expect(d.frame()).toContain("Failed to load log");

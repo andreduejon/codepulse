@@ -1,16 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import { githubEvents } from "../github/events";
 import type { GitHubWorkflowRun } from "../github/types";
+import { jenkinsEvents } from "../jenkins/events";
 import type { JenkinsRun } from "../jenkins/types";
-import {
-  type DashboardEvent,
-  dashboardRows,
-  gitEvents,
-  githubEvents,
-  jenkinsEvents,
-  keepUnchangedRows,
-  openShiftEvents,
-  snykEvents,
-} from "./events";
+import { openShiftEvents } from "../openshift/events";
+import { snykEvents } from "../snyk/events";
+import { type DashboardEvent, dashboardRows, gitEvents, keepUnchangedRows } from "./events";
 
 const SHA = "e6209dd7a1b2c3d4e5f60718293a4b5c6d7e8f90";
 const HOUR = 3_600_000;

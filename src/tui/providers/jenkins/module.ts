@@ -1,12 +1,13 @@
 /** Jenkins as a provider module. */
-import { jenkinsEvents } from "../../../core/dashboard/events";
+
 import { jenkinsProvider } from "../../../core/jenkins/definition";
+import { jenkinsEvents } from "../../../core/jenkins/events";
 import type { JenkinsFailedTest, JenkinsJob, JenkinsRun } from "../../../core/jenkins/types";
-import { buildJenkinsProviderItems } from "../../hooks/menu-provider-items";
-import { JENKINS_LEGEND } from "../legends";
 import { providerModule } from "../module";
 import { type JenkinsDetailSource, jenkinsDetail } from "./detail-entry";
+import { JENKINS_LEGEND } from "./legend";
 import { jenkinsBuildLogTarget, jenkinsTestFailureTarget } from "./log-target";
+import { buildJenkinsProviderItems } from "./menu-items";
 import { useJenkinsCI } from "./use-jenkins-ci";
 
 export const jenkinsModule = providerModule({

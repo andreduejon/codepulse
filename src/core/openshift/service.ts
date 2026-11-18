@@ -8,13 +8,14 @@
  */
 
 import { sleep } from "../abort";
-import { BANNER, debugError } from "../banner";
+import { debugError } from "../banner";
 import type { ProviderFetchArgs } from "../fetch-lifecycle";
 import { failureOf } from "../provider-failure";
 import type { ProviderAppPort, ProviderLifecycle } from "../provider-ports";
 import type { ProviderCacheLimit } from "../provider-settings";
 import { providerError, providerIdle, providerLoading, providerUnavailable, providerWarning } from "../provider-status";
 import { collectTopSHAs } from "../sha-selection";
+import { OPENSHIFT_BANNER } from "./banner";
 import {
   commitDataFromCacheEntry,
   emptyGraphBadge,
@@ -208,10 +209,10 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
   }
 
   function unavailableMessage(): string {
-    if (!ports.config().serverUrl.trim()) return BANNER.openshift.noServer;
-    if (ports.config().namespaces.length === 0) return BANNER.openshift.noNamespaces;
-    if (!ports.token(ports.config().tokenEnvVar)) return BANNER.openshift.missingToken(ports.config().tokenEnvVar);
-    return BANNER.openshift.unavailable;
+    if (!ports.config().serverUrl.trim()) return OPENSHIFT_BANNER.noServer;
+    if (ports.config().namespaces.length === 0) return OPENSHIFT_BANNER.noNamespaces;
+    if (!ports.token(ports.config().tokenEnvVar)) return OPENSHIFT_BANNER.missingToken(ports.config().tokenEnvVar);
+    return OPENSHIFT_BANNER.unavailable;
   }
 
   /**
@@ -323,7 +324,7 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
         lifecycle().noteFetchResult(false);
         freezeAuth();
         publish();
-        app.setStatus(providerError(BANNER.openshift.tokenExpired));
+        app.setStatus(providerError(OPENSHIFT_BANNER.tokenExpired));
         return;
       }
       if (result.successfulRequests === 0 && result.error) {
@@ -372,7 +373,7 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
       if (args.signal?.aborted || !lifecycle().isCurrent(args.epoch, repoPath)) return;
       debugError("OpenShift", err);
       const auth = failureOf(err) === "auth";
-      const message = auth ? BANNER.openshift.tokenExpired : BANNER.openshift.inventoryFailed;
+      const message = auth ? OPENSHIFT_BANNER.tokenExpired : OPENSHIFT_BANNER.inventoryFailed;
       if (auth) freezeAuth();
       lifecycle().noteFetchResult(false);
       publish();
@@ -419,7 +420,7 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
           if (signal.aborted || !lifecycle().isCurrent(epoch, repoPath)) return;
           if (listed.failure === "auth") {
             authFrozen = true;
-            setLiveStatus("error", BANNER.openshift.tokenExpired);
+            setLiveStatus("error", OPENSHIFT_BANNER.tokenExpired);
             return;
           }
           // Every request failed: keep the last live data visible, report, and retry with backoff.
@@ -478,13 +479,13 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
           if (signal.aborted || !lifecycle().isCurrent(epoch, repoPath)) return;
           if (results.includes("auth")) {
             authFrozen = true;
-            setLiveStatus("error", BANNER.openshift.tokenExpired);
+            setLiveStatus("error", OPENSHIFT_BANNER.tokenExpired);
             return;
           }
           if (results.length > 0 && results.every(result => result === "forbidden")) {
             // The live list's own warning: a build inventory that lands later must not clear it, a good list after
             // Reload does.
-            setLiveStatus("warning", BANNER.openshift.watchDenied);
+            setLiveStatus("warning", OPENSHIFT_BANNER.watchDenied);
             return;
           }
           delayMs = 1000;

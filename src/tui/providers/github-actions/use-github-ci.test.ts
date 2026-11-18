@@ -7,8 +7,8 @@ import { closeProviderCaches } from "../../../adapters/cache/sha-sqlite-cache";
 import { githubAdapters } from "../../../adapters/github/adapters";
 import * as api from "../../../adapters/github/api";
 import { GitHubCache } from "../../../adapters/github/cache";
-import { BANNER } from "../../../core/banner";
 import { buildGraph } from "../../../core/git/graph";
+import { GITHUB_BANNER } from "../../../core/github/banner";
 import type { GitHubJob, GitHubWorkflowRun } from "../../../core/github/types";
 import * as monotonic from "../../../core/monotonic";
 import { createAppState } from "../../context/state";
@@ -119,7 +119,7 @@ test("a failed refresh of running runs shows its error, like Jenkins, instead of
   await github.refresh();
   await settle(() => state.graphBadges().size > 0);
   expect(state.providerStatusFor("github-actions").kind).toBe("idle");
-  ci.mockResolvedValue({ data: [], jobs: new Map(), error: BANNER.github.fetchFailed });
+  ci.mockResolvedValue({ data: [], jobs: new Map(), error: GITHUB_BANNER.fetchFailed });
   // Re-enter the view after the stale threshold: the running SHA is refreshed automatically.
   const clock = spyOn(monotonic, "monotonicNow").mockReturnValue(monotonic.monotonicNow() + 120_000);
   try {
@@ -128,7 +128,7 @@ test("a failed refresh of running runs shows its error, like Jenkins, instead of
     actions.setActiveProviderView("github-actions");
     await settle(() => ci.mock.calls.length > calls);
     await settle(() => state.providerStatusFor("github-actions").kind === "error");
-    expect(state.providerStatusFor("github-actions")).toEqual({ kind: "error", message: BANNER.github.fetchFailed });
+    expect(state.providerStatusFor("github-actions")).toEqual({ kind: "error", message: GITHUB_BANNER.fetchFailed });
   } finally {
     clock.mockRestore();
   }
@@ -136,14 +136,14 @@ test("a failed refresh of running runs shows its error, like Jenkins, instead of
 
 test("a failed first fetch in the background shows its error, like Jenkins, instead of looking not loaded yet", async () => {
   const { state, actions, ci } = await mountGitHub({ view: "git" });
-  ci.mockResolvedValue({ data: [], jobs: new Map(), error: BANNER.github.rateLimit });
+  ci.mockResolvedValue({ data: [], jobs: new Map(), error: GITHUB_BANNER.rateLimit });
   await settle(() => ci.mock.calls.length > 0);
   await settle();
-  expect(state.providerStatusFor("github-actions")).toEqual({ kind: "error", message: BANNER.github.rateLimit });
+  expect(state.providerStatusFor("github-actions")).toEqual({ kind: "error", message: GITHUB_BANNER.rateLimit });
   // Entering the view keeps saying why, also without asking GitHub again.
   actions.setActiveProviderView("github-actions");
   await settle();
-  expect(state.providerStatusFor("github-actions")).toEqual({ kind: "error", message: BANNER.github.rateLimit });
+  expect(state.providerStatusFor("github-actions")).toEqual({ kind: "error", message: GITHUB_BANNER.rateLimit });
 });
 
 test("entering the GitHub view before the remote is known fetches once the remote arrives, without a stale banner", async () => {

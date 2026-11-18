@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { BANNER } from "../../core/banner";
 import { clearDebugEvents, getDebugEvents } from "../../core/debug-events";
+import { OPENSHIFT_BANNER } from "../../core/openshift/banner";
 import {
   buildOpenShiftCommitMap,
   buildOpenShiftGraphBadges,
@@ -154,7 +154,7 @@ describe("fetchOpenShiftInventory", () => {
           error: expect.stringContaining("503"),
         }),
       ]);
-      expect(result.error).toBe(BANNER.openshift.inventoryPartial);
+      expect(result.error).toBe(OPENSHIFT_BANNER.inventoryPartial);
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -221,7 +221,7 @@ describe("fetchOpenShiftInventory", () => {
       );
       expect(podRequests).toBe(2);
       expect(result.resources.filter(resource => resource.kind === "Pod")).toHaveLength(2);
-      expect(result.error).toBe(BANNER.openshift.inventoryPartial);
+      expect(result.error).toBe(OPENSHIFT_BANNER.inventoryPartial);
       expect(result.failures).toContainEqual(
         expect.objectContaining({ kind: "Pod", error: expect.stringContaining("pagination token repeated") }),
       );
@@ -253,7 +253,7 @@ describe("fetchOpenShiftInventory", () => {
       );
       expect(podRequests).toBe(MAX_LIST_PAGES);
       expect(result.resources.filter(resource => resource.kind === "Pod")).toHaveLength(MAX_LIST_PAGES);
-      expect(result.error).toBe(BANNER.openshift.inventoryPartial);
+      expect(result.error).toBe(OPENSHIFT_BANNER.inventoryPartial);
       expect(result.failures).toContainEqual(
         expect.objectContaining({ kind: "Pod", error: expect.stringContaining(`${MAX_LIST_PAGES} pages`) }),
       );
@@ -282,7 +282,7 @@ describe("fetchOpenShiftInventory", () => {
         "token",
       );
       expect(result.resources.filter(resource => resource.kind === "Pod")).toHaveLength(MAX_LIST_ITEMS);
-      expect(result.error).toBe(BANNER.openshift.inventoryPartial);
+      expect(result.error).toBe(OPENSHIFT_BANNER.inventoryPartial);
       expect(result.failures).toContainEqual(
         expect.objectContaining({ kind: "Pod", error: expect.stringContaining(`${MAX_LIST_ITEMS} items`) }),
       );
@@ -311,7 +311,7 @@ describe("fetchOpenShiftInventory", () => {
       expect(result.resources.filter(resource => resource.kind === "Pod").map(resource => resource.name)).toEqual([
         "pod-1",
       ]);
-      expect(result.error).toBe(BANNER.openshift.inventoryPartial);
+      expect(result.error).toBe(OPENSHIFT_BANNER.inventoryPartial);
       expect(result.failures).toContainEqual(
         expect.objectContaining({ kind: "Pod", error: expect.stringContaining("400") }),
       );
@@ -370,7 +370,7 @@ describe("fetchOpenShiftInventory", () => {
       );
       expect(requests).toBe(0);
       expect(result.failures).toHaveLength(7);
-      expect(result.error).toBe(BANNER.openshift.invalidNamespace);
+      expect(result.error).toBe(OPENSHIFT_BANNER.invalidNamespace);
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -996,7 +996,7 @@ describe("fetchOpenShiftInventory modes", () => {
         },
         "token",
       );
-      expect(result.error).toBe(BANNER.openshift.tokenExpired);
+      expect(result.error).toBe(OPENSHIFT_BANNER.tokenExpired);
       expect(result.successfulRequests).toBe(0);
     } finally {
       globalThis.fetch = originalFetch;

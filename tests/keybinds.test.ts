@@ -1,11 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import {
-  buildGitHubProviderItems,
-  buildJenkinsProviderItems,
-  buildOpenShiftProviderItems,
-  buildSnykProviderItems,
-} from "../src/tui/hooks/menu-provider-items";
 import { KEYBINDS } from "../src/tui/keybinds";
+import { buildGitHubProviderItems } from "../src/tui/providers/github-actions/menu-items";
+import { buildJenkinsProviderItems } from "../src/tui/providers/jenkins/menu-items";
+import { buildOpenShiftProviderItems } from "../src/tui/providers/openshift/menu-items";
+import { buildSnykProviderItems } from "../src/tui/providers/snyk/menu-items";
 
 function sectionKeys(label: string): string[] {
   const rows = KEYBINDS.general;

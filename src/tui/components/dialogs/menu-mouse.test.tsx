@@ -5,16 +5,14 @@ import { testRender } from "@opentui/solid";
 import { createSignal, Show } from "solid-js";
 import * as config from "../../../adapters/settings/config";
 import * as configWrite from "../../../adapters/settings/config-write";
+import type { GitHubSettings as GitHubMenuConfig } from "../../../core/github/definition";
+import type { JenkinsSettings as JenkinsMenuConfig } from "../../../core/jenkins/definition";
+import type { OpenShiftSettings as OpenShiftMenuConfig } from "../../../core/openshift/definition";
 import type { ConfigInfo } from "../../../core/settings/config";
+import type { SnykSettings as SnykMenuConfig } from "../../../core/snyk/service";
 import type { RepoSettings } from "../../app/repo-settings";
 import { AppStateContext, createAppState } from "../../context/state";
 import { createThemeState, ThemeContext } from "../../context/theme";
-import type {
-  GitHubMenuConfig,
-  JenkinsMenuConfig,
-  OpenShiftMenuConfig,
-  SnykMenuConfig,
-} from "../../hooks/menu-items-types";
 import * as clipboard from "../../hooks/use-clipboard";
 import MenuDialog from "./menu-dialog";
 

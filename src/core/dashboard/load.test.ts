@@ -1,7 +1,7 @@
 /** The Dashboard's reading without Git or caches: the branch walk and the events come from fakes. */
 import { expect, test } from "bun:test";
+import { githubEvents } from "../github/events";
 import type { GitHubCacheEntry } from "../github/merge";
-import { githubEvents } from "./events";
 import { branchOwners, type DashboardGit, type DashboardSources, readAppEvents } from "./load";
 
 // main: m3 → m2 → m1; develop branched at m1: d2 → d1 → m1, merged into main at m3 (m3's second parent is d2).

@@ -1,12 +1,13 @@
 /** OpenShift as a provider module. */
-import { openShiftEvents } from "../../../core/dashboard/events";
+
 import { openShiftProvider } from "../../../core/openshift/definition";
+import { openShiftEvents } from "../../../core/openshift/events";
 import type { OpenShiftResource } from "../../../core/openshift/types";
-import { buildOpenShiftProviderItems } from "../../hooks/menu-provider-items";
-import { OPENSHIFT_LEGEND } from "../legends";
 import { providerModule } from "../module";
 import { type OpenShiftDetailSource, openshiftDetail } from "./detail-entry";
 import { OPENSHIFT_GRAPH_COLUMNS } from "./graph-columns";
+import { OPENSHIFT_LEGEND } from "./legend";
+import { buildOpenShiftProviderItems } from "./menu-items";
 import OpenShiftResourceDialog from "./resource-dialog";
 import { useOpenShift } from "./use-openshift";
 

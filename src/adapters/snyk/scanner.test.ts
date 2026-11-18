@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { chmod, copyFile, mkdir, mkdtemp, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
-import { BANNER } from "../../core/banner";
+import { SNYK_BANNER } from "../../core/snyk/banner";
 import type { SnykDependencyGraph, SnykScanResult } from "../../core/snyk/types";
 import { closeProviderCaches } from "../cache/sha-sqlite-cache";
 import { SnykCache } from "./cache";
@@ -300,7 +300,7 @@ process.exit(1);
     };
     await expect(
       scanSnykCommit({ repoPath: "/repo", sha: SHA, force: true }, { cacheRoot, runCommand: runner }),
-    ).rejects.toThrow(BANNER.snyk.noDependencyProject);
+    ).rejects.toThrow(SNYK_BANNER.noDependencyProject);
   });
 
   test("a scan where every project failed names each manifest with Snyk's reason", async () => {

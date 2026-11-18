@@ -1,5 +1,6 @@
 import { isAbortError } from "../../core/abort";
-import { BANNER, bannerOrFallback, debugError } from "../../core/banner";
+import { bannerOrFallback, debugError } from "../../core/banner";
+import { JENKINS_BANNER } from "../../core/jenkins/banner";
 import {
   JENKINS_MULTIBRANCH_JOB_LIMIT,
   type JenkinsFailedTest,
@@ -69,7 +70,7 @@ const JENKINS_HTTP_POLICY = {
   timeoutMs: JENKINS_REQUEST_TIMEOUT_MS,
   attempts: 2,
   retryDelayMs: 500,
-  timeoutMessage: BANNER.jenkins.timeout,
+  timeoutMessage: JENKINS_BANNER.timeout,
 };
 
 async function fetchWithRetry(url: string, init: RequestInit = {}): Promise<Response> {
@@ -145,7 +146,7 @@ function isEnabledMultibranchJob(job: JenkinsMultibranchChildApi): boolean {
 }
 
 function authHeaders(username: string | undefined, token: string): Record<string, string> {
-  if (!username) throw new Error(BANNER.jenkins.noUsername);
+  if (!username) throw new Error(JENKINS_BANNER.noUsername);
   return { Authorization: `Basic ${Buffer.from(`${username}:${token}`).toString("base64")}` };
 }
 
@@ -167,7 +168,7 @@ function isJenkinsLoginRedirect(location: string | null): boolean {
 
 function jenkinsAuthError(detail: string): Error {
   debugError("Jenkins", detail);
-  return new ProviderAuthError(BANNER.jenkins.authFailed);
+  return new ProviderAuthError(JENKINS_BANNER.authFailed);
 }
 
 async function fetchJson<T>(
@@ -178,17 +179,17 @@ async function fetchJson<T>(
 ): Promise<T> {
   if (!isSafeJenkinsRequestUrl(url)) {
     debugError("Jenkins", url);
-    throw new Error(BANNER.jenkins.invalidJobUrl);
+    throw new Error(JENKINS_BANNER.invalidJobUrl);
   }
   const res = await fetchWithRetry(url, { headers: authHeaders(username, token), signal, redirect: "manual" });
   if (res.status >= 300 && res.status < 400 && isJenkinsLoginRedirect(res.headers.get("location"))) {
     throw jenkinsAuthError(`login redirect ${url}`);
   }
   const contentType = res.headers.get("content-type") ?? "";
-  if (res.status === 401) throw new ProviderAuthError(BANNER.jenkins.tokenExpired);
+  if (res.status === 401) throw new ProviderAuthError(JENKINS_BANNER.tokenExpired);
   if (!res.ok) {
     debugError("Jenkins", `${res.status} ${res.statusText} ${url}`);
-    throw new Error(BANNER.jenkins.fetchFailed);
+    throw new Error(JENKINS_BANNER.fetchFailed);
   }
   if (/text\/html/i.test(contentType)) throw jenkinsAuthError(`html response ${url}`);
   return (await res.json()) as T;
@@ -237,7 +238,7 @@ export async function resolveJenkinsJobs(
         discoveries[index] = { job, api };
       } catch (err) {
         if (isAbortError(err, signal)) throw err;
-        firstError ??= bannerOrFallback(err, BANNER.jenkins.fetchFailed, "Jenkins");
+        firstError ??= bannerOrFallback(err, JENKINS_BANNER.fetchFailed, "Jenkins");
         failure ??= failureOf(err);
       }
     },
@@ -265,7 +266,7 @@ export async function resolveJenkinsJobs(
       parentOrigin = new URL(discovery.job.url).origin;
     } catch {
       debugError("Jenkins", discovery.job.url);
-      firstError ??= BANNER.jenkins.invalidJobUrl;
+      firstError ??= JENKINS_BANNER.invalidJobUrl;
       continue;
     }
     const inGraph = (child: JenkinsMultibranchChildApi) => {
@@ -297,13 +298,13 @@ export async function resolveJenkinsJobs(
       url = normalizeJenkinsJobUrl(onOrigin(child.url ?? "", parentOrigin));
     } catch {
       debugError("Jenkins", child.url ?? "");
-      firstError ??= BANNER.jenkins.invalidJobUrl;
+      firstError ??= JENKINS_BANNER.invalidJobUrl;
       continue;
     }
     if (!url || resolved.has(url) || seen.has(url)) continue;
     if (!isSafeJenkinsRequestUrl(url)) {
       debugError("Jenkins", url);
-      firstError ??= BANNER.jenkins.invalidJobUrl;
+      firstError ??= JENKINS_BANNER.invalidJobUrl;
       continue;
     }
     seen.add(url);
@@ -532,7 +533,7 @@ export async function fetchJenkinsRunsForBuilds(
         );
       } catch (err) {
         if (isAbortError(err, signal)) throw err;
-        firstError ??= bannerOrFallback(err, BANNER.jenkins.fetchFailed, "Jenkins");
+        firstError ??= bannerOrFallback(err, JENKINS_BANNER.fetchFailed, "Jenkins");
         failure ??= failureOf(err);
       }
     },
@@ -588,7 +589,7 @@ export async function fetchJenkinsDataForSHAs(
               for (const sha of matchingHeadShas(build, wanted)) runs.push(mapRun(job, build, sha));
             } catch (err) {
               if (isAbortError(err, opts.signal)) throw err;
-              firstError ??= bannerOrFallback(err, BANNER.jenkins.fetchFailed, "Jenkins");
+              firstError ??= bannerOrFallback(err, JENKINS_BANNER.fetchFailed, "Jenkins");
               failure ??= failureOf(err);
             }
           },
@@ -596,7 +597,7 @@ export async function fetchJenkinsDataForSHAs(
         );
       } catch (err) {
         if (isAbortError(err, opts.signal)) throw err;
-        firstError ??= bannerOrFallback(err, BANNER.jenkins.fetchFailed, "Jenkins");
+        firstError ??= bannerOrFallback(err, JENKINS_BANNER.fetchFailed, "Jenkins");
         failure ??= failureOf(err);
       }
     },
@@ -679,7 +680,7 @@ export async function fetchJenkinsGraphDataForSHAs(
         }
       } catch (err) {
         if (isAbortError(err, opts.signal)) throw err;
-        firstError ??= bannerOrFallback(err, BANNER.jenkins.fetchFailed, "Jenkins");
+        firstError ??= bannerOrFallback(err, JENKINS_BANNER.fetchFailed, "Jenkins");
         failure ??= failureOf(err);
       }
     },
@@ -807,7 +808,7 @@ export async function fetchJenkinsRunJobs(
   } catch (err) {
     if (isAbortError(err, signal)) throw err;
     // Like GitHub's "jobs failed": say which part failed, not a generic fetch failure.
-    return { jobs: [], error: bannerOrFallback(err, BANNER.jenkins.stagesFailed, "Jenkins"), failure: failureOf(err) };
+    return { jobs: [], error: bannerOrFallback(err, JENKINS_BANNER.stagesFailed, "Jenkins"), failure: failureOf(err) };
   }
 }
 
@@ -819,15 +820,15 @@ export async function fetchJenkinsConsoleLog(
 ): Promise<string> {
   const url = `${normalizeJenkinsJobUrl(onOrigin(run.url, run.jobUrl))}/consoleText`;
   // A failed request throws its banner so the log dialog can say why; "" is a build without output.
-  if (!isSafeJenkinsRequestUrl(url)) throw new Error(BANNER.jenkins.invalidJobUrl);
+  if (!isSafeJenkinsRequestUrl(url)) throw new Error(JENKINS_BANNER.invalidJobUrl);
   const res = await fetchWithRetry(url, {
     headers: authHeaders(username, token),
     signal,
   });
-  if (res.status === 401) throw new ProviderAuthError(BANNER.jenkins.tokenExpired);
+  if (res.status === 401) throw new ProviderAuthError(JENKINS_BANNER.tokenExpired);
   if (!res.ok) {
     debugError("Jenkins", `${res.status} ${res.statusText} ${url}`);
-    throw new Error(BANNER.jenkins.logFailed);
+    throw new Error(JENKINS_BANNER.logFailed);
   }
   return res.text();
 }

@@ -3,13 +3,9 @@
  * happened. `dashboardRows` lays them out as knots on the app's rope.
  */
 
-import { formatDuration } from "../duration";
-import type { GitHubCacheEntry } from "../github/merge";
-import type { JenkinsCacheEntry } from "../jenkins/merge";
-import type { OpenShiftCacheEntry } from "../openshift/merge";
 import type { EventSource } from "../provider-model";
 import type { SnykScanResult, SnykSeverity } from "../snyk/types";
-import { categorize, type StatusCategory } from "../status";
+import type { StatusCategory } from "../status";
 
 /** One line of an event's side panel: a label and its value. */
 export interface DashboardFact {
@@ -46,9 +42,12 @@ export interface DashboardEvent {
   facts?: DashboardFact[];
 }
 
-const fact = (label: string, value: string | null | undefined): DashboardFact[] => (value ? [{ label, value }] : []);
+/** A fact for the side panel, when it has a value. */
+export const fact = (label: string, value: string | null | undefined): DashboardFact[] =>
+  value ? [{ label, value }] : [];
 
-const VERBS: Record<StatusCategory, string> = {
+/** How a run that ended in each status reads: `CI #812 failed`. */
+export const VERBS: Record<StatusCategory, string> = {
   pass: "passed",
   fail: "failed",
   cancelled: "cancelled",
@@ -57,7 +56,8 @@ const VERBS: Record<StatusCategory, string> = {
   unknown: "finished",
 };
 
-const timeOf = (value: string | null | undefined) => {
+/** An ISO time in milliseconds; null when it isn't one. */
+export const timeOf = (value: string | null | undefined) => {
   const time = value ? Date.parse(value) : Number.NaN;
   return Number.isFinite(time) ? time : null;
 };
@@ -84,7 +84,7 @@ export function gitEvents(app: string, commits: readonly GitCommitEvent[], branc
 }
 
 /** One event per run, however many commits' snapshots hold it. */
-function runEvents<T extends { id: string | number; updatedAt: string; headSha: string }>(
+export function runEvents<T extends { id: string | number; updatedAt: string; headSha: string }>(
   app: string,
   source: EventSource,
   runs: readonly T[],
@@ -104,141 +104,6 @@ function runEvents<T extends { id: string | number; updatedAt: string; headSha: 
     events.set(id, { id, app, source, time, ...describe(run), sha: run.headSha, entry: String(run.id) });
   }
   return [...events.values()];
-}
-
-export function githubEvents(
-  app: string,
-  entries: readonly Pick<GitHubCacheEntry, "sha" | "runs">[],
-): DashboardEvent[] {
-  return runEvents(
-    app,
-    "github-actions",
-    entries.flatMap(entry => entry.runs),
-    run => {
-      const status = categorize(run.status, run.conclusion);
-      return {
-        status,
-        text: `${run.name} #${run.runNumber} ${VERBS[status]}`,
-        ...(run.url ? { url: run.url } : {}),
-        ...(run.headBranch ? { branch: run.headBranch } : {}),
-        facts: [
-          ...fact("Workflow", run.name),
-          ...fact("Run", `#${run.runNumber}`),
-          ...fact("Trigger", run.event),
-          ...fact("Duration", formatDuration(run.startedAt ?? null, run.updatedAt)),
-        ],
-      };
-    },
-  );
-}
-
-export function jenkinsEvents(
-  app: string,
-  entries: readonly Pick<JenkinsCacheEntry, "sha" | "runs">[],
-): DashboardEvent[] {
-  return runEvents(
-    app,
-    "jenkins",
-    entries.flatMap(entry => entry.runs),
-    run => {
-      const status = categorize(run.status, run.conclusion);
-      const verb = status === "cancelled" ? "aborted" : VERBS[status];
-      return {
-        status,
-        text: `${run.jobLabel || run.name} #${run.runNumber} ${verb}`,
-        ...(run.url ? { url: run.url } : {}),
-        ...(run.branch ? { branch: run.branch } : {}),
-        facts: [
-          ...fact("Job", run.jobLabel || run.name),
-          ...fact("Build", `#${run.runNumber}`),
-          ...fact("Duration", formatDuration(run.startedAt, run.updatedAt)),
-        ],
-      };
-    },
-  );
-}
-
-export function openShiftEvents(app: string, entries: readonly OpenShiftCacheEntry[]): DashboardEvent[] {
-  const events = new Map<string, DashboardEvent>();
-  for (const build of entries.flatMap(entry => entry.builds)) {
-    // When it finished; its creation time otherwise.
-    const objectStatus = (build.object as { status?: Record<string, unknown> } | undefined)?.status ?? {};
-    const text = (key: string) => (typeof objectStatus[key] === "string" ? (objectStatus[key] as string) : null);
-    const completed = text("completionTimestamp");
-    const time = timeOf(completed) ?? timeOf(build.updatedAt);
-    const reason = [text("reason"), text("message")].filter(Boolean).join(": ");
-    const id = `${app}:openshift:${build.namespace}/${build.id}`;
-    if (time === null || events.has(id)) continue;
-    const outcome = build.status === "pass" ? "complete" : build.status === "fail" ? "failed" : "running";
-    // The Git ref its BuildConfig builds, when it names one (`develop`, `refs/heads/develop`); else Git finds it.
-    const spec = (build.object as { spec?: { source?: { git?: { ref?: unknown } } } } | undefined)?.spec;
-    const ref = spec?.source?.git?.ref;
-    const branch = typeof ref === "string" ? ref.trim().replace(/^refs\/heads\//, "") : "";
-    events.set(id, {
-      id,
-      app,
-      entry: build.id,
-      source: "openshift",
-      time,
-      status: build.status,
-      text: `build ${build.name} ${outcome} in ${build.namespace}`,
-      sha: build.commitSha,
-      ...(branch ? { branch } : {}),
-      facts: [
-        ...fact("Namespace", build.namespace),
-        ...fact("Build", build.name),
-        ...fact("Reason", build.status === "fail" ? reason : null),
-        ...fact("Duration", formatDuration(build.updatedAt ?? null, completed)),
-      ],
-    });
-  }
-  return [...events.values()];
-}
-
-export function snykEvents(
-  app: string,
-  scans: readonly (Pick<SnykScanResult, "sha" | "scannedAt" | "counts"> &
-    Partial<Pick<SnykScanResult, "partial" | "failedProjects">>)[],
-): DashboardEvent[] {
-  return scans.flatMap(scan => {
-    const time = timeOf(scan.scannedAt);
-    if (time === null) return [];
-    const { critical, high, medium, low } = scan.counts;
-    const bySeverity = [
-      ["critical", critical],
-      ["high", high],
-      ["medium", medium],
-      ["low", low],
-    ] as const;
-    const total = critical + high + medium + low;
-    // A partial scan without findings is not a clean result: some projects were not scanned.
-    const status: StatusCategory = critical + high > 0 ? "fail" : total > 0 || scan.partial ? "unknown" : "pass";
-    const counted = `${total} ${total === 1 ? "vulnerability" : "vulnerabilities"}`;
-    return [
-      {
-        id: `${app}:snyk:${scan.sha}`,
-        app,
-        source: "snyk" as const,
-        time,
-        status,
-        severity: bySeverity.find(([, count]) => count > 0)?.[0] ?? null,
-        // Every severity in order, zeros too, like Snyk's C0 H0 M0 L0: the counts line up from scan to scan.
-        text: ["scan", counted, ...bySeverity.map(([severity, count]) => `${count} ${severity}`)].join(" · "),
-        counts: scan.counts,
-        partial: scan.partial === true,
-        sha: scan.sha,
-        facts: [
-          ...fact("Vulnerabilities", `${total} (${critical} critical, ${high} high, ${medium} medium, ${low} low)`),
-          ...fact(
-            "Partial",
-            scan.partial
-              ? `${scan.failedProjects ?? 1} ${scan.failedProjects === 1 || scan.failedProjects === undefined ? "project" : "projects"} could not be scanned`
-              : null,
-          ),
-        ],
-      },
-    ];
-  });
 }
 
 export type DashboardRow =

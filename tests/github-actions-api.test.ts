@@ -11,8 +11,8 @@ import {
   nextGithubLink,
 } from "../src/adapters/github/api";
 import { getTokenSource } from "../src/adapters/system/token-env";
-import { BANNER } from "../src/core/banner";
 import { clearDebugEvents, getDebugEvents } from "../src/core/debug-events";
+import { GITHUB_BANNER } from "../src/core/github/banner";
 import {
   aggregateRunsToGraphBadge,
   buildCommitDataMap,
@@ -427,7 +427,7 @@ describe("fetchRunJobs", () => {
   it("returns explicit error (no throw) on 404", async () => {
     mockFetch(mock(async () => new Response(null, { status: 404 })));
     const { jobs, error } = await fetchRunJobs(TEST_REPO, TEST_TOKEN, 999);
-    expect(error).toBe(BANNER.github.jobsFailed);
+    expect(error).toBe(GITHUB_BANNER.jobsFailed);
     expect(jobs).toHaveLength(0);
     expect(getDebugEvents().some(event => event.source === "GitHub" && event.message.includes("404"))).toBe(true);
   });
@@ -439,7 +439,7 @@ describe("fetchRunJobs", () => {
       }),
     );
     const { jobs, error } = await fetchRunJobs(TEST_REPO, TEST_TOKEN, 123);
-    expect(error).toBe(BANNER.github.jobsFailed);
+    expect(error).toBe(GITHUB_BANNER.jobsFailed);
     expect(jobs).toHaveLength(0);
     expect(getDebugEvents().some(event => event.message.includes("Network failure"))).toBe(true);
   });
@@ -482,7 +482,7 @@ describe("fetchRunJobs", () => {
       }),
     );
     const { jobs, error } = await fetchRunJobs(TEST_REPO, TEST_TOKEN, 123);
-    expect(error).toBe(BANNER.github.incomplete);
+    expect(error).toBe(GITHUB_BANNER.incomplete);
     expect(jobs).toHaveLength(MAX_JOB_PAGES);
     expect(n).toBe(MAX_JOB_PAGES);
   });
@@ -683,14 +683,14 @@ describe("fetchCIDataForSHAs", () => {
     mockFetch(mock(async () => new Response(null, { status: 401 })));
     const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
     expect(result.data).toHaveLength(0);
-    expect(result.error).toBe(BANNER.github.tokenExpired);
+    expect(result.error).toBe(GITHUB_BANNER.tokenExpired);
   });
 
   it("returns empty result on HTTP error (graceful degradation)", async () => {
     mockFetch(mock(async () => new Response(null, { status: 403 })));
     const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
     expect(result.data).toHaveLength(0);
-    expect(result.error).toBe(BANNER.github.fetchFailed);
+    expect(result.error).toBe(GITHUB_BANNER.fetchFailed);
     expect(getDebugEvents().some(event => event.source === "GitHub" && event.message.includes("403"))).toBe(true);
   });
 
@@ -699,7 +699,7 @@ describe("fetchCIDataForSHAs", () => {
     mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
     const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
     expect(result.data).toHaveLength(0);
-    expect(result.error).toBe(BANNER.github.fetchFailed);
+    expect(result.error).toBe(GITHUB_BANNER.fetchFailed);
     expect(getDebugEvents().some(event => event.message.includes("Not Found"))).toBe(true);
   });
 
@@ -870,7 +870,7 @@ describe("fetchCIDataForSHAs", () => {
       }),
     );
     const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
-    expect(result.error).toBe(BANNER.github.fetchFailed);
+    expect(result.error).toBe(GITHUB_BANNER.fetchFailed);
     expect(result.jobsUnsupported).not.toBe(true);
     expect(calls).toBe(1);
     const errors = getDebugEvents().filter(event => event.status === "error");
@@ -887,7 +887,7 @@ describe("fetchCIDataForSHAs", () => {
     );
     const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
     expect(result.data).toHaveLength(0);
-    expect(result.error).toBe(BANNER.github.fetchFailed);
+    expect(result.error).toBe(GITHUB_BANNER.fetchFailed);
     expect(getDebugEvents().some(event => event.message.includes("Network failure"))).toBe(true);
   });
 
@@ -1116,17 +1116,17 @@ describe("fetchJobLog", () => {
 
   it("throws the reason for a failed request instead of looking empty", async () => {
     mockFetch(mock(async () => new Response(null, { status: 401 })));
-    await expect(fetchJobLog(TEST_REPO, TEST_TOKEN, 7)).rejects.toThrow(BANNER.github.tokenExpired);
+    await expect(fetchJobLog(TEST_REPO, TEST_TOKEN, 7)).rejects.toThrow(GITHUB_BANNER.tokenExpired);
     mockFetch(mock(async () => new Response(null, { status: 403, headers: { "x-ratelimit-remaining": "0" } })));
-    await expect(fetchJobLog(TEST_REPO, TEST_TOKEN, 7)).rejects.toThrow(BANNER.github.rateLimit);
+    await expect(fetchJobLog(TEST_REPO, TEST_TOKEN, 7)).rejects.toThrow(GITHUB_BANNER.rateLimit);
     mockFetch(mock(async () => new Response(null, { status: 404 })));
-    await expect(fetchJobLog(TEST_REPO, TEST_TOKEN, 7)).rejects.toThrow(BANNER.github.logFailed);
+    await expect(fetchJobLog(TEST_REPO, TEST_TOKEN, 7)).rejects.toThrow(GITHUB_BANNER.logFailed);
     mockFetch(
       mock(async () => {
         throw new Error("socket hang up");
       }),
     );
-    await expect(fetchJobLog(TEST_REPO, TEST_TOKEN, 7)).rejects.toThrow(BANNER.github.logFailed);
+    await expect(fetchJobLog(TEST_REPO, TEST_TOKEN, 7)).rejects.toThrow(GITHUB_BANNER.logFailed);
   });
 });
 

@@ -6,9 +6,9 @@ import type {
   JenkinsRun,
 } from "../../../core/jenkins/types";
 import { scopedMemory } from "../../components/detail-memory";
-import { JENKINS_LEGEND } from "../legends";
 import { detailEntry, type ProviderDetailSource } from "../shared/detail-entry";
 import { JenkinsDetailTab } from "./detail-tab";
+import { JENKINS_LEGEND } from "./legend";
 
 /** What Jenkins hands the detail view. */
 export interface JenkinsDetailSource extends ProviderDetailSource<JenkinsCommitData> {

@@ -1,5 +1,5 @@
 /** Jenkins as core knows it: its names and its settings. */
-import { jenkinsEvents } from "../dashboard/events";
+
 import type { ProviderDefinition } from "../provider-set";
 import {
   DEFAULT_PROVIDER_CACHE_LIMIT,
@@ -11,8 +11,9 @@ import {
   type ProviderLimit,
 } from "../provider-settings";
 import { definedFields, type SettingsSection } from "../settings/provider-section";
+import { jenkinsEvents } from "./events";
 import type { JenkinsAdapters } from "./service";
-import type { JenkinsJobConfig } from "./types";
+import { DEFAULT_JENKINS_CONFIG, type JenkinsJobConfig } from "./types";
 import { isValidJenkinsJobUrl, JENKINS_JOB_URL_MAX_LENGTH } from "./validation";
 
 const TEXT_MAX_LENGTH = 255;
@@ -38,17 +39,8 @@ export const jenkinsProvider: ProviderDefinition<JenkinsAdapters, JenkinsSetting
   storedEvents: async (adapters, app) =>
     jenkinsEvents(app, await adapters.cache(DEFAULT_PROVIDER_CACHE_LIMIT).peekAll(app)),
   settings: {
-    defaults: {
-      enabled: false,
-      username: undefined,
-      tokenEnvVar: "JENKINS_TOKEN",
-      // Read only as fetchDepth's fallback: never written.
-      graphBuildLimit: undefined,
-      fetchDepth: 20,
-      cacheLimit: 20,
-      autoRefreshSeconds: 120,
-      jobs: [],
-    },
+    // The service's defaults (types.ts); graphBuildLimit is read only as fetchDepth's fallback, never written.
+    defaults: { ...DEFAULT_JENKINS_CONFIG, username: undefined, graphBuildLimit: undefined },
     read: (raw, reader) => {
       const enabled = reader.boolean("enabled", raw.enabled);
       const username = reader.text("username", raw.username, TEXT_MAX_LENGTH);

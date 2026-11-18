@@ -9,42 +9,46 @@ import {
   isBanner,
 } from "../src/core/banner";
 import { clearDebugEvents, getDebugEvents } from "../src/core/debug-events";
+import { GITHUB_BANNER } from "../src/core/github/banner";
+import { JENKINS_BANNER } from "../src/core/jenkins/banner";
+import { OPENSHIFT_BANNER } from "../src/core/openshift/banner";
+import { SNYK_BANNER } from "../src/core/snyk/banner";
 
 afterEach(() => clearDebugEvents());
 
 describe("banner catalog", () => {
   test("recognizes static banner sentences", () => {
     expect(isBanner(BANNER.git.fetchFailed)).toBe(true);
-    expect(isBanner(BANNER.github.jobsFailed)).toBe(true);
+    expect(isBanner(GITHUB_BANNER.jobsFailed)).toBe(true);
     expect(isBanner("raw stderr dump")).toBe(false);
   });
 
   test("token expiry names cause, live-data effect and the retry, for every provider", () => {
-    expect(BANNER.openshift.tokenExpired).toBe("OpenShift token expired. Live data unavailable. Reload to retry.");
-    expect(BANNER.github.tokenExpired).toBe("GitHub token expired. Live data unavailable. Reload to retry.");
-    expect(BANNER.jenkins.tokenExpired).toBe("Jenkins token expired. Live data unavailable. Reload to retry.");
-    expect(isBanner(BANNER.openshift.tokenExpired)).toBe(true);
+    expect(OPENSHIFT_BANNER.tokenExpired).toBe("OpenShift token expired. Live data unavailable. Reload to retry.");
+    expect(GITHUB_BANNER.tokenExpired).toBe("GitHub token expired. Live data unavailable. Reload to retry.");
+    expect(JENKINS_BANNER.tokenExpired).toBe("Jenkins token expired. Live data unavailable. Reload to retry.");
+    expect(isBanner(OPENSHIFT_BANNER.tokenExpired)).toBe(true);
   });
 
   test("GitHub and Jenkins token expiry banners are catalogued", () => {
-    expect(isBanner(BANNER.github.tokenExpired)).toBe(true);
-    expect(isBanner(BANNER.jenkins.tokenExpired)).toBe(true);
+    expect(isBanner(GITHUB_BANNER.tokenExpired)).toBe(true);
+    expect(isBanner(JENKINS_BANNER.tokenExpired)).toBe(true);
   });
 
   test("the Jenkins branch-job limit gives the counts, then what they mean", () => {
-    expect(BANNER.jenkins.branchLimit(25, 61)).toBe(
+    expect(JENKINS_BANNER.branchLimit(25, 61)).toBe(
       "Jenkins branch jobs · 25 of 61 read. Branches in the graph come first. Builds on the other 36 do not show.",
     );
   });
 
   test("keeps known banners and dumps unknown detail to debug", () => {
-    expect(bannerOrFallback(new Error(BANNER.jenkins.timeout), BANNER.jenkins.fetchFailed, "Jenkins")).toBe(
-      BANNER.jenkins.timeout,
+    expect(bannerOrFallback(new Error(JENKINS_BANNER.timeout), JENKINS_BANNER.fetchFailed, "Jenkins")).toBe(
+      JENKINS_BANNER.timeout,
     );
     expect(getDebugEvents()).toHaveLength(0);
 
-    expect(bannerOrFallback(new Error("ECONNRESET boom"), BANNER.github.fetchFailed, "GitHub")).toBe(
-      BANNER.github.fetchFailed,
+    expect(bannerOrFallback(new Error("ECONNRESET boom"), GITHUB_BANNER.fetchFailed, "GitHub")).toBe(
+      GITHUB_BANNER.fetchFailed,
     );
     expect(getDebugEvents()[0]).toMatchObject({ source: "GitHub", message: "ECONNRESET boom", status: "error" });
   });
@@ -66,19 +70,19 @@ describe("banner catalog", () => {
 describe("bannerParts", () => {
   test.each([
     ["Git", BANNER.git.fetchFailed, "Fetch failed", []],
-    ["GitHub", BANNER.github.missingToken("GITHUB_TOKEN"), "Unavailable", ["Missing GITHUB_TOKEN."]],
-    ["GitHub", BANNER.github.disabled, "Disabled", []],
+    ["GitHub", GITHUB_BANNER.missingToken("GITHUB_TOKEN"), "Unavailable", ["Missing GITHUB_TOKEN."]],
+    ["GitHub", GITHUB_BANNER.disabled, "Disabled", []],
     [
       "Jenkins",
-      BANNER.jenkins.branchLimit(25, 30),
+      JENKINS_BANNER.branchLimit(25, 30),
       "Branch jobs · 25 of 30 read",
       ["Branches in the graph come first. Builds on the other 5 do not show."],
     ],
-    ["OpenShift", BANNER.openshift.watchDenied, "Watch denied", ["Resource data might be stale. Reload to refresh."]],
+    ["OpenShift", OPENSHIFT_BANNER.watchDenied, "Watch denied", ["Resource data might be stale. Reload to refresh."]],
     ["Snyk", "Partial scan. Kept last complete snapshot.", "Partial scan", ["Kept last complete snapshot."]],
     [
       "Snyk",
-      BANNER.snyk.noDependencyProject,
+      SNYK_BANNER.noDependencyProject,
       "No supported dependency project",
       ["Dependency graphs support Bun, npm, pnpm, Yarn, and Maven projects."],
     ],

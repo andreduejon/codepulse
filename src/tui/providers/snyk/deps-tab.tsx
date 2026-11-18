@@ -1,7 +1,7 @@
 import type { KeyEvent, Renderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, onCleanup, Show, untrack } from "solid-js";
-import { BANNER } from "../../../core/banner";
+import { SNYK_BANNER } from "../../../core/snyk/banner";
 import { DETAIL_PANEL_WIDTH_FRACTION } from "../../constants";
 import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useClipboard } from "../../hooks/use-clipboard";
@@ -381,7 +381,7 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
         <box height={1} flexShrink={0} />
         <Show when={projects().length === 0}>
           <text fg={t().foregroundMuted} wrapMode="word">
-            {BANNER.snyk.noDependencyProject}
+            {SNYK_BANNER.noDependencyProject}
           </text>
         </Show>
         <For each={rows()}>

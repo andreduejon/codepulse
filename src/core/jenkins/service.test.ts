@@ -1,10 +1,10 @@
 /** The Jenkins service with its lifecycle, without Solid: the app is a plain object, Jenkins and the cache are fakes. */
 import { expect, mock, test } from "bun:test";
-import { BANNER } from "../banner";
 import { FetchLifecycle } from "../fetch-lifecycle";
 import type { GraphRow } from "../git/types";
 import type { GraphBadge } from "../provider-model";
 import type { ProviderStatus } from "../provider-status";
+import { JENKINS_BANNER } from "./banner";
 import type { JenkinsCacheEntry } from "./merge";
 import { createJenkinsService, type JenkinsApiPort, type JenkinsCachePort } from "./service";
 import type { JenkinsRun } from "./types";
@@ -125,9 +125,9 @@ test("a first fetch shows the commit's builds and badge, and saves the finished 
 
 test("an authentication failure stops automatic requests until a Reload", async () => {
   const h = harness();
-  h.fail(BANNER.jenkins.authFailed);
+  h.fail(JENKINS_BANNER.authFailed);
   await h.lifecycle.fetchInitial(undefined, undefined, true);
-  expect(h.app.status).toEqual({ kind: "error", message: BANNER.jenkins.authFailed });
+  expect(h.app.status).toEqual({ kind: "error", message: JENKINS_BANNER.authFailed });
   h.fail(null);
   await h.lifecycle.fetchRefresh(undefined, true, false);
   expect(h.api.fetchJenkinsGraphDataForSHAs).toHaveBeenCalledTimes(1);

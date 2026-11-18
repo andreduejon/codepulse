@@ -1,8 +1,3 @@
-import type { GitHubSettings } from "../../core/github/definition";
-import type { JenkinsSettings } from "../../core/jenkins/definition";
-import type { OpenShiftSettings } from "../../core/openshift/definition";
-import type { SnykSettings } from "../../core/snyk/service";
-
 export type MenuTab = "repository" | "branch" | "providers";
 
 export type SettingItem =
@@ -48,9 +43,3 @@ export type SettingItem =
 
 /** Usable width for copyable text: dialog=70 - 2(paddingX=1) - 8(paddingX=4) = 60 */
 export const COPYABLE_VISIBLE_WIDTH = 60;
-
-/** Each provider's settings as its Menu rows change them: its definition's (core/<provider>/definition.ts). */
-export type GitHubMenuConfig = GitHubSettings;
-export type JenkinsMenuConfig = JenkinsSettings;
-export type OpenShiftMenuConfig = OpenShiftSettings;
-export type SnykMenuConfig = SnykSettings;

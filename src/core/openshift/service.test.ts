@@ -1,10 +1,10 @@
 /** The OpenShift service with its lifecycle, without Solid: the app is a plain object, the cluster and cache are fakes. */
 import { expect, mock, test } from "bun:test";
-import { BANNER } from "../banner";
 import { FetchLifecycle } from "../fetch-lifecycle";
 import type { GraphRow } from "../git/types";
 import type { GraphBadge } from "../provider-model";
 import type { ProviderStatus } from "../provider-status";
+import { OPENSHIFT_BANNER } from "./banner";
 import { commitDataFromCacheEntry } from "./commit-data";
 import type { OpenShiftCacheEntry } from "./merge";
 import { createOpenShiftService, type OpenShiftApiPort, type OpenShiftCachePort } from "./service";
@@ -116,10 +116,10 @@ test("the build list shows the commit's builds and badge, and saves the finished
 
 test("an expired token freezes the live list until a Reload, which starts it again", async () => {
   const h = harness();
-  h.fail(BANNER.openshift.tokenExpired);
+  h.fail(OPENSHIFT_BANNER.tokenExpired);
   await h.lifecycle.fetchInitial(undefined, undefined, true);
   expect(h.service.isFrozen()).toBe(true);
-  expect(h.app.status).toEqual({ kind: "error", message: BANNER.openshift.tokenExpired });
+  expect(h.app.status).toEqual({ kind: "error", message: OPENSHIFT_BANNER.tokenExpired });
   h.fail(null);
   const before = h.restarts.count;
   await h.service.refresh();

@@ -1,4 +1,4 @@
-import { BANNER, bannerOrFallback, debugError } from "../banner";
+import { bannerOrFallback, debugError } from "../banner";
 import { addDebugEvent } from "../debug-events";
 import type { ProviderFetchArgs } from "../fetch-lifecycle";
 import { failureOf, type ProviderFailure } from "../provider-failure";
@@ -7,6 +7,7 @@ import type { ProviderCacheLimit } from "../provider-settings";
 import { providerError, providerIdle, providerLoading, providerUnavailable } from "../provider-status";
 import { collectRunningSHAs, collectTopSHAs } from "../sha-selection";
 import { jobsSettled } from "../status";
+import { GITHUB_BANNER } from "./banner";
 import { buildCommitDataMap, buildGraphBadges, GQL_BATCH_SIZE } from "./commit-data";
 import { type GitHubCacheEntry, isTerminalGitHubRun, mergeGitHubEntry, mergeGitHubRuns } from "./merge";
 import type {
@@ -254,13 +255,13 @@ export function createGitHubService(ports: GitHubServicePorts) {
     if (!showStatus) return;
     const config = ports.config();
     const token = ports.token(config.tokenEnvVar);
-    if (!config.enabled) app.setStatus(providerUnavailable(BANNER.github.disabled));
-    else if (!ports.parsedRepo()) app.setStatus(providerUnavailable(BANNER.github.noRemote));
+    if (!config.enabled) app.setStatus(providerUnavailable(GITHUB_BANNER.disabled));
+    else if (!ports.parsedRepo()) app.setStatus(providerUnavailable(GITHUB_BANNER.noRemote));
     else if (!ports.repo()) {
       const host = ports.parsedRepo()?.hostname;
       if (host) debugError("GitHub", `Untrusted host: ${host}`);
-      app.setStatus(providerUnavailable(BANNER.github.untrustedHost));
-    } else if (!token) app.setStatus(providerUnavailable(BANNER.github.missingToken(config.tokenEnvVar)));
+      app.setStatus(providerUnavailable(GITHUB_BANNER.untrustedHost));
+    } else if (!token) app.setStatus(providerUnavailable(GITHUB_BANNER.missingToken(config.tokenEnvVar)));
   };
 
   const runInitialFetch = async ({ signal, shas, showStatus, retry, epoch }: ProviderFetchArgs) => {
@@ -288,7 +289,7 @@ export function createGitHubService(ports: GitHubServicePorts) {
       else if (showStatus || app.status().kind === "error") app.setStatus(providerIdle());
     } catch (err) {
       if (signal?.aborted) return;
-      const message = bannerOrFallback(err, BANNER.github.fetchFailed, "GitHub");
+      const message = bannerOrFallback(err, GITHUB_BANNER.fetchFailed, "GitHub");
       rememberAuthError(failureOf(err));
       lifecycle().noteFetchResult(false);
       app.setStatus(providerError(message));
@@ -405,11 +406,11 @@ export function createGitHubService(ports: GitHubServicePorts) {
     // Finished GraphQL jobs still show when REST cannot be asked about attempts.
     const fallback = cached && jobsSettled(cached) ? { jobs: cached, error: null } : null;
     // Frozen after a 401: no requests until Reload; say why instead of asking GitHub again.
-    if (authFrozen) return fallback ?? { jobs: [], error: BANNER.github.tokenExpired };
+    if (authFrozen) return fallback ?? { jobs: [], error: GITHUB_BANNER.tokenExpired };
 
     const repo = ports.repo();
     const token = ports.token(ports.config().tokenEnvVar);
-    if (!repo || !token) return fallback ?? { jobs: [], error: BANNER.github.unavailable };
+    if (!repo || !token) return fallback ?? { jobs: [], error: GITHUB_BANNER.unavailable };
 
     const fetched = await lifecycle().runRequest(signal => ports.api.fetchRunJobs(repo, token, run.id, signal), signal);
     if (signal?.aborted || !lifecycle().isCurrent(epoch, repoPath)) return { jobs: [], error: null };
@@ -445,7 +446,7 @@ export function createGitHubService(ports: GitHubServicePorts) {
     const config = ports.config();
     const token = ports.token(config.tokenEnvVar);
     if (!repo || !token)
-      throw new Error(token ? BANNER.github.noRemote : BANNER.github.missingToken(config.tokenEnvVar));
+      throw new Error(token ? GITHUB_BANNER.noRemote : GITHUB_BANNER.missingToken(config.tokenEnvVar));
     const log = await lifecycle().runRequest(signal => ports.api.fetchJobLog(repo, token, jobId, signal), signal);
     if (!lifecycle().isCurrent(epoch, repoPath)) return "";
     if (isTerminalGitHubRun(run) && log && lifecycle().isCurrent(epoch, repoPath))

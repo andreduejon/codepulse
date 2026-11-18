@@ -1,5 +1,6 @@
 import { isAbortError } from "../../core/abort";
-import { BANNER, debugError } from "../../core/banner";
+import { debugError } from "../../core/banner";
+import { OPENSHIFT_BANNER } from "../../core/openshift/banner";
 import {
   arr,
   buildOpenShiftCommitMap,
@@ -34,7 +35,7 @@ import { isOpenShiftWatchGone, type OpenShiftWatchEvent, parseOpenShiftWatchBuff
 import { failureOf, ProviderAuthError, type ProviderFailure } from "../../core/provider-failure";
 import { fetchWithRetry } from "../http";
 
-const FETCH_OPTS = { timeoutMs: 15000, attempts: 2, retryDelayMs: 500, timeoutMessage: BANNER.openshift.timeout };
+const FETCH_OPTS = { timeoutMs: 15000, attempts: 2, retryDelayMs: 500, timeoutMessage: OPENSHIFT_BANNER.timeout };
 export const MAX_LIST_PAGES = 100;
 export const MAX_LIST_ITEMS = 50_000;
 
@@ -59,9 +60,9 @@ export function getOpenShiftToken(envVar: string): string | null {
 function openshiftInventoryBanner(failures: OpenShiftInventoryFailure[], successfulRequests: number): string | null {
   if (failures.length === 0) return null;
   if (failures.every(failure => failure.error.startsWith("Invalid OpenShift namespace"))) {
-    return BANNER.openshift.invalidNamespace;
+    return OPENSHIFT_BANNER.invalidNamespace;
   }
-  return successfulRequests === 0 ? BANNER.openshift.inventoryFailed : BANNER.openshift.inventoryPartial;
+  return successfulRequests === 0 ? OPENSHIFT_BANNER.inventoryFailed : OPENSHIFT_BANNER.inventoryPartial;
 }
 
 export function isOpenShiftAuthStatus(status: number): boolean {
@@ -93,7 +94,7 @@ async function fetchList(
         FETCH_OPTS,
         "OpenShift",
       );
-      if (isOpenShiftAuthStatus(res.status)) throw new ProviderAuthError(BANNER.openshift.tokenExpired);
+      if (isOpenShiftAuthStatus(res.status)) throw new ProviderAuthError(OPENSHIFT_BANNER.tokenExpired);
       if (!res.ok) throw new Error(`OpenShift ${path} failed: ${res.status}`);
       const body = obj(await res.json());
       const pageItems = arr(body?.items);
@@ -143,7 +144,7 @@ export async function fetchOpenShiftBuildLog(
     FETCH_OPTS,
     "OpenShift",
   );
-  if (isOpenShiftAuthStatus(res.status)) throw new ProviderAuthError(BANNER.openshift.tokenExpired);
+  if (isOpenShiftAuthStatus(res.status)) throw new ProviderAuthError(OPENSHIFT_BANNER.tokenExpired);
   if (!res.ok) throw new Error(`OpenShift ${path} failed: ${res.status}`);
   return await res.text();
 }
@@ -164,7 +165,7 @@ export async function fetchOpenShiftPodLog(
     FETCH_OPTS,
     "OpenShift",
   );
-  if (isOpenShiftAuthStatus(res.status)) throw new ProviderAuthError(BANNER.openshift.tokenExpired);
+  if (isOpenShiftAuthStatus(res.status)) throw new ProviderAuthError(OPENSHIFT_BANNER.tokenExpired);
   if (!res.ok) throw new Error(`OpenShift ${path} failed: ${res.status}`);
   return await res.text();
 }
@@ -228,7 +229,7 @@ export async function followOpenShiftLog(
     signal,
     headers: { Authorization: `Bearer ${token}`, Accept: "text/plain, */*" },
   });
-  if (isOpenShiftAuthStatus(res.status)) throw new ProviderAuthError(BANNER.openshift.tokenExpired);
+  if (isOpenShiftAuthStatus(res.status)) throw new ProviderAuthError(OPENSHIFT_BANNER.tokenExpired);
   if (!res.ok) throw new Error(`OpenShift log follow failed: ${res.status}`);
   onChunk("");
   const reader = res.body?.getReader();
@@ -512,7 +513,7 @@ export async function fetchOpenShiftObject(
     FETCH_OPTS,
     "OpenShift",
   );
-  if (isOpenShiftAuthStatus(res.status)) throw new ProviderAuthError(BANNER.openshift.tokenExpired);
+  if (isOpenShiftAuthStatus(res.status)) throw new ProviderAuthError(OPENSHIFT_BANNER.tokenExpired);
   if (!res.ok) throw new Error(`OpenShift ${path} failed: ${res.status}`);
   return await res.json();
 }
@@ -551,7 +552,7 @@ export async function fetchOpenShiftEvents(
     FETCH_OPTS,
     "OpenShift",
   );
-  if (isOpenShiftAuthStatus(res.status)) throw new ProviderAuthError(BANNER.openshift.tokenExpired);
+  if (isOpenShiftAuthStatus(res.status)) throw new ProviderAuthError(OPENSHIFT_BANNER.tokenExpired);
   if (res.status === 403)
     throw new Error(`No permission to list events in ${resource.namespace}. The token needs list on events.`);
   if (!res.ok) throw new Error(`OpenShift events failed: ${res.status}`);
@@ -617,7 +618,7 @@ export async function fetchOpenShiftResources(
     debugError("OpenShift", `${failure.namespace}/${failure.kind} ${failure.path} ${failure.error}`);
   }
   const error = acc.authFailed
-    ? BANNER.openshift.tokenExpired
+    ? OPENSHIFT_BANNER.tokenExpired
     : openshiftInventoryBanner(acc.failures, acc.successfulRequests);
   return {
     resources: acc.resources,
