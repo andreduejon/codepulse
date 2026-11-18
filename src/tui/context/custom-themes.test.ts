@@ -5,7 +5,9 @@ import { dirname, join } from "node:path";
 import { defaultConfigPath } from "../../adapters/settings/config";
 import { defaultCustomThemesPath, readCustomThemesFile } from "../../adapters/settings/theme-file";
 import { clearDebugEvents, getDebugEvents } from "../../core/debug-events";
+import { providerColors } from "../providers/colors";
 import { parseCustomThemes } from "./custom-themes";
+import { defaultProviderModules } from "./provider-modules";
 
 const loadCustomThemes = (path: string) => parseCustomThemes(readCustomThemesFile(path));
 
@@ -214,4 +216,18 @@ test("registry resolves custom startup IDs and falls back for missing IDs withou
   }
   expect(themes).toEqual(before);
   expect(Object.hasOwn(themes, "my-night")).toBe(false);
+});
+
+test("a standalone theme made before a provider still loads: that provider's colors come from its accent and background", () => {
+  const { name: _name, jenkinsBg: _bg, jenkinsFg: _fg, ...colors } = themes.dracula;
+  writeThemes({ "before-jenkins": { name: "Before Jenkins", colors } });
+  const [custom] = loadCustomThemes(path);
+  expect(custom?.theme.jenkinsBg).toBe(themes.dracula.accent);
+  expect(custom?.theme.jenkinsFg).toBe(themes.dracula.background);
+  expect(getDebugEvents()).toEqual([]);
+  // As the badge draws it.
+  expect(custom && providerColors(custom.theme, "jenkins", defaultProviderModules())).toEqual({
+    bg: themes.dracula.accent,
+    fg: themes.dracula.background,
+  });
 });

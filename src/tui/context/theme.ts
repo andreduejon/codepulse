@@ -52,6 +52,22 @@ export interface Theme {
   dashboardBg: string;
 }
 
+/**
+ * The built-in providers' badge colors: a theme made before one of them may lack its pair, which then comes from the
+ * theme's accent (the badge) and background (its text). A new provider adds no keys: it picks its colors from the
+ * theme's others.
+ */
+export const PROVIDER_THEME_COLORS = {
+  githubActionsBg: "accent",
+  githubActionsFg: "background",
+  jenkinsBg: "accent",
+  jenkinsFg: "background",
+  snykBg: "accent",
+  snykFg: "background",
+  openShiftBg: "accent",
+  openShiftFg: "background",
+} as const satisfies Partial<Record<keyof Theme, keyof Theme>>;
+
 export interface CustomTheme {
   id: string;
   theme: Theme;

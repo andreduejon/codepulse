@@ -1,5 +1,5 @@
 import { addDebugEvent } from "../../core/debug-events";
-import { type CustomTheme, type Theme, themes } from "./theme";
+import { type CustomTheme, PROVIDER_THEME_COLORS, type Theme, themes } from "./theme";
 
 type ColorKey = Exclude<keyof Theme, "name">;
 const colorKeys = Object.keys(themes["catppuccin-mocha"]).filter(key => key !== "name") as ColorKey[];
@@ -36,13 +36,18 @@ function parseTheme(id: string, value: unknown): CustomTheme {
 
   const theme = { name: value.name } as Theme;
   const baseTheme = base ? themes[base] : undefined;
-  // Every color, the newest too (dashboardFg, dashboardBg): a standalone theme names what it lacks.
+  // Every color, the newest too (dashboardFg, dashboardBg): a standalone theme names what it lacks. A provider's pair
+  // may be missing (a theme made before the provider): it comes from the theme's own accent and background.
   const colors = value.colors;
-  const missing = base ? [] : colorKeys.filter(key => !Object.hasOwn(colors, key));
+  const fallbacks: Partial<Record<ColorKey, ColorKey>> = PROVIDER_THEME_COLORS;
+  const missing = base ? [] : colorKeys.filter(key => !Object.hasOwn(colors, key) && !fallbacks[key]);
   if (missing.length > 0) throw new Error(`standalone theme is missing colors: ${missing.join(", ")}`);
   for (const key of colorKeys) {
     const supplied = Object.hasOwn(value.colors, key);
-    const color = supplied ? value.colors[key] : baseTheme?.[key];
+    const fallback = fallbacks[key];
+    const color = supplied
+      ? value.colors[key]
+      : (baseTheme?.[key] ?? (fallback === undefined ? undefined : colors[fallback]));
     if (key === "graphColors") {
       if (
         !Array.isArray(color) ||
