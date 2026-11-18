@@ -22,6 +22,10 @@ bun run bench --save       # keep this run as the baseline (scripts/bench/baseli
 | `log` | a CI log of 20,000 lines: opening it, its memory, `G`, the memory kept after ten more opens |
 
 Memory is read after a full garbage collection: the process (with OpenTUI's native buffers) and the JavaScript heap.
+The heap is the heap's allocated blocks, so it also counts free space between objects: a change that only moves code
+around can raise it by 10 to 15% while the live objects stay the same. Before calling that a leak, compare
+`Bun.generateHeapSnapshot()` totals or `heapStats().objectCount` on both sides. The process memory right after
+startup varies between runs of the same code by about a quarter.
 
 The numbers depend on the machine, so compare runs on the same one; the baseline names the machine it was made on.
 Two runs of unchanged code stay within about 25% of each other. Save a new baseline only for a change meant to
