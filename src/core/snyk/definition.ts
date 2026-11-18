@@ -3,6 +3,7 @@
 import type { ProviderDefinition } from "../provider-set";
 import { PROVIDER_CACHE_LIMIT_OPTIONS } from "../provider-settings";
 import { definedFields } from "../settings/provider-section";
+import { SNYK_BANNER } from "./banner";
 import { snykEvents } from "./events";
 import type { SnykAdapters, SnykSettings } from "./service";
 
@@ -14,6 +15,7 @@ export const snykProvider: ProviderDefinition<SnykAdapters, SnykSettings> = {
   displayName: "Snyk",
   detailLabel: "Vulnerabilities",
   category: "scan-quality",
+  messages: SNYK_BANNER,
   moreTabs: [{ id: "snyk-deps", label: "Dependencies" }],
   storedEvents: async (adapters, app) => snykEvents(app, await adapters.storedScans(app)),
   settings: {

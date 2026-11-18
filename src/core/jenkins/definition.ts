@@ -11,6 +11,7 @@ import {
   type ProviderLimit,
 } from "../provider-settings";
 import { definedFields, type SettingsSection } from "../settings/provider-section";
+import { JENKINS_BANNER } from "./banner";
 import { jenkinsEvents } from "./events";
 import type { JenkinsAdapters } from "./service";
 import { DEFAULT_JENKINS_CONFIG, type JenkinsJobConfig } from "./types";
@@ -36,6 +37,7 @@ export const jenkinsProvider: ProviderDefinition<JenkinsAdapters, JenkinsSetting
   displayName: "Jenkins",
   detailLabel: "Builds",
   category: "ci",
+  messages: JENKINS_BANNER,
   storedEvents: async (adapters, app) =>
     jenkinsEvents(app, await adapters.cache(DEFAULT_PROVIDER_CACHE_LIMIT).peekAll(app)),
   settings: {

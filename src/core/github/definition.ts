@@ -11,6 +11,7 @@ import {
   type ProviderLimit,
 } from "../provider-settings";
 import { definedFields, type SettingsSection } from "../settings/provider-section";
+import { GITHUB_BANNER } from "./banner";
 import { githubEvents } from "./events";
 import { normalizeGitHubHost } from "./host";
 import type { GitHubAdapters } from "./service";
@@ -35,6 +36,7 @@ export const githubProvider: ProviderDefinition<GitHubAdapters, GitHubSettings> 
   displayName: "GitHub",
   detailLabel: "Actions",
   category: "ci",
+  messages: GITHUB_BANNER,
   storedEvents: async (adapters, app) =>
     githubEvents(app, await adapters.cache(DEFAULT_PROVIDER_CACHE_LIMIT).peekAll(app)),
   settings: {

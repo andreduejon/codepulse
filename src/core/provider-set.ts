@@ -26,6 +26,11 @@ export interface ProviderDefinition<Adapters = unknown, Settings extends Setting
   category: ProviderCategory;
   /** Detail tabs after its own. */
   moreTabs?: readonly ProviderTab[];
+  /**
+   * Its messages (core/<provider>/banner.ts, made with banners()): carrying them here loads them with the provider, so
+   * the app knows them as messages to show as they are whenever the provider is in its set.
+   */
+  messages?: Readonly<Record<string, unknown>>;
   /** Its settings: their defaults, how they are read from the file, what a backfill writes. */
   settings: ProviderSettingsDefinition<Settings>;
   /** The Dashboard events it stored for an app (finished runs, builds, scans), read through its adapters. */
