@@ -1,3 +1,4 @@
+import { isTerminalJenkinsRun } from "../../../core/jenkins/merge";
 import type { JenkinsFailedTest, JenkinsJob, JenkinsJobFetchResult, JenkinsRun } from "../../../core/jenkins/types";
 import type { JobLogTarget } from "../shared/job-log-dialog";
 import { isWholeBuildEntry, jenkinsBuildSummary, jenkinsLogEntries } from "./build-summary";
@@ -15,7 +16,8 @@ export interface JenkinsLogReader {
 
 /**
  * A Jenkins build in the log viewer at an entry: the full log (its summary, then the console) and each stage's part
- * of the console, ←/→ between them. The summary is read again with the log, so `r` updates a running build.
+ * of the console, ←/→ between them. The summary is read again with the log, so `r` updates a running build. A finished
+ * build's console no longer changes: its stages share one read for as long as the viewer is open.
  */
 export function jenkinsBuildLogTarget(
   ci: JenkinsLogReader,
@@ -24,6 +26,19 @@ export function jenkinsBuildLogTarget(
   entry: number,
 ): JobLogTarget {
   const entries = jenkinsLogEntries(pipeline);
+  let finishedConsole: Promise<string> | undefined;
+  const readConsole = (signal?: AbortSignal): Promise<string> => {
+    if (!isTerminalJenkinsRun(run)) return ci.fetchRunLog(run, signal);
+    if (!finishedConsole) {
+      const read = ci.fetchRunLog(run, signal);
+      finishedConsole = read;
+      // A failed read is not kept: `r` or the next stage tries again.
+      read.catch(() => {
+        if (finishedConsole === read) finishedConsole = undefined;
+      });
+    }
+    return finishedConsole;
+  };
   return {
     provider: "jenkins",
     job: entries[entry] ?? entries[0],
@@ -31,7 +46,7 @@ export function jenkinsBuildLogTarget(
     jobs: entries,
     noun: "stage",
     fetchLog: async (current, signal) => {
-      const full = await ci.fetchRunLog(run, signal);
+      const full = await readConsole(signal);
       if (!isWholeBuildEntry(current)) {
         const stage = sliceStageLog(full, current.name);
         if (stage.log !== undefined) return stage.log;

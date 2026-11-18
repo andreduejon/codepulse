@@ -73,6 +73,23 @@ test("a stage in a parallel branch, or one the console lacks, opens the full log
   });
 });
 
+test("a finished build's console is read once for all its stages; a failed read is tried again", async () => {
+  const finished = { ...run, status: "completed", conclusion: "failure" } as JenkinsRun;
+  const ci = {
+    fetchRunLog: mock(async (): Promise<string> => {
+      throw new Error("Jenkins is unreachable");
+    }),
+    fetchJobsForRun: mock(async () => ({ jobs: [pipeline], error: null })),
+  };
+  const target = jenkinsBuildLogTarget(ci, finished, pipeline, 1);
+  await expect(target.fetchLog(target.job, signal)).rejects.toThrow("Jenkins is unreachable");
+  ci.fetchRunLog.mockImplementation(async () => console_);
+  expect(await target.fetchLog(target.job, signal)).toBe("[Pipeline] { (Unit tests)\n+ ./gradlew test\n[Pipeline] }");
+  expect(await target.fetchLog(target.jobs[0], signal)).toMatchObject({ log: console_ });
+  expect(await target.fetchLog(target.job, signal)).toBe("[Pipeline] { (Unit tests)\n+ ./gradlew test\n[Pipeline] }");
+  expect(ci.fetchRunLog).toHaveBeenCalledTimes(2);
+});
+
 test("a failed Jenkins test opens its error and stack; o opens the test report; no failed tests open nothing", async () => {
   const failed: JenkinsFailedTest[] = [
     { className: "com.demo.CartTest", name: "rounds", details: "expected 9.99", stackTrace: "at CartTest" },
