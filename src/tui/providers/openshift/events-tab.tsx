@@ -253,7 +253,7 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
             fg={
               cursored(row.key)
                 ? t().accent
-                : row.cached
+                : row.kind === "reason" && row.cached
                   ? t().foregroundMuted
                   : row.kind === "reason" && row.level === "failure"
                     ? t().error
