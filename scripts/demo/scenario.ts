@@ -1168,6 +1168,26 @@ export function openShiftWorld(state: DemoState, phase: Phase): OpenShiftWorld {
     ...ready,
     containerStatuses: [container(s.payments, { ready: true, restartCount: 0, state: { running: {} } })],
   });
+  // A StatefulSet's pod keeps its name: OpenShift recreates shop-cache-0 in every phase, a new object each time. Its
+  // image says its commit. Each earlier one's warning is still listed (cached in the Events tab, a row each).
+  add("shop-test", "Pod", {
+    kind: "Pod",
+    apiVersion: "v1",
+    metadata: {
+      name: "shop-cache-0",
+      namespace: "shop-test",
+      uid: `uid-shop-cache-0-${phase.index}`,
+      labels: { app: "shop-cache" },
+      ownerReferences: [{ kind: "StatefulSet", uid: "uid-shop-cache" }],
+      creationTimestamp: created(5),
+    },
+    status: {
+      ...ready,
+      containerStatuses: [
+        container(s.payments, { name: "cache", ready: true, restartCount: 0, state: { running: {} } }),
+      ],
+    },
+  });
   deployment("shop-test", "shop-batch", s.rounding, 0, {});
 
   // shop-prod: `readme` is live; a worker runs a commit the graph does not show. Events are forbidden here.
@@ -1274,6 +1294,21 @@ export function openShiftWorld(state: DemoState, phase: Phase): OpenShiftWorld {
             ]
           : []),
       ],
+    ],
+    [
+      // One BackOff per shop-cache-0 there was (25, 15, 5 minutes ago): each about its own object, the newest today's.
+      "shop-test/Pod/shop-cache-0",
+      Array.from({ length: phase.index + 1 }, (_, i) => ({
+        ...event(
+          "Warning",
+          "BackOff",
+          "Back-off restarting failed container cache in pod shop-cache-0",
+          3,
+          25 - i * 10,
+        ),
+        metadata: { uid: `ev-shop-cache-0-${i}`, creationTimestamp: iso(now - (55 - i * 10) * MIN) },
+        involvedObject: { uid: `uid-shop-cache-0-${i}` },
+      })),
     ],
     [
       // A warning about the pod 41 ran in: the Events tab shows it with 41's commit. It outlives the pod.

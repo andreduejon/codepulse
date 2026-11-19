@@ -22,7 +22,7 @@ bun run demo --help                            # options and steps
 | `--size WxH` | headless | Screen size, default `160x45`, up to `1000x1000`. The interactive demo uses your terminal's size. |
 | `--github MODE` | both | `default`, `empty`, `off`, or `error:401`, `error:rate-limit`, `error:offline`, `error:timeout`, `error:no-token` |
 | `--jenkins MODE` | both | `default`, `empty`, `off`, or `error:401`, `error:offline`, `error:timeout`, `error:no-token` |
-| `--openshift MODE` | both | `default`, `empty`, `off`, or `error:401`, `error:offline`, `error:timeout`, `error:partial`, `error:watch-denied`, `error:no-token` |
+| `--openshift MODE` | both | `default`, `empty`, `off`, or `error:401`, `error:offline`, `error:timeout`, `error:partial`, `error:watch-denied`, `error:events`, `error:no-token` |
 | `--snyk MODE` | both | `default`, `empty`, `off`, or `error:no-token`, `error:partial`, `error:no-cli` |
 | `--setup` | both | Starts on a repository the config does not know yet: the welcome screen. |
 | `--live [SECONDS]` | interactive | The world moves on every SECONDS (default 60, up to 86400). See [Phases](#phases). |
@@ -39,7 +39,8 @@ Provider modes:
 - `error:KIND`: every request fails that way. `timeout` takes as long as the app waits: 20 seconds a request, and it
   tries once more, so about 40 seconds a fetch. Waits allow two minutes with it.
   `partial` fails one part (shop-prod's lists, or Snyk's `admin` project); `watch-denied` lets OpenShift list but
-  not watch.
+  not watch; `events` fails a resource's own events while the namespace's list answers (its dialog shows the saved
+  warnings).
 
 Seconds are whole numbers (`--live 30`); `--latency` and the `sleep:` step take milliseconds.
 

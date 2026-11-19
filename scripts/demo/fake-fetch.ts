@@ -450,6 +450,8 @@ let followCount = 0;
 /** How many batches of lines a followed log gets in a play before it stops growing. */
 const HEADLESS_FOLLOW_BATCHES = 3;
 
+const withUid = (uid: string | undefined) => (uid ? { uid } : {});
+
 /** The uid of the object an event is about, while the cluster still has it (an event outlives its pod). */
 const uidOf = (ns: string, kind: string, name: string) => {
   const item = itemsOf(world, ns, kind).find(entry => (entry.metadata as { name?: string } | undefined)?.name === name);
@@ -457,8 +459,15 @@ const uidOf = (ns: string, kind: string, name: string) => {
   return uid ? { uid } : {};
 };
 
-/** An event's uid, the same in the namespace's list and the resource's, as a cluster gives it. */
-const eventUid = (key: string, event: Record<string, unknown>) => `${key}/${event.reason}`;
+/**
+ * An event's uid, the same in the namespace's list and the resource's, as a cluster gives it: its own when the scenario
+ * names one (one per object, for a pod recreated under its name), else one per resource and reason.
+ */
+const eventUid = (key: string, event: Record<string, unknown>) =>
+  (event.metadata as { uid?: string } | undefined)?.uid ?? `${key}/${event.reason}`;
+/** The uid of the object an event is about: the one the scenario names (an earlier pod of that name), else today's. */
+const aboutUid = (event: Record<string, unknown>, ns: string, kind: string, name: string) =>
+  (event.involvedObject as { uid?: string } | undefined)?.uid ?? uidOf(ns, kind, name).uid;
 
 function openshift(url: URL, signal: AbortSignal | null | undefined): Response {
   const match = url.pathname.match(/^\/apis?\/(?:[^/]+\/)?v1\/namespaces\/([^/]+)\/([^/]+)(?:\/([^/]+))?(?:\/(log))?$/);
@@ -479,22 +488,28 @@ function openshift(url: URL, signal: AbortSignal | null | undefined): Response {
             .map(event => ({
               ...event,
               metadata: { ...(event.metadata as object), uid: eventUid(key, event) },
-              involvedObject: { kind, name, namespace: ns, ...uidOf(ns, kind, name) },
+              involvedObject: { kind, name, namespace: ns, ...withUid(aboutUid(event, ns, kind, name)) },
             }));
         });
       return json({ kind: "EventList", items });
     }
-    const kind = selector.match(/involvedObject\.kind=([^,]+)/)?.[1];
-    const object = selector.match(/involvedObject\.name=([^,]+)/)?.[1];
+    // --openshift error:events: a resource's own events fail; the namespace's list above still answers.
+    if (errorOf("openshift") === "events") return json({ message: "etcdserver: request timed out" }, 500);
+    const kind = selector.match(/involvedObject\.kind=([^,]+)/)?.[1] ?? "";
+    const object = selector.match(/involvedObject\.name=([^,]+)/)?.[1] ?? "";
     const key = `${ns}/${kind}/${object}`;
-    // Asked by uid: none when another object has its name now (a gone one's events outlive it, as in a cluster).
+    // Asked by uid: only that object's events (a gone one's outlive it, as in a cluster), not a newer one's of its name.
     const uid = selector.match(/involvedObject\.uid=([^,]+)/)?.[1];
-    const current = kind && object ? uidOf(ns, kind, object).uid : undefined;
-    if (uid && current && current !== uid) return json({ kind: "EventList", items: [] });
-    const items = (world.events.get(key) ?? []).map(event => ({
-      ...event,
-      metadata: { ...(event.metadata as object), uid: eventUid(key, event) },
-    }));
+    const items = (world.events.get(key) ?? [])
+      .filter(event => {
+        const about = aboutUid(event, ns, kind, object);
+        return !uid || !about || about === uid;
+      })
+      .map(event => ({
+        ...event,
+        metadata: { ...(event.metadata as object), uid: eventUid(key, event) },
+        involvedObject: { kind, name: object, namespace: ns, ...withUid(aboutUid(event, ns, kind, object)) },
+      }));
     return json({ kind: "EventList", items });
   }
   const kind = PLURALS[plural];

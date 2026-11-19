@@ -75,7 +75,8 @@ export const GOLDEN_PLAYS: readonly GoldenPlay[] = [
   {
     name: "openshift-cached",
     covers:
-      "the next phase: (cached) in the Events tab (a replaced pod, a deleted event), the Cached section of the events, a ReplicaSet's events only",
+      "the next phases: (cached) in the Events tab (a pruned build, a replaced pod, a deleted event, a build's pod, a " +
+      "pod recreated twice under its name), the Cached section, a pruned build without a saved log, a ReplicaSet",
     args: [
       ...WIDE,
       "--play",
@@ -84,9 +85,42 @@ export const GOLDEN_PLAYS: readonly GoldenPlay[] = [
         'click:OpenShift wait:"64ddc8a" advance type::reload enter',
         'click:64ddc8a enter right wait:"shop-api-41 (cached)" shot:events',
         'click:"shop-api-41 (cached)" enter wait:"Cached (no longer" shot:dialog',
-        // No commit holds a ReplicaSet: its warning opens on its events only.
+        // Nobody opened 41's log before OpenShift pruned it: the cache has none.
+        'c wait:"No saved log" shot:no-saved-log',
+        // No commit holds a ReplicaSet: its warning opens it all the same.
         'esc click:"30m ago" enter wait:"exceeded quota" shot:replicaset',
+        // shop-cache-0 is recreated once more: a (cached) row for each earlier one, then today's.
+        'esc advance type::reload enter sleep:2000 click:64ddc8a enter right wait:"shop-cache-0 (cached)" shot:recreated',
       ].join("\n"),
+    ],
+  },
+  {
+    name: "openshift-events",
+    covers:
+      "OpenShift's Events tab: failures in red, warnings, Normal events, a build's pod; a failing pod's dialog, the build pod's",
+    args: [
+      "--size",
+      "200x60",
+      "--play",
+      [
+        'click:OpenShift wait:"64ddc8a" click:64ddc8a enter right wait:"FailedCreate" shot:tab',
+        // Why the pod is ✗ (its status, red), then its events.
+        'click:waiting enter wait:"LAST SEEN" shot:failing-pod',
+        // The pod 41 ran in: its steps that passed plain, the one that failed red, then its warning.
+        'esc click:"ended docker-build" enter wait:"step 7/9" shot:build-pod',
+      ].join("\n"),
+    ],
+  },
+  {
+    name: "openshift-events-failed",
+    covers:
+      "a resource's events that cannot load: its dialog lists the warnings saved about it, without saying they are gone",
+    args: [
+      ...WIDE,
+      "--openshift",
+      "error:events",
+      "--play",
+      'click:OpenShift wait:"64ddc8a" click:64ddc8a enter right wait:"FailedCreate" click:"just now" enter wait:"Saved warnings" shot:saved',
     ],
   },
   {
@@ -165,7 +199,8 @@ export const GOLDEN_PLAYS: readonly GoldenPlay[] = [
       ...WIDE,
       "--colors",
       "--play",
-      'j j click:Dashboard wait:"events" j shot:dashboard tab tab wait:"CI #812" shot:github',
+      'j j click:Dashboard wait:"events" j shot:dashboard tab tab wait:"CI #812" shot:github ' +
+        'click:OpenShift wait:"64ddc8a" click:64ddc8a enter right wait:"FailedCreate" shot:openshift-events',
     ],
   },
 ];
