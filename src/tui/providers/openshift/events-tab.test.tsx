@@ -26,7 +26,12 @@ const warning = (overrides: Partial<OpenShiftWarning>): OpenShiftWarning => ({
 
 async function renderEventsTab(
   warnings: OpenShiftWarning[],
-  options: { cached?: readonly string[]; removed?: readonly string[]; pruned?: readonly string[] } = {},
+  options: {
+    cached?: readonly string[];
+    removed?: readonly string[];
+    pruned?: readonly string[];
+    normal?: OpenShiftWarning[];
+  } = {},
 ) {
   // The commit holds what the warnings are about, but a removed one; a pruned build only from the cache.
   const held = (kind: string) =>
@@ -54,7 +59,13 @@ async function renderEventsTab(
       pods: inNamespace("Pod"),
     };
   });
-  const data: OpenShiftCommitData = { sha: SHA, liveFetched: true, namespaces, warnings };
+  const data: OpenShiftCommitData = {
+    sha: SHA,
+    liveFetched: true,
+    namespaces,
+    warnings,
+    ...(options.normal ? { normalEvents: options.normal } : {}),
+  };
   const [cursor, setCursor] = createSignal(0);
   const action = mock((_action: string | null) => {});
   const opened = mock((_resource: OpenShiftResource, _options?: { eventsOnly: boolean }) => {});
@@ -275,6 +286,31 @@ test("a build OpenShift pruned says (cached), muted, and opens in full from the 
     expect(t.opened).toHaveBeenLastCalledWith(expect.objectContaining({ name: "shop-api-39", cacheOnly: true }), {
       eventsOnly: false,
     });
+  } finally {
+    t.renderer.destroy();
+  }
+});
+
+test("Normal events the cluster lists now follow the warnings, in the text color, and count in the total", async () => {
+  const t = await renderEventsTab([warning({ id: "event-1" })], {
+    normal: [
+      warning({ id: "pulled", reason: "Pulled", message: "Container image already present", lastSeen: minutesAgo(1) }),
+    ],
+  });
+  try {
+    expect(t.lines()).toEqual([
+      "Reload commit live",
+      "total events 2",
+      "└─ ▾ shop-test 2",
+      "├─ ▾ BackOff 1",
+      "│ └─ shop-api-7d9f8-x2k4q 2m ago",
+      "└─ ▾ Pulled 1",
+      "└─ shop-api-7d9f8-x2k4q 1m ago",
+    ]);
+    expect(t.fgOf("BackOff")).toEqual(RGBA.fromHex(t.theme.warning));
+    expect(t.fgOf("Pulled")).toEqual(RGBA.fromHex(t.theme.foreground));
+    // Never (cached) while listed, though no warning list holds its uid.
+    expect(t.frame()).not.toContain("(cached)");
   } finally {
     t.renderer.destroy();
   }

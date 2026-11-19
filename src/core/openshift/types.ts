@@ -119,6 +119,8 @@ export interface OpenShiftCommitData {
   namespaces: OpenShiftNamespaceData[];
   /** The Kubernetes warnings about its resources (warnings.ts), newest first. */
   warnings?: OpenShiftWarning[];
+  /** The Normal events the cluster lists now about its resources, newest first: shown, never saved. */
+  normalEvents?: OpenShiftWarning[];
   /** Live inventory was applied or skipped (no digest seed). Not a cache/UI flag. */
   liveFetched: boolean;
 }

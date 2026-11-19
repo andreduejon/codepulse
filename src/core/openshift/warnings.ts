@@ -30,6 +30,8 @@ export interface OpenShiftWarning {
 /** The warnings listed in each configured namespace. */
 export interface OpenShiftWarningList {
   warnings: OpenShiftWarning[];
+  /** The Normal events listed now, in the same shape: shown while the cluster lists them, never saved. */
+  normal?: OpenShiftWarning[];
   /** Namespaces whose events the token may not list. */
   denied: string[];
   /** Namespaces whose list failed for another reason. */

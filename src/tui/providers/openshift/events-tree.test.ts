@@ -104,4 +104,33 @@ describe("the Events tab's tree", () => {
       "      └─ Deployment shop-api",
     ]);
   });
+
+  test("Normal events the cluster lists now follow the warnings' reasons, not in the warning color", () => {
+    const rows = eventsTreeRows([warning({ id: "backoff", lastSeen: "2026-03-02T09:00:00Z" })], {
+      isPresent: () => true,
+      isCached: () => false,
+      collapsed: new Set(),
+      // Newer than the warning, still after it: what went wrong leads.
+      normal: [
+        warning({ id: "pulled", reason: "Pulled", lastSeen: "2026-03-02T09:30:00Z" }),
+        warning({ id: "started", reason: "Started", lastSeen: "2026-03-02T09:20:00Z" }),
+        // The same reason as a warning is its own row.
+        warning({ id: "backoff-normal", reason: "BackOff", lastSeen: "2026-03-02T09:10:00Z" }),
+      ],
+    });
+    expect(rows.map(text)).toEqual([
+      "└─ ▾ shop-test 4",
+      "   ├─ ▾ BackOff 1",
+      "   │  └─ Pod shop-api-7d9f8-x2k4q",
+      "   ├─ ▾ Pulled 1",
+      "   │  └─ Pod shop-api-7d9f8-x2k4q",
+      "   ├─ ▾ Started 1",
+      "   │  └─ Pod shop-api-7d9f8-x2k4q",
+      "   └─ ▾ BackOff 1",
+      "      └─ Pod shop-api-7d9f8-x2k4q",
+    ]);
+    const reasons = rows.filter(row => row.kind === "reason");
+    expect(reasons.map(row => row.kind === "reason" && row.warning)).toEqual([true, false, false, false]);
+    expect(new Set(rows.map(row => row.key)).size).toBe(rows.length);
+  });
 });

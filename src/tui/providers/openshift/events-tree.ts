@@ -1,6 +1,6 @@
 /**
- * The Events tab's tree, without drawing: namespace, then each reason newest first, then the resources it happened
- * to, newest first. An event is always about one object, so ten pods crash-looping are ten BackOff events: one
+ * The Events tab's tree, without drawing: namespace, then each reason newest first (the warnings' first, then the
+ * Normal events' the cluster lists now), then the resources it happened to, newest first. An event is always about one object, so ten pods crash-looping are ten BackOff events: one
  * reason row with ten resources. A resource the cluster no longer has, or whose events OpenShift deleted, is shown
  * from the cache: cached. Each row carries its prefix (the tree's lines), so the tab only draws it.
  */
@@ -8,7 +8,16 @@ import type { OpenShiftWarning } from "../../../core/openshift/warnings";
 
 export type EventsRow =
   | { kind: "namespace"; key: string; prefix: string; namespace: string; count: number; open: boolean }
-  | { kind: "reason"; key: string; prefix: string; reason: string; count: number; open: boolean }
+  | {
+      kind: "reason";
+      key: string;
+      prefix: string;
+      reason: string;
+      count: number;
+      open: boolean;
+      /** A warning's reason (kept, in the warning color); else a Normal event's, shown while the cluster lists it. */
+      warning: boolean;
+    }
   | {
       kind: "resource";
       key: string;
@@ -34,10 +43,13 @@ export interface EventsTreeOptions {
   isPresent: (warning: OpenShiftWarning) => boolean;
   isCached: (warning: OpenShiftWarning) => boolean;
   collapsed: ReadonlySet<string>;
+  /** The Normal events the cluster lists now: after the warnings, never cached themselves. */
+  normal?: readonly OpenShiftWarning[];
 }
 
 export const namespaceKey = (namespace: string) => `namespace:${namespace}`;
-export const reasonKey = (namespace: string, reason: string) => `reason:${namespace}:${reason}`;
+export const reasonKey = (namespace: string, reason: string, warning = true) =>
+  `reason:${namespace}:${reason}${warning ? "" : ":normal"}`;
 
 const newestFirst = (a: OpenShiftWarning, b: OpenShiftWarning) => (b.lastSeen ?? "").localeCompare(a.lastSeen ?? "");
 
@@ -59,7 +71,8 @@ function groupBy<T>(items: readonly T[], keyOf: (item: T) => string): T[][] {
 
 /** Every row of the tab's tree. */
 export function eventsTreeRows(warnings: readonly OpenShiftWarning[], options: EventsTreeOptions): EventsRow[] {
-  const sorted = [...warnings].sort(newestFirst);
+  const isWarning = new Set(warnings);
+  const sorted = [...warnings, ...(options.normal ?? [])].sort(newestFirst);
   // Namespaces by name, so a new warning never moves them; reasons and resources newest first.
   const namespaces = groupBy(sorted, warning => warning.namespace).sort((a, b) =>
     (a[0]?.namespace ?? "").localeCompare(b[0]?.namespace ?? ""),
@@ -80,13 +93,33 @@ export function eventsTreeRows(warnings: readonly OpenShiftWarning[], options: E
     });
     if (!nsOpen) return;
     const nsLead = below("", nsLast);
-    const reasons = groupBy(inNamespace, warning => warning.reason);
+    // What went wrong leads: the warnings' reasons, then the Normal events'.
+    const reasons = [
+      ...groupBy(
+        inNamespace.filter(entry => isWarning.has(entry)),
+        entry => entry.reason,
+      ),
+      ...groupBy(
+        inNamespace.filter(entry => !isWarning.has(entry)),
+        entry => entry.reason,
+      ),
+    ];
     reasons.forEach((ofReason, reasonIndex) => {
-      const reason = ofReason[0]?.reason ?? "";
+      const first = ofReason[0] as OpenShiftWarning;
+      const reason = first.reason;
+      const warning = isWarning.has(first);
       const reasonLast = reasonIndex === reasons.length - 1;
-      const key = reasonKey(namespace, reason);
+      const key = reasonKey(namespace, reason, warning);
       const open = !options.collapsed.has(key);
-      rows.push({ kind: "reason", key, prefix: branch(nsLead, reasonLast), reason, count: ofReason.length, open });
+      rows.push({
+        kind: "reason",
+        key,
+        prefix: branch(nsLead, reasonLast),
+        reason,
+        count: ofReason.length,
+        open,
+        warning,
+      });
       if (!open) return;
       const reasonLead = below(nsLead, reasonLast);
       // One recreated under its old name is two: the one the commit has, and the removed one.
@@ -99,12 +132,13 @@ export function eventsTreeRows(warnings: readonly OpenShiftWarning[], options: E
         const removed = !options.isPresent(newest);
         rows.push({
           kind: "resource",
-          key: `resource:${namespace}:${reason}:${newest.kind}:${newest.name}:${removed ? "removed" : "present"}`,
+          key: `resource:${key}:${newest.kind}:${newest.name}:${removed ? "removed" : "present"}`,
           prefix: branch(reasonLead, index === resources.length - 1),
           resourceKind: newest.kind,
           name: newest.name,
           removed,
-          cached: removed || events.every(options.isCached),
+          // A Normal event is shown only while the cluster lists it: cached only when its resource is gone.
+          cached: removed || (warning && events.every(options.isCached)),
           count: events.length,
           lastSeen: newest.lastSeen,
           warning: newest,

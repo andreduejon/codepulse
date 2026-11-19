@@ -1233,16 +1233,29 @@ describe("fetchOpenShiftWarnings", () => {
         eventTime: "2026-01-01T00:02:00Z",
         regarding: { kind: "ReplicaSet", name: "api-7f9c", uid: "rs-uid" },
       },
+      {
+        metadata: { uid: "event-3" },
+        type: "Normal",
+        reason: "Pulled",
+        message: "Container image already present on machine",
+        count: 2,
+        lastTimestamp: "2026-01-01T00:09:00Z",
+        involvedObject: { kind: "Pod", name: "api-7f9c", uid: "pod-uid", namespace: "dev" },
+      },
     ];
     await withFetch(
       url => new Response(JSON.stringify({ items: url.pathname.includes("/dev/") ? items : [] }), { status: 200 }),
       async urls => {
         const result = await fetchOpenShiftWarnings(config, "token");
         expect(urls.map(url => decodeURIComponent(url))).toEqual([
-          "https://api.example.com:6443/api/v1/namespaces/dev/events?fieldSelector=type=Warning",
-          "https://api.example.com:6443/api/v1/namespaces/prod/events?fieldSelector=type=Warning",
+          "https://api.example.com:6443/api/v1/namespaces/dev/events",
+          "https://api.example.com:6443/api/v1/namespaces/prod/events",
         ]);
         expect(result.denied).toEqual([]);
+        // A Normal event is shown while the cluster lists it, apart from the warnings, which are kept.
+        expect(result.normal?.map(event => [event.id, event.reason, event.name])).toEqual([
+          ["event-3", "Pulled", "api-7f9c"],
+        ]);
         expect(result.warnings).toEqual([
           {
             id: "event-1",
@@ -1281,7 +1294,7 @@ describe("fetchOpenShiftWarnings", () => {
           : new Response(JSON.stringify({ items: [] }), { status: 200 }),
       async () => {
         const result = await fetchOpenShiftWarnings(config, "token");
-        expect(result).toEqual({ warnings: [], denied: ["prod"], failed: [] });
+        expect(result).toEqual({ warnings: [], normal: [], denied: ["prod"], failed: [] });
       },
     );
   });

@@ -1,6 +1,7 @@
 /**
  * OpenShift's Events tab: the warnings Kubernetes reported about a commit's resources, kept with the commit
- * (core/openshift/warnings.ts), as a tree (events-tree.ts): namespace, reason, then the resources it happened to.
+ * (core/openshift/warnings.ts), then the Normal events the cluster lists now, as a tree (events-tree.ts): namespace,
+ * reason, then the resources it happened to.
  * Enter on a resource opens its events in the resource dialog, where the whole message is.
  */
 import { createEffect, createMemo, createSignal, For, on, Show, untrack } from "solid-js";
@@ -86,6 +87,7 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
 
   const data = () => props.getCommitData(props.sha);
   const warnings = () => data()?.warnings ?? [];
+  const normal = () => data()?.normalEvents ?? [];
   const commitLoading = () => props.isLoading?.(props.sha) ?? false;
   const reloadBusy = () => commitLoading() || !!props.loading;
   // An expired token only stops automatic fetches; Reload commit stays the explicit retry, as in Resources.
@@ -96,6 +98,7 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
       isPresent: warning => props.isPresent?.(warning) ?? true,
       isCached: warning => props.isCached?.(warning) ?? false,
       collapsed: collapsed(),
+      normal: normal(),
     }),
   );
   const byKey = createMemo(() => new Map(rows().map(row => [row.key, row])));
@@ -241,8 +244,8 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
             selectable={!props.mouseEnabled}
             text={row.kind === "namespace" ? row.namespace : row.reason}
             active={cursored(row.key)}
-            // The reason is what the tab is about: in the warning color, like the graph's count.
-            fg={cursored(row.key) ? t().accent : row.kind === "reason" ? t().warning : t().foreground}
+            // A warning's reason is what the tab is about: in the warning color, like the graph's count.
+            fg={cursored(row.key) ? t().accent : row.kind === "reason" && row.warning ? t().warning : t().foreground}
           />
           <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
             {String(row.count).padStart(3)}
@@ -267,7 +270,7 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
       />
       {/* As Resources: the count once the commit is loaded, the tree when there is one. */}
       <Show when={!!data()}>
-        <ProviderSummaryRow label="total events" count={warnings().length} />
+        <ProviderSummaryRow label="total events" count={warnings().length + normal().length} />
         <For each={rows()}>{renderRow}</For>
       </Show>
     </box>

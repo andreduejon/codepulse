@@ -371,3 +371,19 @@ test("the warnings of a commit codepulse no longer holds are let go with it", as
   expect(h.service.getCommitData(SHA)).toBeNull();
   expect(h.service.warningsAboutResource(build)).toEqual([]);
 });
+
+test("Normal events show with the commit while the cluster lists them, and are never saved", async () => {
+  const h = harness();
+  const started = buildWarning({ id: "event-normal", reason: "BuildStarted", message: "Build ns/app-1 is now running" });
+  h.cluster.warnings = { warnings: [buildWarning()], normal: [started], denied: [], failed: [] };
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  expect(h.service.getCommitData(SHA)?.normalEvents?.map(e => e.id)).toEqual(["event-normal"]);
+  expect(h.service.getCommitData(SHA)?.warnings?.map(e => e.id)).toEqual(["event-1"]);
+  expect(h.saved.get(SHA)?.warnings?.map(e => e.id)).toEqual(["event-1"]);
+  // Not counted in the graph: its Events column counts warnings.
+  expect(h.app.badges.get(SHA)).toMatchObject({ warningCount: 1 });
+  // The cluster no longer lists it: it is gone, no cache keeps it.
+  h.cluster.warnings = { warnings: [buildWarning()], normal: [], denied: [], failed: [] };
+  await h.service.refresh();
+  expect(h.service.getCommitData(SHA)?.normalEvents ?? []).toEqual([]);
+});

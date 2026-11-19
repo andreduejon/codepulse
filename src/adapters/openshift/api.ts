@@ -573,15 +573,16 @@ function parseOpenShiftWarning(item: unknown, namespace: string): OpenShiftWarni
 }
 
 /**
- * Every configured namespace's warnings (events of type Warning: OpenShift says what went wrong, codepulse adds
- * nothing). A namespace whose events the token may not list is named, not a failure of the others.
+ * Every configured namespace's events: the warnings (type Warning: OpenShift says what went wrong, codepulse adds
+ * nothing), kept with their commits, and the Normal ones, shown while listed. A namespace whose events the token may
+ * not list is named, not a failure of the others.
  */
 export async function fetchOpenShiftWarnings(
   config: OpenShiftClusterConfig,
   token: string,
   signal?: AbortSignal,
 ): Promise<OpenShiftWarningList> {
-  const result: OpenShiftWarningList = { warnings: [], denied: [], failed: [] };
+  const result: OpenShiftWarningList = { warnings: [], normal: [], denied: [], failed: [] };
   for (const ns of config.namespaces) {
     signal?.throwIfAborted();
     if (!isValidOpenShiftNamespace(ns)) continue;
@@ -591,11 +592,12 @@ export async function fetchOpenShiftWarnings(
         token,
         `/api/v1/namespaces/${encodeURIComponent(ns)}/events`,
         signal,
-        "fieldSelector=type%3DWarning",
       );
       for (const item of items) {
-        const warning = parseOpenShiftWarning(item, ns);
-        if (warning) result.warnings.push(warning);
+        const event = parseOpenShiftWarning(item, ns);
+        if (!event) continue;
+        if (str(obj(item)?.type) === "Warning") result.warnings.push(event);
+        else result.normal?.push(event);
       }
     } catch (err) {
       if (isAbortError(err, signal)) throw err;

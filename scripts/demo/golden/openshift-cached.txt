@@ -3,29 +3,29 @@
   Graph                         Commit   Description                                                      Resources        Events                   Resources            Events             Info
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
     █                           bf08113   dev   origin/dev   shop-dev  feat(api): export request metrics   2   2            2                 Reload commit                                       live
-    │                                                                                                                                         total events                                           6
-    █                           e6209dd  feat(api): add a health endpoint                                 ·······          ·······            ├─ ▾ shop-dev                                          1
-    │                                                                                                                                         │  └─ ▾ BuildFailed                                    1
-    █                           3447db9   v0.42.0   main   shop-prod   +3  docs: rewrite the README for…   5               ·······            │     └─ shop-api-41 (cached)                     2h ago
-    │                                                                                                                                         └─ ▾ shop-test                                         5
-    │ █                         6adc455   feature/payments-…   origin/feature/pa…  wip(payments): retry…  ·······          ·······               ├─ ▾ BackOff                                        1
-    │ │                                                                                                                                          │  └─ shop-api-7d9f8-x2k4q                   just now
-    █─╯                         64ddc8a   shop-test  feat(payments): retry failed payments with exponent   3   1   3   1    4   2                ├─ ▾ Unhealthy                                      1
+    │                                                                                                                                         total events                                          10
+    █                           e6209dd  feat(api): add a health endpoint                                 ·······          ·······            ├─ ▾ shop-dev                                          2
+    │                                                                                                                                         │  ├─ ▾ BuildFailed                                    1
+    █                           3447db9   v0.42.0   main   shop-prod   +3  docs: rewrite the README for…   5               ·······            │  │  └─ shop-api-41 (cached)                     2h ago
+    │                                                                                                                                         │  └─ ▾ BuildStarted                                   1
+    │ █                         6adc455   feature/payments-…   origin/feature/pa…  wip(payments): retry…  ·······          ·······            │     └─ shop-api-41 (cached)                     2h ago
+    │ │                                                                                                                                       └─ ▾ shop-test                                         8
+    █─╯                         64ddc8a   shop-test  feat(payments): retry failed payments with exponent   3   1   3   1    4   2                ├─ ▾ BackOff                                        1
+    │                                                                                                                                            │  └─ shop-api-7d9f8-x2k4q                   just now
+    █                           917f7b3  perf(cart): cache price lookups                                  ·······          ·······               ├─ ▾ Unhealthy                                      1
     │                                                                                                                                            │  └─ shop-api-7d9f8-x2k4q                     1m ago
-    █                           917f7b3  perf(cart): cache price lookups                                  ·······          ·······               ├─ ▾ OOMKilling                                     1
-    │                                                                                                                                            │  └─ shop-api-7d9f8-oom7k (cached)           18m ago
-    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                    ·······          ·······               ├─ ▾ FailedCreate                                   1
+    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                    ·······          ·······               ├─ ▾ OOMKilling                                     1
+    │ │                                                                                                                                          │  └─ shop-api-7d9f8-oom7k (cached)           18m ago
+    │ █                         0166f71  feat(i18n): add French                                           ·······          ·······               ├─ ▾ FailedCreate                                   1
     │ │                                                                                                                                          │  └─ shop-api-7d9f8                          30m ago
-    │ █                         0166f71  feat(i18n): add French                                           ·······          ·······               └─ ▾ ProgressDeadlineExceeded                       1
-    │ │                                                                                                                                             └─ shop-api                                40m ago
-    │ █─╮                       5245790  Merge branch 'main' into feature/i18n                            ·······          ·······
-    │ │ │
-    │ █ │                       484821c  feat(i18n): add German                                           ·······          ·······
-    │ │ │
-    │ █ │                       3ad11a2  feat(i18n): extract the checkout strings                         ·······          ·······
-    │ │ │
-    █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                   ·······          ·······
-    │ │ │ │
+    │ █─╮                       5245790  Merge branch 'main' into feature/i18n                            ·······          ·······               ├─ ▾ ProgressDeadlineExceeded                       1
+    │ │ │                                                                                                                                        │  └─ shop-api                                40m ago
+    │ █ │                       484821c  feat(i18n): add German                                           ·······          ·······               ├─ ▾ Pulled                                         1
+    │ │ │                                                                                                                                        │  └─ shop-api-7d9f8-x2k4q                     2m ago
+    │ █ │                       3ad11a2  feat(i18n): extract the checkout strings                         ·······          ·······               ├─ ▾ Started                                        1
+    │ │ │                                                                                                                                        │  └─ shop-api-7d9f8-x2k4q                     2m ago
+    █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                   ·······          ·······               └─ ▾ Scheduled                                      1
+    │ │ │ │                                                                                                                                         └─ shop-api-7d9f8-x2k4q                    44m ago
     │ │ │ █                     9d1b361  fix(search): ignore accents                                      ·······          ·······
     │ │ │ │
     │ │ │ █                     cce93f9  feat(search): search as you type                                 ·······          ·······
@@ -50,29 +50,29 @@
   Graph                         Commit   Description                                                      Resources        Events                   Resources            Events             Info
   ──────────────────                                                                                                                                                                ──────────────────
     █                    OpenShift · Build · shop-dev · shop-api-41 · events                                                                                          esc close                   live
-    │                                                                                                                                                                                                6
-    █                    1  STATUS  REASON             MESSAGE                                                                                                                                       1
+    │                                                                                                                                                                                               10
+    █                    1  STATUS  REASON             MESSAGE                                                                                                                                       2
     │                    2  Failed  DockerBuildFailed  Docker build strategy has failed.                                                                                                             1
     █                    3                                                                                                                                                                      2h ago
-    │                    4  LAST SEEN  TYPE    REASON        COUNT  MESSAGE                                                                                                                          5
-    │ █                  5  2h ago     Normal  BuildStarted      1  Build shop-dev/shop-api-41 is now running                                                                                        1
-    │ │                  6                                                                                                                                                                    just now
+    │                    4  LAST SEEN  TYPE    REASON        COUNT  MESSAGE                                                                                                                          1
+    │ █                  5  2h ago     Normal  BuildStarted      1  Build shop-dev/shop-api-41 is now running                                                                                   2h ago
+    │ │                  6                                                                                                                                                                           8
     █─╯                  7  Cached (no longer in the cluster)                                                                                                                                        1
-    │                    8  LAST SEEN  TYPE     REASON       COUNT  MESSAGE                                                                                                                     1m ago
+    │                    8  LAST SEEN  TYPE     REASON       COUNT  MESSAGE                                                                                                                   just now
     █                    9  2h ago     Warning  BuildFailed      1  Build shop-dev/shop-api-41 failed                                                                                                1
-    │                                                                                                                                                                                          18m ago
+    │                                                                                                                                                                                           1m ago
     █─╮                                                                                                                                                                                              1
-    │ │                                                                                                                                                                                        30m ago
+    │ │                                                                                                                                                                                        18m ago
     │ █                                                                                                                                                                                              1
-    │ │                                                                                                                                                                                        40m ago
-    │ █─╮
-    │ │ │
-    │ █ │
-    │ │ │
-    │ █ │
-    │ │ │
-    █─┼─┼─╮
-    │ │ │ │
+    │ │                                                                                                                                                                                        30m ago
+    │ █─╮                                                                                                                                                                                            1
+    │ │ │                                                                                                                                                                                      40m ago
+    │ █ │                                                                                                                                                                                            1
+    │ │ │                                                                                                                                                                                       2m ago
+    │ █ │                                                                                                                                                                                            1
+    │ │ │                                                                                                                                                                                       2m ago
+    █─┼─┼─╮                                                                                                                                                                                          1
+    │ │ │ │                                                                                                                                                                                    44m ago
     │ │ │ █
     │ │ │ │
     │ │ │ █
@@ -97,29 +97,29 @@
   Graph                         Commit   Description                                                      Resources        Events                   Resources            Events             Info
   ──────────────────                                                                                                                                                                ──────────────────
     █                    OpenShift · ReplicaSet · shop-test · shop-api-7d9f8 · events · 1 warning                                                                     esc close                   live
-    │                                                                                                                                                                                                6
-    █                    1  LAST SEEN  TYPE     REASON        COUNT  MESSAGE                                                                                                                         1
+    │                                                                                                                                                                                               10
+    █                    1  LAST SEEN  TYPE     REASON        COUNT  MESSAGE                                                                                                                         2
     │                    2  30m ago    Warning  FailedCreate      3  Error creating: pods "shop-api-7d9f8-" is forbidden: exceeded quota: compute-resources, requested: limits.                      1
     █                                                                                                                                                                                           2h ago
-    │                                                                                                                                                                                                5
-    │ █                                                                                                                                                                                              1
-    │ │                                                                                                                                                                                       just now
+    │                                                                                                                                                                                                1
+    │ █                                                                                                                                                                                         2h ago
+    │ │                                                                                                                                                                                              8
     █─╯                                                                                                                                                                                              1
-    │                                                                                                                                                                                           1m ago
+    │                                                                                                                                                                                         just now
     █                                                                                                                                                                                                1
-    │                                                                                                                                                                                          18m ago
+    │                                                                                                                                                                                           1m ago
     █─╮                                                                                                                                                                                              1
-    │ │                                                                                                                                                                                        30m ago
+    │ │                                                                                                                                                                                        18m ago
     │ █                                                                                                                                                                                              1
-    │ │                                                                                                                                                                                        40m ago
-    │ █─╮
-    │ │ │
-    │ █ │
-    │ │ │
-    │ █ │
-    │ │ │
-    █─┼─┼─╮
-    │ │ │ │
+    │ │                                                                                                                                                                                        30m ago
+    │ █─╮                                                                                                                                                                                            1
+    │ │ │                                                                                                                                                                                      40m ago
+    │ █ │                                                                                                                                                                                            1
+    │ │ │                                                                                                                                                                                       2m ago
+    │ █ │                                                                                                                                                                                            1
+    │ │ │                                                                                                                                                                                       2m ago
+    █─┼─┼─╮                                                                                                                                                                                          1
+    │ │ │ │                                                                                                                                                                                    44m ago
     │ │ │ █
     │ │ │ │
     │ │ │ █

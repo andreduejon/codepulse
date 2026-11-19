@@ -190,10 +190,11 @@ restarts, failing conditions and their messages.
 
 ## Warnings
 
-Kubernetes events of type `Warning` in the configured namespaces are read with every
-build list fetch (Reload and auto refresh). codepulse takes them as OpenShift reports
-them: a warning is never turned into a failure, and `✗` comes only from a resource's
-own status.
+The events in the configured namespaces are read with every build list fetch (Reload and
+auto refresh). codepulse takes them as OpenShift reports them: a warning is never turned
+into a failure, and `✗` comes only from a resource's own status. Events of type `Warning`
+are kept with their commit (below); `Normal` ones (Scheduled, Pulled, BuildStarted) show
+in the **Events** tab only while the cluster lists them, and are never saved.
 
 - A warning belongs to the commit whose resource it is about: the same name, and the same
   uid, so a resource recreated under its old name is another one. One about a ReplicaSet
@@ -210,8 +211,8 @@ own status.
   yellow for those the cluster still reports, muted for those only the cache has.
 - In **Resources**, a resource OpenShift warned about shows `!` before its status mark.
 - The **Events** tab starts with **Reload commit** and the count (`total events`), then a
-  tree: namespace, each reason newest first (in the warning colour), then the resources it
-  happened to, newest first, each with when. An event is always about one object, so ten
+  tree: namespace, each reason newest first (the warnings' in the warning colour, then the
+  Normal events'), then the resources it happened to, newest first, each with when. An event is always about one object, so ten
   pods crash-looping are ten BackOff events under one BackOff row. A resource with two
   events of one reason (another message) is one row. Enter (or a click) on a resource
   opens its dialog on the events view, where the whole message is; `o` opens it in the

@@ -218,6 +218,8 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
   const warningsBySha = new Map<string, OpenShiftWarning[]>();
   /** The warnings the cluster listed last, linked again whenever the commits' resources change. */
   let listedWarnings: OpenShiftWarning[] = [];
+  /** The Normal events the cluster listed last: shown with their commits while listed, never saved. */
+  let listedNormal: OpenShiftWarning[] = [];
   /** Namespaces whose events the token may not list, for the Events tab's notice. */
   let warningsDenied: string[] = [];
   /**
@@ -240,7 +242,9 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
 
   /** Links the listed warnings to the commits now held, attaches each commit's, and saves what is new. */
   function attachWarnings(): void {
-    const linked = linkWarningsToCommits(listedWarnings, commits, live.listed?.controllers ?? []);
+    const controllers = live.listed?.controllers ?? [];
+    const linked = linkWarningsToCommits(listedWarnings, commits, controllers);
+    const linkedNormal = linkWarningsToCommits(listedNormal, commits, controllers);
     const changed: string[] = [];
     for (const [sha, incoming] of linked) {
       const kept = warningsBySha.get(sha) ?? [];
@@ -251,8 +255,12 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
     }
     for (const [sha, commit] of commits) {
       const warnings = warningsBySha.get(sha);
-      if (commit.warnings !== warnings)
-        commits.set(sha, warnings ? { ...commit, warnings } : { ...commit, warnings: undefined });
+      const listed = linkedNormal.get(sha);
+      // The same events read again keep their list, so nothing that shows them redraws.
+      const normalEvents =
+        listed && commit.normalEvents && sameWarnings(commit.normalEvents, listed) ? commit.normalEvents : listed;
+      if (commit.warnings !== warnings || commit.normalEvents !== normalEvents)
+        commits.set(sha, { ...commit, warnings, normalEvents });
     }
     // An older commit only shown from the cache keeps its new warnings too, without counting as a use for eviction.
     const used = changed.filter(sha => !shownFromCache.has(sha));
@@ -525,6 +533,8 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
     listedWarnings = list.warnings;
     warningsDenied = list.denied;
     const unanswered = new Set([...list.denied, ...list.failed]);
+    // A namespace that did not answer keeps what it listed last.
+    listedNormal = [...listedNormal.filter(entry => unanswered.has(entry.namespace)), ...(list.normal ?? [])];
     for (const namespace of config.namespaces) {
       if (unanswered.has(namespace)) continue;
       listedIds.set(namespace, new Set(list.warnings.filter(entry => entry.namespace === namespace).map(entry => entry.id)));
@@ -687,6 +697,7 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
     live.listed = null;
     warningsBySha.clear();
     listedWarnings = [];
+    listedNormal = [];
     warningsDenied = [];
     listedIds.clear();
     ports.onLiveState("idle");
