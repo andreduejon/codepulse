@@ -167,7 +167,8 @@ export function useDashboard(
       const known = byId.get(event.id);
       const same = known?.time === event.time && known.text === event.text && known.sha === event.sha;
       if (known && (known.time > event.time || same)) continue;
-      const branch = event.branch ?? known?.branch ?? branches.get(event.sha);
+      // The branch it had only on the same commit: one that moved takes its new commit's.
+      const branch = event.branch ?? (known?.sha === event.sha ? known.branch : undefined) ?? branches.get(event.sha);
       byId.set(event.id, branch ? { ...event, branch } : event);
       changed = true;
     }

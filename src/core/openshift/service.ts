@@ -326,6 +326,8 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
   async function persistWarnings(shas: string[], touch: boolean): Promise<void> {
     const epoch = lifecycle().getEpoch();
     const repoPath = app.repoPath();
+    // Read now: by the time the cache merges, a refresh may have let the commit go.
+    const held = new Map(shas.map(sha => [sha, terminalBuildsOf(commits.get(sha))]));
     try {
       await persistMerged(
         ports.cache(),
@@ -337,7 +339,7 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
           sha,
           // A commit the cache dropped (the limit) comes back whole, as the build list writes it: never without its
           // finished builds.
-          builds: existing?.builds ?? terminalBuildsOf(commits.get(sha)),
+          builds: existing?.builds ?? held.get(sha) ?? [],
           warnings: mergeWarnings(existing?.warnings ?? [], incoming),
         }),
         { touch },
@@ -432,6 +434,7 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
     if (changed) ports.onDataChange();
   }
 
+  /** Each build list: the held commits' finished builds and kept warnings, into their snapshots. */
   async function persistTerminalBuilds(
     repoPath: string,
     data: Map<string, OpenShiftCommitData>,
@@ -442,12 +445,20 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
       repoPath,
       [...data.keys()],
       () => lifecycle().isCurrent(epoch, repoPath),
-      sha => terminalBuildsOf(data.get(sha)),
-      (sha, existing, incoming) => ({
-        sha,
-        builds: mergeById(existing?.builds ?? [], incoming),
-        ...(existing?.warnings ? { warnings: existing.warnings } : {}),
-      }),
+      sha => {
+        const builds = terminalBuildsOf(data.get(sha));
+        // Its kept warnings too: one whose own save failed is saved now, also when it did not change.
+        const warnings = warningsBySha.get(sha.toLowerCase()) ?? [];
+        return builds.length > 0 || warnings.length > 0 ? [{ builds, warnings }] : [];
+      },
+      (sha, existing, [incoming]) => {
+        const warnings = mergeWarnings(existing?.warnings ?? [], incoming?.warnings ?? []);
+        return {
+          sha,
+          builds: mergeById(existing?.builds ?? [], incoming?.builds ?? []),
+          ...(warnings.length > 0 ? { warnings } : {}),
+        };
+      },
     );
   }
 

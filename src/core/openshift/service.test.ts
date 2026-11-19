@@ -411,6 +411,47 @@ test("a warning whose first save failed is saved with the next change: only a sa
   expect(h.saved.get(SHA)?.warnings?.map(w => w.count)).toEqual([2]);
 });
 
+test("a warning save that lands after its commit left never writes it back without its builds", async () => {
+  const h = harness();
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => (release = resolve));
+  const mergeMany = h.cache.mergeMany;
+  h.cache.mergeMany = async (repo, items, merge, isCurrent, options) => {
+    if (items.some(item => item.incoming.some(entry => "reason" in (entry as object)))) await gate;
+    return mergeMany(repo, items, merge, isCurrent, options);
+  };
+  h.cluster.warnings = { warnings: [buildWarning()], denied: [], failed: [] };
+  await h.service.refresh();
+  // While the save waits: the cache limit drops the commit, and it leaves the window, so codepulse lets it go.
+  h.saved.delete(SHA);
+  h.app.rows = [{ commit: { hash: "e".repeat(40), refs: [] } }] as unknown as GraphRow[];
+  Object.assign(h.api, {
+    fetchOpenShiftInventory: mock(async () => ({ data: new Map(), error: null, failures: [], successfulRequests: 1 })),
+  });
+  await h.service.refresh();
+  expect(h.service.getCommitData(SHA)).toBeNull();
+  release();
+  await Bun.sleep(5);
+  expect(h.saved.get(SHA)?.builds.map(b => b.name) ?? ["dropped"]).not.toEqual([]);
+});
+
+test("a warning whose save failed is saved by a later refresh, also when it did not change", async () => {
+  const h = harness();
+  const mergeMany = h.cache.mergeMany;
+  let busy = true;
+  h.cache.mergeMany = async (repo, items, merge, isCurrent, options) =>
+    busy ? 0 : mergeMany(repo, items, merge, isCurrent, options);
+  h.cluster.warnings = { warnings: [buildWarning()], denied: [], failed: [] };
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  await Bun.sleep(0);
+  expect(h.saved.has(SHA)).toBe(false);
+  busy = false;
+  await h.service.refresh();
+  await Bun.sleep(0);
+  expect(h.saved.get(SHA)?.warnings?.map(w => w.id)).toEqual(["event-1"]);
+});
+
 test("an answer to the warnings that lands after a reset changes nothing", async () => {
   const h = harness();
   let answer!: (list: OpenShiftWarningList) => void;
