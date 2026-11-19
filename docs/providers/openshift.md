@@ -125,6 +125,10 @@ Pod → ReplicaSet → Deployment
 Pod → ReplicationController → DeploymentConfig
 ```
 
+A Pod without a label of its own matches a labeled Deployment's selector, unless its
+image digest names another commit: during a rollout the old Pods still match the
+selector but run the previous commit's image, so they stay with that commit.
+
 Terminating Pods are excluded. ImageStreamTags are a match seed only and are
 not written to disk. An overwritten IST annotation moves the tag to the new
 commit; it does not stay on the old SHA. Terminal Builds remain on the commit
@@ -195,7 +199,8 @@ The events in the configured namespaces are read with every build list fetch (Re
 auto refresh). codepulse takes them as OpenShift reports them: a warning is never turned
 into a failure, and `✗` comes only from a resource's own status. Events of type `Warning`
 are kept with their commit (below); `Normal` ones (Scheduled, Pulled, BuildStarted) show
-in the **Events** tab only while the cluster lists them, and are never saved.
+in the **Events** tab only while the cluster lists them, and are never saved (one about a
+resource that is gone says `(cached)` until the cluster's list drops it).
 
 - A warning belongs to the commit whose resource it is about: the same name, and the same
   uid, so a resource recreated under its old name is another one. One about a ReplicaSet
@@ -241,7 +246,8 @@ muted, in **Resources** and **Events** alike.
   any of its events of that reason. While a problem keeps happening Kubernetes updates the
   same event (its count and last time), so it stays one; when it starts again after
   OpenShift deleted it, the new event is a new one beside the cached one. A pod recreated
-  under its old name is two rows: the one running, then the cached one.
+  under its old name is a row for each: the one running, then each cached one, so every
+  one's events open.
 - Enter on a cached pod opens its dialog on its events only: there is no log, object or
   console page for it any more. A pruned Build opens in full: its log and object are
   cached. A ReplicaSet or ReplicationController also opens on its events only, since no

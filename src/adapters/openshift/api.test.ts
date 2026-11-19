@@ -10,6 +10,7 @@ import {
   resourceFromWatchObject,
 } from "../../core/openshift/resources";
 import type { OpenShiftCommitData, OpenShiftResource } from "../../core/openshift/types";
+import { linkWarningsToCommits } from "../../core/openshift/warnings";
 import {
   fetchOpenShiftEvents,
   fetchOpenShiftInventory,
@@ -415,6 +416,89 @@ describe("fetchOpenShiftInventory", () => {
       },
     ]);
     expect(map.get(SHA)?.namespaces[0].pods.map(item => item.name)).toEqual(["app-1"]);
+  });
+
+  test("during a rollout an old pod stays with the commit its image is from, and so does its ReplicaSet's warning", () => {
+    const OLD = "a".repeat(40);
+    const NEW = "b".repeat(40);
+    const pod = (name: string, digest: string, owner: string): OpenShiftResource => ({
+      id: `Pod:ns:${name}`,
+      kind: "Pod",
+      name,
+      namespace: "ns",
+      status: "running",
+      imageRefs: [`app@sha256:${digest}`],
+      labels: { app: "svc" },
+      ownerReferences: [{ kind: "ReplicaSet", uid: owner }],
+    });
+    const tag = (sha: string, digest: string): OpenShiftResource => ({
+      id: `ImageStreamTag:ns:app:${sha.slice(0, 1)}`,
+      kind: "ImageStreamTag",
+      name: `app:${sha.slice(0, 1)}`,
+      namespace: "ns",
+      status: "pass",
+      imageRefs: [`sha256:${digest}`],
+      commitSha: sha,
+    });
+    const deployment: OpenShiftResource = {
+      id: "Deployment:ns:app",
+      uid: "deploy-uid",
+      kind: "Deployment",
+      name: "app",
+      namespace: "ns",
+      status: "running",
+      imageRefs: [],
+      commitSha: NEW,
+      // The selector is the same for every rollout: the old pods match it too.
+      podSelector: { app: "svc" },
+    };
+    const controllers = [
+      {
+        kind: "ReplicaSet" as const,
+        namespace: "ns",
+        uid: "old-rs",
+        createdAt: "2026-03-02T08:00:00Z",
+        ownerReferences: [{ kind: "Deployment", uid: "deploy-uid" }],
+      },
+      {
+        kind: "ReplicaSet" as const,
+        namespace: "ns",
+        uid: "new-rs",
+        createdAt: "2026-03-02T10:00:00Z",
+        ownerReferences: [{ kind: "Deployment", uid: "deploy-uid" }],
+      },
+    ];
+    const map = buildOpenShiftCommitMap(
+      [
+        tag(OLD, "aaa111"),
+        tag(NEW, "bbb222"),
+        deployment,
+        pod("app-old", "aaa111", "old-rs"),
+        pod("app-new", "bbb222", "new-rs"),
+      ],
+      controllers,
+    );
+    expect(map.get(OLD)?.namespaces[0]?.pods.map(item => item.name)).toEqual(["app-old"]);
+    expect(map.get(NEW)?.namespaces[0]?.pods.map(item => item.name)).toEqual(["app-new"]);
+    const linked = linkWarningsToCommits(
+      [
+        {
+          id: "event-old-rs",
+          namespace: "ns",
+          kind: "ReplicaSet",
+          name: "app-old",
+          uid: "old-rs",
+          reason: "FailedCreate",
+          message: "Error creating: pods is forbidden",
+          count: 1,
+          firstSeen: "2026-03-02T08:30:00Z",
+          lastSeen: "2026-03-02T08:30:00Z",
+        },
+      ],
+      map,
+      controllers,
+    );
+    expect([...linked.keys()]).toEqual([OLD]);
   });
 
   test("keeps every ImageStreamTag when they share an ImageStream uid", () => {

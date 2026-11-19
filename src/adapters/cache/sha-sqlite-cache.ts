@@ -366,8 +366,9 @@ export class ShaSqliteCache<T extends { sha: string }> {
   /**
    * Merges each commit's new results into its entry, all in one transaction: an entry that comes out the same is not
    * written again, the count limit applies once, and listeners hear of it once, only when something was written.
-   * Reading an entry to merge into doesn't count as using it; writing it does, unless `touch: false` (an entry only
-   * shown keeps its place for eviction; a new one is written as used). Returns how many entries it wrote.
+   * Reading an entry to merge into doesn't count as using it; writing it does, unless `touch: false`: an entry only
+   * shown keeps its place for eviction, and one the cache no longer has stays gone (writing it back would evict
+   * another in its place). Returns how many entries it wrote.
    */
   async mergeMany<I>(
     repoPath: string,
@@ -398,6 +399,7 @@ export class ShaSqliteCache<T extends { sha: string }> {
         for (const item of items) {
           const sha = assertExactSha(item.sha);
           const row = select.get(this.provider, hash, sha);
+          if (!row && options?.touch === false) continue;
           let existing: T | null = null;
           if (row) {
             try {
@@ -411,7 +413,7 @@ export class ShaSqliteCache<T extends { sha: string }> {
           if (!this.isEntry(merged)) throw new InvalidEntryError(this.invalidMessage);
           const payload = JSON.stringify({ ...merged, sha });
           if (row?.payload === payload) continue;
-          if (row && options?.touch === false) update.run(path, payload, this.provider, hash, sha);
+          if (options?.touch === false) update.run(path, payload, this.provider, hash, sha);
           else upsert.run(this.provider, hash, path, sha, payload, now);
           written++;
         }

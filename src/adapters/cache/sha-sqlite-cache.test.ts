@@ -747,7 +747,7 @@ describe("read without touch", () => {
 });
 
 describe("merge without touch", () => {
-  test("writes the merged snapshot and leaves its last access alone; a new one is written as used", async () => {
+  test("writes the merged snapshot and leaves its last access alone; one the cache no longer has stays gone", async () => {
     const root = await cacheRoot();
     const disk = cache(root);
     const sha = "d".repeat(40);
@@ -770,6 +770,7 @@ describe("merge without touch", () => {
         .query<{ accessed_at: number }, [string]>("SELECT accessed_at FROM snapshots WHERE sha = ?")
         .get(of)?.accessed_at;
     expect(accessed(sha)).toBe(1_000);
-    expect(accessed(fresh)).toBeGreaterThan(1_000);
+    // Writing it back would evict another commit's snapshot and logs in its place.
+    expect(accessed(fresh)).toBeUndefined();
   });
 });

@@ -122,17 +122,17 @@ export function eventsTreeRows(warnings: readonly OpenShiftWarning[], options: E
       });
       if (!open) return;
       const reasonLead = below(nsLead, reasonLast);
-      // One recreated under its old name is two: the one the commit has, and the removed one.
-      const resources = groupBy(
-        ofReason,
-        warning => `${warning.kind}\u0000${warning.name}\u0000${options.isPresent(warning) ? "present" : "removed"}`,
-      );
+      // One recreated under its old name is a row each: the one the commit has, then each removed one by its uid, so
+      // every one's events stay reachable (Enter opens the row's own object).
+      const objectOf = (entry: OpenShiftWarning) =>
+        `${entry.kind}:${entry.name}:${options.isPresent(entry) ? "present" : `removed:${entry.uid ?? ""}`}`;
+      const resources = groupBy(ofReason, objectOf);
       resources.forEach((events, index) => {
         const newest = events[0] as OpenShiftWarning;
         const removed = !options.isPresent(newest);
         rows.push({
           kind: "resource",
-          key: `resource:${key}:${newest.kind}:${newest.name}:${removed ? "removed" : "present"}`,
+          key: `resource:${key}:${objectOf(newest)}`,
           prefix: branch(reasonLead, index === resources.length - 1),
           resourceKind: newest.kind,
           name: newest.name,

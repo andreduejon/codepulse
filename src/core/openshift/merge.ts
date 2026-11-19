@@ -37,6 +37,8 @@ function isOpenShiftWarning(value: unknown): value is OpenShiftWarning {
     typeof entry.reason === "string" &&
     typeof entry.message === "string" &&
     typeof entry.count === "number" &&
+    (entry.uid === undefined || typeof entry.uid === "string") &&
+    (entry.firstSeen === null || typeof entry.firstSeen === "string") &&
     (entry.lastSeen === null || typeof entry.lastSeen === "string")
   );
 }

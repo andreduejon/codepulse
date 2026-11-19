@@ -521,6 +521,8 @@ test("opened from the Events tab, the dialog starts on the events; c still cycle
     expect(d.frame()).toMatch(/test-resource · events/);
     expect(d.frame()).toContain("BackOff");
     expect(d.loadLog).not.toHaveBeenCalled();
+    // Asked once: opening on the events view does not ask again.
+    expect(loadEvents).toHaveBeenCalledTimes(1);
     await d.key("c");
     await Bun.sleep(0);
     await d.flush();
@@ -557,6 +559,8 @@ test("the events view ends with the warnings only the cache has, newest first, n
     await Bun.sleep(0);
     await d.flush();
     const rows = d.frame().split("\n");
+    // The title counts the warnings the view shows: the one the cluster lists and the two only the cache has.
+    expect(d.frame()).toMatch(/test-resource · events · 3 warnings/);
     const title = rows.findIndex(row => row.includes("Cached (no longer in the cluster)"));
     expect(title).toBeGreaterThan(rows.findIndex(row => row.includes("BackOff message")));
     expect(rows.findIndex(row => row.includes("Unhealthy message"))).toBeGreaterThan(title);

@@ -39,6 +39,8 @@ function harness() {
     writeLog: async () => {},
     mergeMany: async (_repo, items, merge, _isCurrent, options) => {
       for (const item of items) {
+        // As the SQLite cache: an entry only shown that the cache dropped is not written back.
+        if (options?.touch === false && !saved.has(item.sha)) continue;
         saved.set(item.sha, merge(item.sha, saved.get(item.sha) ?? null, [...item.incoming]));
         touched.set(item.sha, options?.touch !== false);
       }
@@ -386,4 +388,73 @@ test("Normal events show with the commit while the cluster lists them, and are n
   h.cluster.warnings = { warnings: [buildWarning()], normal: [], denied: [], failed: [] };
   await h.service.refresh();
   expect(h.service.getCommitData(SHA)?.normalEvents ?? []).toEqual([]);
+});
+
+/** A live list the test sets, and one live session run to its first list. */
+function liveCluster(h: ReturnType<typeof harness>) {
+  const pod = (name: string, uid: string): OpenShiftResource => ({
+    id: `Pod:ns:${name}`,
+    kind: "Pod",
+    namespace: "ns",
+    name,
+    uid,
+    status: "pass",
+    imageRefs: [],
+    commitSha: SHA,
+  });
+  const state = { pods: [] as OpenShiftResource[] };
+  Object.assign(h.api, {
+    fetchOpenShiftResources: mock(async () => ({
+      resources: state.pods,
+      controllers: [],
+      error: null,
+      failures: [],
+      successfulRequests: 1,
+      resourceVersions: new Map(),
+    })),
+    watchOpenShiftStream: mock(async () => "end"),
+  });
+  const liveOnce = async () => {
+    const stop = new AbortController();
+    const session = h.service.runWatchSession(stop.signal, h.lifecycle.getEpoch());
+    await Bun.sleep(5);
+    stop.abort();
+    await session;
+  };
+  return { pod, state, liveOnce };
+}
+
+test("a Normal event about a pod that is gone stays, cached, while the cluster still lists it", async () => {
+  const h = harness();
+  const live = liveCluster(h);
+  const killing = buildWarning({ id: "killing", kind: "Pod", name: "app-1-abcde", uid: "pod-1", reason: "Killing" });
+  h.cluster.warnings = { warnings: [], normal: [killing], denied: [], failed: [] };
+  live.state.pods = [live.pod("app-1-abcde", "pod-1")];
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  await live.liveOnce();
+  expect(h.service.getCommitData(SHA)?.normalEvents?.map(e => e.id)).toEqual(["killing"]);
+  // The pod was replaced; the namespace still lists the event.
+  live.state.pods = [live.pod("app-1-fghij", "pod-2")];
+  await live.liveOnce();
+  expect(h.service.getCommitData(SHA)?.normalEvents?.map(e => e.id)).toEqual(["killing"]);
+  expect(h.app.badges.get(SHA)).toMatchObject({ cachedEventCount: 1 });
+  // OpenShift deleted the event: it is gone, nothing keeps a Normal event.
+  h.cluster.warnings = { warnings: [], normal: [], denied: [], failed: [] };
+  await h.service.refresh();
+  expect(h.service.getCommitData(SHA)?.normalEvents ?? []).toEqual([]);
+});
+
+test("a namespace whose event list failed keeps the warnings it listed before, to link once their pod shows", async () => {
+  const h = harness();
+  const live = liveCluster(h);
+  const backOff = buildWarning({ id: "backoff", kind: "Pod", name: "app-1-abcde", uid: "pod-1", reason: "BackOff" });
+  h.cluster.warnings = { warnings: [backOff], denied: [], failed: [] };
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  // No live list yet: nothing holds the pod, so the warning is not linked.
+  expect(h.service.getCommitData(SHA)?.warnings ?? []).toEqual([]);
+  h.cluster.warnings = { warnings: [], denied: [], failed: ["ns"] };
+  await h.service.refresh();
+  live.state.pods = [live.pod("app-1-abcde", "pod-1")];
+  await live.liveOnce();
+  expect(h.service.getCommitData(SHA)?.warnings?.map(e => e.id)).toEqual(["backoff"]);
 });

@@ -536,17 +536,23 @@ export function buildOpenShiftCommitMap(
   }
   for (const r of resources.filter(r => !r.commitSha)) {
     if (r.kind === "Pod" && r.terminating) continue;
+    // The commits its image is from: during a rollout an old pod still matches the Deployment's selector, but runs
+    // the previous commit's image, so a known image wins over the selector.
+    const digests = r.imageRefs.flatMap(imageDigests);
+    const byImage = new Set(
+      [...tokensBySha].filter(([, tokens]) => digests.some(ref => tokens.has(ref))).map(([sha]) => sha),
+    );
     if (r.kind === "Pod") {
       for (const deploy of resources) {
         if (deploy.kind !== "Deployment" && deploy.kind !== "DeploymentConfig") continue;
         if (!deploy.commitSha || deploy.namespace !== r.namespace) continue;
         if (!matchesPodSelector(r.labels, deploy.podSelector)) continue;
+        if (byImage.size > 0 && !byImage.has(deploy.commitSha)) continue;
         add(map, deploy.commitSha, { ...r, commitSha: deploy.commitSha });
         matchedPods.push({ sha: deploy.commitSha, pod: r });
       }
     }
-    for (const [sha, tokens] of tokensBySha) {
-      if (!r.imageRefs.flatMap(imageDigests).some(ref => tokens.has(ref))) continue;
+    for (const sha of byImage) {
       add(map, sha, r);
       if (r.kind === "Pod") matchedPods.push({ sha, pod: r });
     }

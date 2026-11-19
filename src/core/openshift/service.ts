@@ -220,6 +220,11 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
   let listedWarnings: OpenShiftWarning[] = [];
   /** The Normal events the cluster listed last: shown with their commits while listed, never saved. */
   let listedNormal: OpenShiftWarning[] = [];
+  /**
+   * Each commit's Normal events. One keeps its commit while the cluster lists it, also once the pod it is about is
+   * gone (then cached), as a warning does; it goes when the list no longer has it.
+   */
+  const normalBySha = new Map<string, OpenShiftWarning[]>();
   /** Namespaces whose events the token may not list, for the Events tab's notice. */
   let warningsDenied: string[] = [];
   /**
@@ -253,9 +258,17 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
       warningsBySha.set(sha, merged);
       changed.push(sha);
     }
+    const listedById = new Map(listedNormal.map(entry => [entry.id, entry]));
+    for (const sha of commits.keys()) {
+      const now = linkedNormal.get(sha) ?? [];
+      const before = (normalBySha.get(sha) ?? []).flatMap(entry => listedById.get(entry.id) ?? []);
+      const events = mergeWarnings(before, now);
+      if (events.length > 0) normalBySha.set(sha, events);
+      else normalBySha.delete(sha);
+    }
     for (const [sha, commit] of commits) {
       const warnings = warningsBySha.get(sha);
-      const listed = linkedNormal.get(sha);
+      const listed = normalBySha.get(sha);
       // The same events read again keep their list, so nothing that shows them redraws.
       const normalEvents =
         listed && commit.normalEvents && sameWarnings(commit.normalEvents, listed) ? commit.normalEvents : listed;
@@ -464,6 +477,7 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
         if (cachedSHAs.has(sha.toLowerCase())) continue;
         commits.delete(sha);
         warningsBySha.delete(sha);
+        normalBySha.delete(sha);
       }
       for (const sha of candidates) {
         const commit = seeds.get(sha);
@@ -531,11 +545,12 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
 
   /** Keeps what the cluster listed; the warnings are linked to commits when the commits are published. */
   function applyWarningList(config: OpenShiftClusterConfig, list: OpenShiftWarningList): void {
-    listedWarnings = list.warnings;
     warningsDenied = list.denied;
     const unanswered = new Set([...list.denied, ...list.failed]);
-    // A namespace that did not answer keeps what it listed last.
-    listedNormal = [...listedNormal.filter(entry => unanswered.has(entry.namespace)), ...(list.normal ?? [])];
+    // A namespace that did not answer keeps what it listed last, to link once what it is about shows.
+    const keptOf = (listed: readonly OpenShiftWarning[]) => listed.filter(entry => unanswered.has(entry.namespace));
+    listedWarnings = [...keptOf(listedWarnings), ...list.warnings];
+    listedNormal = [...keptOf(listedNormal), ...(list.normal ?? [])];
     for (const namespace of config.namespaces) {
       if (unanswered.has(namespace)) continue;
       listedIds.set(namespace, new Set(list.warnings.filter(entry => entry.namespace === namespace).map(entry => entry.id)));
@@ -699,6 +714,7 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
     warningsBySha.clear();
     listedWarnings = [];
     listedNormal = [];
+    normalBySha.clear();
     warningsDenied = [];
     listedIds.clear();
     ports.onLiveState("idle");

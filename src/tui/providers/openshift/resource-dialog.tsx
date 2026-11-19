@@ -180,10 +180,14 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
     void loadLog(false);
   });
 
-  // Events load as the dialog opens, so the title can say there are warnings before you switch to them.
+  // Events load as the dialog opens, so the title can say there are warnings before you switch to them. Opened on the
+  // events view, that view's effect asked already.
   createEffect(() => {
     props.resource.id;
-    if (canEvents()) untrack(() => void loadEvents());
+    if (canEvents())
+      untrack(() => {
+        if (!eventsLoading()) void loadEvents();
+      });
   });
 
   const statusLines = createMemo(() => formatOpenShiftStatus(props.resource.kind, objectValue()));
@@ -215,7 +219,13 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
       ...cachedLines(),
     ];
   });
-  const warningCount = () => (events() ?? []).filter(event => event.type === "Warning").length;
+  /** The warnings the events view shows: the cluster's, and the kept ones it no longer lists. */
+  const warningCount = () => {
+    const live = events() ?? [];
+    const listed = new Set(live.flatMap(event => (event.id ? [event.id] : [])));
+    const kept = (props.savedWarnings?.() ?? []).filter(warning => !listed.has(warning.id)).length;
+    return live.filter(event => event.type === "Warning").length + kept;
+  };
   /**
    * Events: what the status says is wrong in red (why the resource is ✗), warning events in the warning color, the
    * headers muted. Kubernetes has no error events: red comes only from the status. Log and object lines are plain.

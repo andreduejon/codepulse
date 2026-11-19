@@ -88,6 +88,25 @@ describe("the Events tab's tree", () => {
     ]);
   });
 
+  test("a pod recreated twice under its name is a row for each: every one's warnings stay reachable", () => {
+    const rows = eventsTreeRows(
+      [
+        warning({ id: "p3", uid: "pod-3", lastSeen: "2026-03-02T09:30:00Z" }),
+        warning({ id: "p2", uid: "pod-2", lastSeen: "2026-03-02T09:20:00Z" }),
+        warning({ id: "p1", uid: "pod-1", lastSeen: "2026-03-02T09:10:00Z" }),
+      ],
+      { isPresent: entry => entry.uid === "pod-3", isCached: () => false, collapsed: new Set() },
+    );
+    expect(rows.map(text).slice(2)).toEqual([
+      "      ├─ Pod shop-api-7d9f8-x2k4q",
+      "      ├─ Pod shop-api-7d9f8-x2k4q (cached)",
+      "      └─ Pod shop-api-7d9f8-x2k4q (cached)",
+    ]);
+    // Each opens its own pod.
+    expect(rows.slice(2).map(row => row.kind === "resource" && row.warning.uid)).toEqual(["pod-3", "pod-2", "pod-1"]);
+    expect(new Set(rows.map(row => row.key)).size).toBe(rows.length);
+  });
+
   test("a closed namespace or reason keeps only its own row", () => {
     const rows = eventsTreeRows(WARNINGS, {
       isPresent: () => true,
