@@ -271,14 +271,14 @@ test("a warning about a resource the live list no longer has is not present; the
   ).toEqual(["event-1", "event-pod"]);
   expect(h.service.warningIsPresent(SHA, podWarning)).toBe(true);
   expect(h.app.badges.get(SHA)).toMatchObject({ warningCount: 2 });
-  expect(h.app.badges.get(SHA)?.cachedWarningCount).toBeUndefined();
+  expect(h.app.badges.get(SHA)?.cachedEventCount).toBeUndefined();
   // The pod was replaced by another one with the same commit.
   listed = liveList([pod("app-1-fghij", "pod-2")]);
   await liveOnce();
   expect(h.service.warningIsPresent(SHA, podWarning)).toBe(false);
   expect(h.service.warningIsPresent(SHA, buildWarning())).toBe(true);
   expect(h.service.getCommitData(SHA)?.warnings).toHaveLength(2);
-  expect(h.app.badges.get(SHA)).toMatchObject({ warningCount: 1, cachedWarningCount: 1 });
+  expect(h.app.badges.get(SHA)).toMatchObject({ warningCount: 1, cachedEventCount: 1 });
 });
 
 test("a finished build the cluster prunes while the app runs is shown from the cache from the next list on", async () => {
@@ -380,8 +380,8 @@ test("Normal events show with the commit while the cluster lists them, and are n
   expect(h.service.getCommitData(SHA)?.normalEvents?.map(e => e.id)).toEqual(["event-normal"]);
   expect(h.service.getCommitData(SHA)?.warnings?.map(e => e.id)).toEqual(["event-1"]);
   expect(h.saved.get(SHA)?.warnings?.map(e => e.id)).toEqual(["event-1"]);
-  // Not counted in the graph: its Events column counts warnings.
-  expect(h.app.badges.get(SHA)).toMatchObject({ warningCount: 1 });
+  // The graph's Events column counts it apart from the warnings: green while listed.
+  expect(h.app.badges.get(SHA)).toMatchObject({ warningCount: 1, normalEventCount: 1 });
   // The cluster no longer lists it: it is gone, no cache keeps it.
   h.cluster.warnings = { warnings: [buildWarning()], normal: [], denied: [], failed: [] };
   await h.service.refresh();

@@ -27,12 +27,17 @@ function resourceChips(theme: Theme, badge: GraphBadge | undefined): StatusChip[
   return [...statusCountChips(theme, badge?.lanes?.live), ...cachedChip(theme, badge?.cachedCount)];
 }
 
-/** Events: the warnings the cluster still reports, in the warning color, then how many only the cache has. */
+/**
+ * Events: the warnings the cluster still reports in the warning color, the Normal events it lists now in the pass
+ * color, then how many only the cache has.
+ */
 function eventChips(theme: Theme, badge: GraphBadge | undefined): StatusChip[] {
-  const current = badge?.warningCount ?? 0;
+  const chip = (count: number | undefined, bg: string): StatusChip[] =>
+    count ? [{ text: String(count), fg: theme.background, bg }] : [];
   return [
-    ...(current > 0 ? [{ text: String(current), fg: theme.background, bg: theme.warning }] : []),
-    ...cachedChip(theme, badge?.cachedWarningCount),
+    ...chip(badge?.warningCount, theme.warning),
+    ...chip(badge?.normalEventCount, statusColor(theme, "pass")),
+    ...cachedChip(theme, badge?.cachedEventCount),
   ];
 }
 
@@ -43,7 +48,9 @@ const resourceTexts = (badge: GraphBadge) => {
   return [...counts, badge.cachedCount ?? 0].filter(count => count > 0).map(String);
 };
 const eventTexts = (badge: GraphBadge) =>
-  [badge.warningCount ?? 0, badge.cachedWarningCount ?? 0].filter(count => count > 0).map(String);
+  [badge.warningCount ?? 0, badge.normalEventCount ?? 0, badge.cachedEventCount ?? 0]
+    .filter(count => count > 0)
+    .map(String);
 
 function OpenShiftChipsColumn(
   props: Readonly<{ chips: StatusChip[]; active: boolean; dimmed: boolean; width: number; paddingRight: number }>,
@@ -82,7 +89,8 @@ export function OpenShiftColumnHeaders(props: Readonly<{ first: number; second: 
 
 /**
  * OpenShift's columns, named as its detail tabs: Resources (what the cluster has of the commit now, then muted what
- * only the cache has) and Events (the warnings the cluster still reports, then muted the cached ones); and its
+ * only the cache has) and Events (the warnings the cluster still reports, the Normal events it lists now, then muted
+ * the cached ones); and its
  * namespaces' names.
  */
 export const OPENSHIFT_GRAPH_COLUMNS: ProviderGraphColumns = {

@@ -841,18 +841,31 @@ describe("buildOpenShiftGraphBadges", () => {
     const withResources = buildOpenShiftCommitMap([{ ...resource("pod-1", "pass"), commitSha: SHA }]);
     const quiet = buildOpenShiftGraphBadges(withResources).get(SHA);
     expect(quiet?.warningCount).toBeUndefined();
-    expect(quiet?.cachedWarningCount).toBeUndefined();
+    expect(quiet?.cachedEventCount).toBeUndefined();
     const commit = withResources.get(SHA) as OpenShiftCommitData;
     const three = [warning, { ...warning, id: "event-2", count: 40 }, { ...warning, id: "event-3" }];
     const cachedOnes = (_sha: string, entry: { id: string }) => entry.id === "event-3";
     const warned = buildOpenShiftGraphBadges(new Map([[SHA, { ...commit, warnings: three }]]), cachedOnes).get(SHA);
-    expect(warned).toMatchObject({ warningCount: 2, cachedWarningCount: 1 });
+    expect(warned).toMatchObject({ warningCount: 2, cachedEventCount: 1 });
     // The pod is gone; its warnings stay with the commit, only in the cache.
     const onlyWarnings = new Map([[SHA, { sha: SHA, namespaces: [], liveFetched: true, warnings: [warning] }]]);
     expect(buildOpenShiftGraphBadges(onlyWarnings, () => true).get(SHA)).toMatchObject({
-      cachedWarningCount: 1,
+      cachedEventCount: 1,
       resourceCount: 0,
     });
+    // Normal events the cluster lists now: green while their resource is there; about a gone one, with the cached.
+    const normal = [
+      { ...warning, id: "pulled", reason: "Pulled" },
+      { ...warning, id: "started", reason: "Started" },
+      { ...warning, id: "killing", reason: "Killing" },
+    ];
+    const live = buildOpenShiftGraphBadges(
+      new Map([[SHA, { ...commit, normalEvents: normal }]]),
+      () => false,
+      (_sha, entry) => entry.id === "killing",
+    ).get(SHA);
+    expect(live).toMatchObject({ normalEventCount: 2, cachedEventCount: 1 });
+    expect(live?.warningCount).toBeUndefined();
   });
 });
 

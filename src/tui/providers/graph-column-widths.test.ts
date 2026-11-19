@@ -52,7 +52,7 @@ describe("provider column widths", () => {
 
   test("OpenShift Events fits the warning count and the muted cached one", () => {
     const widths = OPENSHIFT_GRAPH_COLUMNS.widths(
-      new Map([["a", badge({ warningCount: 120, cachedWarningCount: 3400 })]]),
+      new Map([["a", badge({ warningCount: 120, cachedEventCount: 3400 })]]),
     );
     // ` 120 ` (5), a gap, ` 3400 ` (6): wider than the Date column.
     expect(widths.second).toBe(Math.max(DATE_COL_WIDTH, 5 + 1 + 6));

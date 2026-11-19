@@ -16,7 +16,8 @@ The graph has two columns, named as the detail tabs:
   OpenShift lists them), as fail, running, neutral (cancelled, unknown) and pass counts.
   A muted count follows: Builds only the cache has (see Cached).
 - **Events** — the warnings the cluster still reports about the commit, in the warning
-  colour, then a muted count of the ones only the cache has (see Warnings).
+  colour, the Normal events it lists now in green, then a muted count of the ones shown
+  from the cache (see Warnings).
 
 A muted count is muted text on grey; the neutral chip has bright text. Empty columns
 show `·······`. In details, a finished Build the cluster no longer lists (pruned, or
@@ -207,8 +208,10 @@ in the **Events** tab only while the cluster lists them, and are never saved.
   out. A warning about a resource no commit has is not kept.
 - Warnings are saved in the commit's snapshot (see Cache), so they outlast the cluster's
   copy and are evicted with the snapshot by the cache limit.
-- The graph's **Events** column counts a commit's warnings, not how often each happened:
-  yellow for those the cluster still reports, muted for those only the cache has.
+- The graph's **Events** column counts a commit's events, not how often each happened:
+  yellow for the warnings the cluster still reports, green for the Normal events it lists
+  now, muted for those shown from the cache (a warning OpenShift deleted, or an event about
+  a resource that is gone).
 - In **Resources**, a resource OpenShift warned about shows `!` before its status mark.
 - The **Events** tab starts with **Reload commit** and the count (`total events`), then a
   tree: namespace, each reason newest first (the warnings' in the warning colour, then the

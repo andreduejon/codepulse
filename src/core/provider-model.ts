@@ -54,8 +54,13 @@ export interface GraphBadge {
   cachedCount?: number;
   /** OpenShift: the warnings the cluster still reports about its resources (a yellow chip). */
   warningCount?: number;
-  /** OpenShift: its warnings only the cache has: OpenShift deleted the event or its resource (a muted chip). */
-  cachedWarningCount?: number;
+  /** OpenShift: the Normal events the cluster lists now about its resources (a green chip). */
+  normalEventCount?: number;
+  /**
+   * OpenShift: its events shown from the cache: a warning OpenShift deleted, or an event about a resource that is gone
+   * (a muted chip).
+   */
+  cachedEventCount?: number;
   /** OpenShift: the namespaces whose workloads run this commit now, shown with the refs in the graph. */
   namespaces?: NamespaceMarker[];
   /** Severity counts used by scan/quality providers. */

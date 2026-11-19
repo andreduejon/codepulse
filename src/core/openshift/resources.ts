@@ -639,6 +639,8 @@ export function buildOpenShiftNamespaceMarkers(
 export function buildOpenShiftGraphBadges(
   data: Map<string, OpenShiftCommitData>,
   isCachedWarning: (sha: string, warning: OpenShiftWarning) => boolean = () => false,
+  /** A Normal event is listed now: cached only when its resource is gone. */
+  isAboutGoneResource: (sha: string, event: OpenShiftWarning) => boolean = () => false,
 ): Map<string, GraphBadge> {
   const badges = new Map<string, GraphBadge>();
   for (const [sha, entry] of data) {
@@ -650,9 +652,13 @@ export function buildOpenShiftGraphBadges(
       ...ns.imageStreamTags,
     ]);
     const warnings = entry.warnings ?? [];
-    const cachedWarningCount = warnings.filter(warning => isCachedWarning(sha, warning)).length;
-    const warningCount = warnings.length - cachedWarningCount;
-    if (resources.length === 0 && warnings.length === 0) continue;
+    const normal = entry.normalEvents ?? [];
+    const cachedWarnings = warnings.filter(warning => isCachedWarning(sha, warning)).length;
+    const warningCount = warnings.length - cachedWarnings;
+    const goneNormal = normal.filter(event => isAboutGoneResource(sha, event)).length;
+    const normalEventCount = normal.length - goneNormal;
+    const cachedEventCount = cachedWarnings + goneNormal;
+    if (resources.length === 0 && warnings.length === 0 && normal.length === 0) continue;
     const listed = resources.filter(resource => !resource.cacheOnly);
     const cachedCount = resources.length - listed.length;
     const totals = statusCounts(resources);
@@ -667,7 +673,8 @@ export function buildOpenShiftGraphBadges(
       latestStatus: badge,
       ...(cachedCount > 0 ? { cachedCount } : {}),
       ...(warningCount > 0 ? { warningCount } : {}),
-      ...(cachedWarningCount > 0 ? { cachedWarningCount } : {}),
+      ...(normalEventCount > 0 ? { normalEventCount } : {}),
+      ...(cachedEventCount > 0 ? { cachedEventCount } : {}),
     });
   }
   return badges;

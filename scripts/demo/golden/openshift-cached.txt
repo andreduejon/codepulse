@@ -2,7 +2,7 @@
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
   Graph                         Commit   Description                                                      Resources        Events                   Resources            Events             Info
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-    █                           bf08113   dev   origin/dev   shop-dev  feat(api): export request metrics   2   2            2                 Reload commit                                       live
+    █                           bf08113   dev   origin/dev   shop-dev  feat(api): export request metrics   2   2            2   2             Reload commit                                       live
     │                                                                                                                                         total events                                          10
     █                           e6209dd  feat(api): add a health endpoint                                 ·······          ·······            ├─ ▾ shop-dev                                          2
     │                                                                                                                                         │  ├─ ▾ BuildFailed                                    1
@@ -10,7 +10,7 @@
     │                                                                                                                                         │  └─ ▾ BuildStarted                                   1
     │ █                         6adc455   feature/payments-…   origin/feature/pa…  wip(payments): retry…  ·······          ·······            │     └─ shop-api-41 (cached)                     2h ago
     │ │                                                                                                                                       └─ ▾ shop-test                                         8
-    █─╯                         64ddc8a   shop-test  feat(payments): retry failed payments with exponent   3   1   3   1    4   2                ├─ ▾ BackOff                                        1
+    █─╯                         64ddc8a   shop-test  feat(payments): retry failed payments with exponent   3   1   3   1    4   3   3            ├─ ▾ BackOff                                        1
     │                                                                                                                                            │  └─ shop-api-7d9f8-x2k4q                   just now
     █                           917f7b3  perf(cart): cache price lookups                                  ·······          ·······               ├─ ▾ Unhealthy                                      1
     │                                                                                                                                            │  └─ shop-api-7d9f8-x2k4q                     1m ago

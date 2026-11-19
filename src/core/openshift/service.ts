@@ -298,6 +298,7 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
     const badges = buildOpenShiftGraphBadges(
       commits,
       (sha, warning) => !warningIsPresent(sha, warning) || warningIsCached(warning),
+      (sha, event) => !warningIsPresent(sha, event),
     );
     // What each namespace runs comes from the whole live list, so a deployed commit below the window is marked too.
     const markers = live.listed
