@@ -54,6 +54,8 @@ export interface GraphBadge {
   cachedCount?: number;
   /** OpenShift: the warnings the cluster still reports about its resources (a yellow chip). */
   warningCount?: number;
+  /** OpenShift: what its failing resources' status says is wrong (a red chip, before the warnings). */
+  failureCount?: number;
   /** OpenShift: the Normal events the cluster lists now about its resources (a green chip). */
   normalEventCount?: number;
   /**

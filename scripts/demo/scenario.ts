@@ -1048,7 +1048,36 @@ export function openShiftWorld(state: DemoState, phase: Phase): OpenShiftWorld {
   // By the next phase OpenShift has pruned 41: only codepulse's cache has it. Its uid is still drawn, so the objects
   // after it keep theirs.
   const uid41 = nextUid();
-  if (!failed)
+  if (!failed) {
+    // The pod OpenShift ran 41 in: owned by the Build, labeled with its name, no commit's. Its step that failed says
+    // why; the ones before it ended well. Pruned with the Build.
+    add("shop-dev", "Pod", {
+      kind: "Pod",
+      apiVersion: "v1",
+      metadata: {
+        name: "shop-api-41-build",
+        namespace: "shop-dev",
+        uid: "uid-shop-api-41-build",
+        labels: { "openshift.io/build.name": "shop-api-41" },
+        annotations: { "openshift.io/build.name": "shop-api-41" },
+        ownerReferences: [{ apiVersion: "build.openshift.io/v1", kind: "Build", name: "shop-api-41", uid: uid41 }],
+        creationTimestamp: created(400),
+      },
+      status: {
+        phase: "Failed",
+        initContainerStatuses: [
+          { name: "git-clone", state: { terminated: { reason: "Completed", exitCode: 0 } } },
+          { name: "manage-dockerfile", state: { terminated: { reason: "Completed", exitCode: 0 } } },
+        ],
+        containerStatuses: [
+          {
+            name: "docker-build",
+            image: "registry.redhat.io/openshift4/ose-docker-builder",
+            state: { terminated: { reason: "Error", exitCode: 1, message: "error: build error: step 7/9 failed" } },
+          },
+        ],
+      },
+    });
     add("shop-dev", "Build", {
       kind: "Build",
       metadata: {
@@ -1067,6 +1096,7 @@ export function openShiftWorld(state: DemoState, phase: Phase): OpenShiftWorld {
         completionTimestamp: created(396),
       },
     });
+  }
   // 41 failed, its re-run 42 made the image shop-test runs.
   completeBuild("shop-api-42", s.payments, 380, "main");
   completeBuild("shop-api-43", s.readme, 50, "main");
@@ -1243,6 +1273,19 @@ export function openShiftWorld(state: DemoState, phase: Phase): OpenShiftWorld {
               event("Warning", "BackOff", 'Back-off pulling image "shop-api:metrics"', 20, 0),
             ]
           : []),
+      ],
+    ],
+    [
+      // A warning about the pod 41 ran in: the Events tab shows it with 41's commit. It outlives the pod.
+      "shop-dev/Pod/shop-api-41-build",
+      [
+        event(
+          "Warning",
+          "FailedMount",
+          'MountVolume.SetUp failed for volume "build-ca-bundles" : configmap "shop-api-41-ca" not found',
+          2,
+          168,
+        ),
       ],
     ],
     [

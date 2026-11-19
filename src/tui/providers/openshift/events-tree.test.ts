@@ -149,7 +149,30 @@ describe("the Events tab's tree", () => {
       "      └─ Pod shop-api-7d9f8-x2k4q",
     ]);
     const reasons = rows.filter(row => row.kind === "reason");
-    expect(reasons.map(row => row.kind === "reason" && row.warning)).toEqual([true, false, false, false]);
+    expect(reasons.map(row => row.kind === "reason" && row.level)).toEqual(["warning", "normal", "normal", "normal"]);
     expect(new Set(rows.map(row => row.key)).size).toBe(rows.length);
+  });
+
+  test("what a failing resource's status says leads, before the warnings: its part of the status instead of a time", () => {
+    const rows = eventsTreeRows([warning({ id: "backoff" })], {
+      isPresent: () => true,
+      isCached: () => false,
+      collapsed: new Set(),
+      failures: [
+        {
+          ...warning({ id: "status:crash", reason: "CrashLoopBackOff", lastSeen: null }),
+          status: "waiting",
+        },
+      ],
+    });
+    expect(rows.map(text)).toEqual([
+      "└─ ▾ shop-test 2",
+      "   ├─ ▾ CrashLoopBackOff 1",
+      "   │  └─ Pod shop-api-7d9f8-x2k4q",
+      "   └─ ▾ BackOff 1",
+      "      └─ Pod shop-api-7d9f8-x2k4q",
+    ]);
+    expect(rows[1]).toMatchObject({ kind: "reason", level: "failure" });
+    expect(rows[2]).toMatchObject({ kind: "resource", status: "waiting", cached: false });
   });
 });

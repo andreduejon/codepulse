@@ -15,9 +15,10 @@ The graph has two columns, named as the detail tabs:
   DeploymentConfigs, Pods, ImageStreamTags and Builds (running or finished, as long as
   OpenShift lists them), as fail, running, neutral (cancelled, unknown) and pass counts.
   A muted count follows: Builds only the cache has (see Cached).
-- **Events** — the warnings the cluster still reports about the commit, in the warning
-  colour, the Normal events it lists now in green, then a muted count of the ones shown
-  from the cache (see Warnings).
+- **Events** — in red what the status of the commit's failing resources says (see
+  Failures), the warnings the cluster still reports about it in the warning colour, the
+  Normal events it lists now in green, then a muted count of the ones shown from the cache
+  (see Warnings).
 
 A muted count is muted text on grey; the neutral chip has bright text. Empty columns
 show `·······`. In details, a finished Build the cluster no longer lists (pruned, or
@@ -214,14 +215,16 @@ resource that is gone says `(cached)` until the cluster's list drops it).
 - Warnings are saved in the commit's snapshot (see Cache), so they outlast the cluster's
   copy and are evicted with the snapshot by the cache limit.
 - The graph's **Events** column counts a commit's events, not how often each happened:
-  yellow for the warnings the cluster still reports, green for the Normal events it lists
-  now, muted for those shown from the cache (a warning OpenShift deleted, or an event about
-  a resource that is gone).
+  red for its failures, yellow for the warnings the cluster still reports, green for the
+  Normal events it lists now, muted for those shown from the cache (a warning OpenShift
+  deleted, or an event or failure about a resource that is gone).
 - In **Resources**, a resource OpenShift warned about shows `!` before its status mark.
 - The **Events** tab starts with **Reload commit** and the count (`total events`), then a
-  tree: namespace, each reason newest first (the warnings' in the warning colour, then the
-  Normal events'), then the resources it happened to, newest first, each with when. An event is always about one object, so ten
-  pods crash-looping are ten BackOff events under one BackOff row. A resource with two
+  tree: namespace, each reason (failures in red, then the warnings' in the warning colour,
+  then the Normal events', each newest first), then the resources it happened to, newest
+  first, each with when (a failure with which part of the status says it). An event is
+  always about one object, so ten pods crash-looping are ten BackOff events under one
+  BackOff row. A resource with two
   events of one reason (another message) is one row. Enter (or a click) on a resource
   opens its dialog on the events view, where the whole message is; `o` opens it in the
   web console. A namespace whose events the token may not list is named in a notice
@@ -231,6 +234,22 @@ resource that is gone says `(cached)` until the cluster's list drops it).
   have, newest first, in the same columns. When the events cannot load, the section is
   **Saved warnings** and lists every kept one: nothing says whether the cluster still
   has them.
+
+## Failures
+
+Kubernetes has no failure events: a resource is `✗` because of its own status, and that
+status says why. The **Events** tab lists it first, in red, by its reason, as the resource
+dialog does above the events: a container waiting on `CrashLoopBackOff` or
+`ImagePullBackOff`, one that ended with `Error · exit 1` or `OOMKilled`, an `Evicted`
+pod, a rollout's `ProgressDeadlineExceeded`, a Build's `DockerBuildFailed`. A Pod's
+conditions show only when its containers say nothing. Failures are not saved: they go when
+the resource is fine again, and say `(cached)` once it is gone (a pruned Build).
+
+A Build runs in a pod (`<build>-build`) that OpenShift owns by the Build and labels with
+its name; no commit holds it. A failed Build's pod adds the step that failed (`ended
+docker-build Error · exit 1`; the steps that ended well are not failures), and a warning
+about that pod goes to the Build's commit: by the pod's owner, then its label, and once
+the pod is gone by its name. Enter opens the pod in full while the cluster has it.
 
 ## Cached
 

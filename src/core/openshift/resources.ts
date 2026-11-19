@@ -10,6 +10,7 @@ import {
   type OpenShiftResource,
   type OpenShiftResourceKind,
   type OpenShiftStatus,
+  type OpenShiftStatusRow,
 } from "./types";
 import type { OpenShiftWarning } from "./warnings";
 import { isOpenShiftWatchGone, type OpenShiftWatchEvent } from "./watch";
@@ -211,11 +212,7 @@ function podStatus(pod: unknown): OpenShiftStatus {
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
 
 /** One thing a resource's status says is wrong: `waiting  CrashLoopBackOff  back-off 5m0s restarting…`. */
-export interface OpenShiftStatusRow {
-  status: string;
-  reason: string;
-  message: string;
-}
+export type { OpenShiftStatusRow } from "./types";
 
 /** Workload conditions in the state that says something is wrong; the healthy ones are left out. */
 const PROBLEM_CONDITIONS: Record<string, string> = {
@@ -393,6 +390,7 @@ export function extractWorkload(
   return {
     ...baseResource(kind, namespace, item),
     status,
+    ...failingRows(status, kind, item),
     scaledToZero: desiredReplicas(obj(obj(item)?.spec) ?? {}) === 0 || undefined,
     imageRefs: containerImages(obj(item)?.spec),
     commitSha: commitShaFromItem(item, annotationKey),
@@ -408,7 +406,15 @@ export function extractPod(namespace: string, item: unknown): OpenShiftResource 
     ...baseResource("Pod", namespace, item),
     status,
     imageRefs,
+    ...failingRows(status, "Pod", item),
   };
+}
+
+/** A failing resource's status rows, kept without its object. */
+function failingRows(status: OpenShiftStatus, kind: OpenShiftResourceKind, item: unknown): Partial<OpenShiftResource> {
+  if (status !== "fail") return {};
+  const rows = openShiftStatusRows(kind, item);
+  return rows.length > 0 ? { statusRows: rows } : {};
 }
 
 export function resourceFromWatchObject(object: unknown, annotationKey: string): OpenShiftResource | null {
@@ -645,7 +651,7 @@ export function buildOpenShiftNamespaceMarkers(
 export function buildOpenShiftGraphBadges(
   data: Map<string, OpenShiftCommitData>,
   isCachedWarning: (sha: string, warning: OpenShiftWarning) => boolean = () => false,
-  /** A Normal event is listed now: cached only when its resource is gone. */
+  /** A Normal event or a failure: cached only when what it is about is gone. */
   isAboutGoneResource: (sha: string, event: OpenShiftWarning) => boolean = () => false,
 ): Map<string, GraphBadge> {
   const badges = new Map<string, GraphBadge>();
@@ -663,7 +669,11 @@ export function buildOpenShiftGraphBadges(
     const warningCount = warnings.length - cachedWarnings;
     const goneNormal = normal.filter(event => isAboutGoneResource(sha, event)).length;
     const normalEventCount = normal.length - goneNormal;
-    const cachedEventCount = cachedWarnings + goneNormal;
+    // A failure is the status of what it is about: shown from the cache once that is gone (a pruned Build).
+    const failures = entry.failures ?? [];
+    const goneFailures = failures.filter(failure => isAboutGoneResource(sha, failure)).length;
+    const failureCount = failures.length - goneFailures;
+    const cachedEventCount = cachedWarnings + goneNormal + goneFailures;
     if (resources.length === 0 && warnings.length === 0 && normal.length === 0) continue;
     const listed = resources.filter(resource => !resource.cacheOnly);
     const cachedCount = resources.length - listed.length;
@@ -678,6 +688,7 @@ export function buildOpenShiftGraphBadges(
       latestRunAt: "",
       latestStatus: badge,
       ...(cachedCount > 0 ? { cachedCount } : {}),
+      ...(failureCount > 0 ? { failureCount } : {}),
       ...(warningCount > 0 ? { warningCount } : {}),
       ...(normalEventCount > 0 ? { normalEventCount } : {}),
       ...(cachedEventCount > 0 ? { cachedEventCount } : {}),

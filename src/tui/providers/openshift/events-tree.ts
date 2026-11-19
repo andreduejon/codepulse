@@ -1,10 +1,18 @@
 /**
- * The Events tab's tree, without drawing: namespace, then each reason newest first (the warnings' first, then the
- * Normal events' the cluster lists now), then the resources it happened to, newest first. An event is always about one object, so ten pods crash-looping are ten BackOff events: one
- * reason row with ten resources. A resource the cluster no longer has, or whose events OpenShift deleted, is shown
- * from the cache: cached. Each row carries its prefix (the tree's lines), so the tab only draws it.
+ * The Events tab's tree, without drawing: namespace, then each reason (what a failing resource's status says first,
+ * then the warnings', then the Normal events' the cluster lists now, each newest first), then the resources it
+ * happened to, newest first. An event is always about one object, so ten pods crash-looping are ten BackOff events:
+ * one reason row with ten resources. A resource the cluster no longer has, or whose events OpenShift deleted, is
+ * shown from the cache: cached. Each row carries its prefix (the tree's lines), so the tab only draws it.
  */
+import type { OpenShiftFailure } from "../../../core/openshift/failures";
 import type { OpenShiftWarning } from "../../../core/openshift/warnings";
+
+/**
+ * What a reason is: `failure`, what a failing resource's status says (red, as `✗`); `warning`, a warning event (kept,
+ * in the warning color); `normal`, a Normal event, shown while the cluster lists it.
+ */
+export type EventsLevel = "failure" | "warning" | "normal";
 
 export type EventsRow =
   | { kind: "namespace"; key: string; prefix: string; namespace: string; count: number; open: boolean }
@@ -15,8 +23,7 @@ export type EventsRow =
       reason: string;
       count: number;
       open: boolean;
-      /** A warning's reason (kept, in the warning color); else a Normal event's, shown while the cluster lists it. */
-      warning: boolean;
+      level: EventsLevel;
     }
   | {
       kind: "resource";
@@ -35,6 +42,8 @@ export type EventsRow =
       /** Its events of this reason (one, unless their messages differed). */
       count: number;
       lastSeen: string | null;
+      /** A failure's part of the status (`waiting`, `last run`), shown where an event shows its time. */
+      status?: string;
       /** Its newest event of this reason: what the resource is (namespace, kind, name, uid), to open it. */
       warning: OpenShiftWarning;
     };
@@ -45,11 +54,13 @@ export interface EventsTreeOptions {
   collapsed: ReadonlySet<string>;
   /** The Normal events the cluster lists now: after the warnings, never cached themselves. */
   normal?: readonly OpenShiftWarning[];
+  /** What the commit's failing resources' status says: before the warnings, cached only once the resource is gone. */
+  failures?: readonly OpenShiftFailure[];
 }
 
 export const namespaceKey = (namespace: string) => `namespace:${namespace}`;
-export const reasonKey = (namespace: string, reason: string, warning = true) =>
-  `reason:${namespace}:${reason}${warning ? "" : ":normal"}`;
+export const reasonKey = (namespace: string, reason: string, level: EventsLevel = "warning") =>
+  `reason:${namespace}:${reason}${level === "warning" ? "" : `:${level}`}`;
 
 const newestFirst = (a: OpenShiftWarning, b: OpenShiftWarning) => (b.lastSeen ?? "").localeCompare(a.lastSeen ?? "");
 
@@ -69,10 +80,16 @@ function groupBy<T>(items: readonly T[], keyOf: (item: T) => string): T[][] {
   return [...groups.values()];
 }
 
+const LEVELS: readonly EventsLevel[] = ["failure", "warning", "normal"];
+
 /** Every row of the tab's tree. */
 export function eventsTreeRows(warnings: readonly OpenShiftWarning[], options: EventsTreeOptions): EventsRow[] {
-  const isWarning = new Set(warnings);
-  const sorted = [...warnings, ...(options.normal ?? [])].sort(newestFirst);
+  const levelOf = new Map<OpenShiftWarning, EventsLevel>([
+    ...(options.failures ?? []).map(entry => [entry, "failure"] as const),
+    ...warnings.map(entry => [entry, "warning"] as const),
+    ...(options.normal ?? []).map(entry => [entry, "normal"] as const),
+  ]);
+  const sorted = [...levelOf.keys()].sort(newestFirst);
   // Namespaces by name, so a new warning never moves them; reasons and resources newest first.
   const namespaces = groupBy(sorted, warning => warning.namespace).sort((a, b) =>
     (a[0]?.namespace ?? "").localeCompare(b[0]?.namespace ?? ""),
@@ -93,23 +110,18 @@ export function eventsTreeRows(warnings: readonly OpenShiftWarning[], options: E
     });
     if (!nsOpen) return;
     const nsLead = below("", nsLast);
-    // What went wrong leads: the warnings' reasons, then the Normal events'.
-    const reasons = [
-      ...groupBy(
-        inNamespace.filter(entry => isWarning.has(entry)),
+    // What went wrong leads: what the status says, then the warnings' reasons, then the Normal events'.
+    const reasons = LEVELS.flatMap(level =>
+      groupBy(
+        inNamespace.filter(entry => levelOf.get(entry) === level),
         entry => entry.reason,
-      ),
-      ...groupBy(
-        inNamespace.filter(entry => !isWarning.has(entry)),
-        entry => entry.reason,
-      ),
-    ];
-    reasons.forEach((ofReason, reasonIndex) => {
+      ).map(entries => ({ level, entries })),
+    );
+    reasons.forEach(({ level, entries: ofReason }, reasonIndex) => {
       const first = ofReason[0] as OpenShiftWarning;
       const reason = first.reason;
-      const warning = isWarning.has(first);
       const reasonLast = reasonIndex === reasons.length - 1;
-      const key = reasonKey(namespace, reason, warning);
+      const key = reasonKey(namespace, reason, level);
       const open = !options.collapsed.has(key);
       rows.push({
         kind: "reason",
@@ -118,7 +130,7 @@ export function eventsTreeRows(warnings: readonly OpenShiftWarning[], options: E
         reason,
         count: ofReason.length,
         open,
-        warning,
+        level,
       });
       if (!open) return;
       const reasonLead = below(nsLead, reasonLast);
@@ -137,10 +149,11 @@ export function eventsTreeRows(warnings: readonly OpenShiftWarning[], options: E
           resourceKind: newest.kind,
           name: newest.name,
           removed,
-          // A Normal event is shown only while the cluster lists it: cached only when its resource is gone.
-          cached: removed || (warning && events.every(options.isCached)),
+          // A Normal event or a failure is shown only while the cluster has it: cached only when its resource is gone.
+          cached: removed || (level === "warning" && events.every(options.isCached)),
           count: events.length,
           lastSeen: newest.lastSeen,
+          ...(level === "failure" ? { status: (newest as OpenShiftFailure).status } : {}),
           warning: newest,
         });
       });

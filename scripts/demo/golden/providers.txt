@@ -104,7 +104,7 @@
     │                                                                                                                                            ├─ Pods
     │ █                         6adc455   feature/payments-r…   origin/feature/pay…  wip(payments): retry…  ·······        ·······               │  ├─ shop-api-7d9f8-r2m4p                          ✓
     │ │                                                                                                                                          │  └─ shop-api-7d9f8-pull9                          ●
-    █─╯                         64ddc8a   shop-test  feat(payments): retry failed payments with exponenti…   5   1   2      6   5                └─ Builds
+    █─╯                         64ddc8a   shop-test  feat(payments): retry failed payments with exponenti…   5   1   2      8   7   5            └─ Builds
     │                                                                                                                                               └─ shop-api-44                                   ✓
     █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······
     │
@@ -144,41 +144,41 @@
   Graph                         Commit   Description                                                        Resources      Events                   Resources            Events             Info
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
     █                           bf08113   dev   origin/dev   shop-dev  feat(api): export request metrics     2   2          2                 Reload commit                                       live
-    │                                                                                                                                         total events                                          11
-    █                           e6209dd  feat(api): add a health endpoint                                   ·······        ·······            ├─ ▾ shop-dev                                          2
-    │                                                                                                                                         │  ├─ ▾ BuildFailed                                    1
-    █                           3447db9   v0.42.0   main   origin/…   shop-pr…   +2  docs: rewrite the RE…   5             ·······            │  │  └─ shop-api-41                              2h ago
+    │                                                                                                                                         total events                                          20
+    █                           e6209dd  feat(api): add a health endpoint                                   ·······        ·······            ├─ ▾ shop-dev                                          5
+    │                                                                                                                                         │  ├─ ▾ DockerBuildFailed                              1
+    █                           3447db9   v0.42.0   main   origin/…   shop-pr…   +2  docs: rewrite the RE…   5             ·······            │  │  └─ shop-api-41                              Failed
+    │                                                                                                                                         │  ├─ ▾ Error                                          1
+    │ █                         6adc455   feature/payments-r…   origin/feature/pay…  wip(payments): retry…  ·······        ·······            │  │  └─ shop-api-41-build            ended docker-build
+    │ │                                                                                                                                       │  ├─ ▾ BuildFailed                                    1
+    █─╯                         64ddc8a   shop-test  feat(payments): retry failed payments with exponentia   5   1   2      8   7   5         │  │  └─ shop-api-41                              2h ago
+    │                                                                                                                                         │  ├─ ▾ FailedMount                                    1
+    █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······            │  │  └─ shop-api-41-build                        2h ago
     │                                                                                                                                         │  └─ ▾ BuildStarted                                   1
-    │ █                         6adc455   feature/payments-r…   origin/feature/pay…  wip(payments): retry…  ·······        ·······            │     └─ shop-api-41                              2h ago
-    │ │                                                                                                                                       └─ ▾ shop-test                                         9
-    █─╯                         64ddc8a   shop-test  feat(payments): retry failed payments with exponentia   5   1   2      6   5                ├─ ▾ BackOff                                        1
-    │                                                                                                                                            │  └─ shop-api-7d9f8-x2k4q                   just now
-    █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······               ├─ ▾ Unhealthy                                      1
-    │                                                                                                                                            │  └─ shop-api-7d9f8-x2k4q                     1m ago
-    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······               ├─ ▾ OOMKilling                                     1
-    │ │                                                                                                                                          │  └─ shop-api-7d9f8-oom7k                    18m ago
-    │ █                         0166f71  feat(i18n): add French                                             ·······        ·······               ├─ ▾ FailedCreate                                   1
-    │ │                                                                                                                                          │  └─ shop-api-7d9f8                          30m ago
+    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······            │     └─ shop-api-41                              2h ago
+    │ │                                                                                                                                       └─ ▾ shop-test                                        15
+    │ █                         0166f71  feat(i18n): add French                                             ·······        ·······               ├─ ▾ MinimumReplicasUnavailable                     1
+    │ │                                                                                                                                          │  └─ shop-api                        Available False
     │ █─╮                       5245790  Merge branch 'main' into feature/i18n                              ·······        ·······               ├─ ▾ ProgressDeadlineExceeded                       1
-    │ │ │                                                                                                                                        │  └─ shop-api                                40m ago
-    │ █ │                       484821c  feat(i18n): add German                                             ·······        ·······               ├─ ▾ Pulled                                         1
-    │ │ │                                                                                                                                        │  └─ shop-api-7d9f8-x2k4q                     2m ago
-    │ █ │                       3ad11a2  feat(i18n): extract the checkout strings                           ·······        ·······               ├─ ▾ Started                                        2
-    │ │ │                                                                                                                                        │  ├─ shop-api-7d9f8-x2k4q                     2m ago
-    █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                     ·······        ·······               │  └─ shop-api-7d9f8-oom7k                    20m ago
-    │ │ │ │                                                                                                                                      └─ ▾ Scheduled                                      1
-    │ │ │ █                     9d1b361  fix(search): ignore accents                                        ·······        ·······                  └─ shop-api-7d9f8-x2k4q                    44m ago
-    │ │ │ │
-    │ │ │ █                     cce93f9  feat(search): search as you type                                   ·······        ·······
-    │ │ │ │
-    │ │ │ █─╮                   ae57e03  Merge branch 'main' into feature/search                            ·······        ·······
-    │ │ │ │ │
-    │ │ │ █ │                   a89a18f  feat(search): highlight matching words                             ·······        ·······
-    │ │ │ │ │
-    │ │ │ █ │                   52defc5  feat(search): rank results by popularity                           ·······        ·······
-
-  │
-  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                           normal   search   path   ancestry
+    │ │ │                                                                                                                                        │  └─ shop-api                      Progressing False
+    │ █ │                       484821c  feat(i18n): add German                                             ·······        ·······               ├─ ▾ CrashLoopBackOff                               1
+    │ │ │                                                                                                                                        │  └─ shop-api-7d9f8-x2k4q                    waiting
+    │ █ │                       3ad11a2  feat(i18n): extract the checkout strings                           ·······        ·······               ├─ ▾ Error                                          1
+    │ │ │                                                                                                                                        │  └─ shop-api-7d9f8-x2k4q                   last run
+    █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                     ·······        ·······               ├─ ▾ OOMKilled                                      1
+    │ │ │ │                                                                                                                                      │  └─ shop-api-7d9f8-oom7k                      ended
+    │ │ │ █                     9d1b361  fix(search): ignore accents                                        ·······        ·······               ├─ ▾ Evicted                                        1
+    │ │ │ │                                                                                                                                      │  └─ shop-api-7d9f8-ev1ct                     Failed
+    │ │ │ █                     cce93f9  feat(search): search as you type                                   ·······        ·······               ├─ ▾ BackOff                                        1
+    │ │ │ │                                                                                                                                      │  └─ shop-api-7d9f8-x2k4q                   just now
+    │ │ │ █─╮                   ae57e03  Merge branch 'main' into feature/search                            ·······        ·······               ├─ ▾ Unhealthy                                      1
+    │ │ │ │ │                                                                                                                                    │  └─ shop-api-7d9f8-x2k4q                     1m ago
+    │ │ │ █ │                   a89a18f  feat(search): highlight matching words                             ·······        ·······               ├─ ▾ OOMKilling                                     1
+    │ │ │ │ │                                                                                                                                    │  └─ shop-api-7d9f8-oom7k                    18m ago
+    │ │ │ █ │                   52defc5  feat(search): rank results by popularity                           ·······        ·······               ├─ ▾ FailedCreate                                   1
+                                                                                                                                                 │  └─ shop-api-7d9f8                          30m ago
+  │                                                                                                                                              ├─ ▾ ProgressDeadlineExceeded                       1
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                           normal   search   path   ancestry          │  └─ shop-api                                40m ago
   │
   │   customer-notification-service   shop   shop-web                                                                 main   86 commits       │
   │                                                                                                                                           │     No permission to list events in shop-prod   ✕

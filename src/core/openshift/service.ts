@@ -24,6 +24,7 @@ import {
   mergeLiveIntoCommit,
   selectOpenShiftCandidateSHAs,
 } from "./commit-data";
+import { commitFailures, type OpenShiftFailure } from "./failures";
 import { mergeById, type OpenShiftCacheEntry, toCachedBuild } from "./merge";
 import {
   applyOpenShiftWatchEvent,
@@ -168,6 +169,10 @@ export interface OpenShiftServicePorts {
   restartLive: () => void;
 }
 
+/** Whether two lists hold the same failures, each saying the same: nothing to redraw. */
+const sameFailures = (a: readonly OpenShiftFailure[], b: readonly OpenShiftFailure[]) =>
+  a.length === b.length && a.every((entry, i) => entry.id === b[i]?.id && entry.message === b[i]?.message);
+
 /** Merge each commit's incoming items into its cached snapshot, in one go, while `isCurrent`. */
 async function persistMerged<I>(
   cache: OpenShiftCachePort,
@@ -240,16 +245,36 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
   /** Whether only the cache has the event: its namespace's last list didn't (or none was read yet). */
   const warningIsCached = (warning: OpenShiftWarning) => !(listedIds.get(warning.namespace)?.has(warning.id) ?? false);
 
+  /** The live list's pods that ran a Build: no commit holds them, their Build's commit shows their events. */
+  const buildPods = (): OpenShiftResource[] =>
+    (live.listed?.resources ?? []).filter(
+      resource =>
+        resource.kind === "Pod" &&
+        (!!resource.labels?.["openshift.io/build.name"] ||
+          (resource.ownerReferences ?? []).some(owner => owner.kind === "Build")),
+    );
+
   function warningIsPresent(sha: string, warning: OpenShiftWarning): boolean {
     if (!live.listed) return true;
-    return isAboutPresentResource(warning, commits.get(sha.toLowerCase()), live.listed.controllers);
+    if (isAboutPresentResource(warning, commits.get(sha.toLowerCase()), live.listed.controllers)) return true;
+    // A build's pod is there while the live list has it.
+    return (
+      warning.kind === "Pod" &&
+      buildPods().some(
+        pod =>
+          pod.namespace === warning.namespace &&
+          pod.name === warning.name &&
+          (!warning.uid || !pod.uid || pod.uid === warning.uid),
+      )
+    );
   }
 
   /** Links the listed warnings to the commits now held, attaches each commit's, and saves what is new. */
   function attachWarnings(): void {
     const controllers = live.listed?.controllers ?? [];
-    const linked = linkWarningsToCommits(listedWarnings, commits, controllers);
-    const linkedNormal = linkWarningsToCommits(listedNormal, commits, controllers);
+    const pods = buildPods();
+    const linked = linkWarningsToCommits(listedWarnings, commits, controllers, pods);
+    const linkedNormal = linkWarningsToCommits(listedNormal, commits, controllers, pods);
     const changed: string[] = [];
     for (const [sha, incoming] of linked) {
       const kept = warningsBySha.get(sha) ?? [];
@@ -272,8 +297,15 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
       // The same events read again keep their list, so nothing that shows them redraws.
       const normalEvents =
         listed && commit.normalEvents && sameWarnings(commit.normalEvents, listed) ? commit.normalEvents : listed;
-      if (commit.warnings !== warnings || commit.normalEvents !== normalEvents)
-        commits.set(sha, { ...commit, warnings, normalEvents });
+      const found = commitFailures(commit, pods);
+      const failures: OpenShiftFailure[] | undefined =
+        found.length === 0
+          ? undefined
+          : commit.failures && sameFailures(commit.failures, found)
+            ? commit.failures
+            : found;
+      if (commit.warnings !== warnings || commit.normalEvents !== normalEvents || commit.failures !== failures)
+        commits.set(sha, { ...commit, warnings, normalEvents, failures });
     }
     // An older commit only shown from the cache keeps its new warnings too, without counting as a use for eviction.
     const used = changed.filter(sha => !shownFromCache.has(sha));

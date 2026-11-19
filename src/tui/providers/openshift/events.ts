@@ -1,3 +1,4 @@
+import { isStatusProblem } from "../../../core/openshift/failures";
 import { openShiftStatusRows } from "../../../core/openshift/resources";
 import type { OpenShiftEvent, OpenShiftResourceKind } from "../../../core/openshift/types";
 import type { OpenShiftWarning } from "../../../core/openshift/warnings";
@@ -103,6 +104,10 @@ export function formatOpenShiftStatus(kind: OpenShiftResourceKind, object: unkno
     `${status.padEnd(statusWidth)}  ${reason.padEnd(reasonWidth)}  ${message}`.trimEnd();
   return [
     { text: line("STATUS", "REASON", "MESSAGE"), kind: "header" },
-    ...rows.map(row => ({ text: line(row.status, row.reason, row.message), kind: "error" as const })),
+    // A step that ended well (a build pod's git clone) is context, not why it failed.
+    ...rows.map(row => ({
+      text: line(row.status, row.reason, row.message),
+      kind: isStatusProblem(row) ? ("error" as const) : ("normal" as const),
+    })),
   ];
 }

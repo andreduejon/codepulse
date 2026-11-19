@@ -1,7 +1,7 @@
 /**
- * OpenShift's Events tab: the warnings Kubernetes reported about a commit's resources, kept with the commit
- * (core/openshift/warnings.ts), then the Normal events the cluster lists now, as a tree (events-tree.ts): namespace,
- * reason, then the resources it happened to.
+ * OpenShift's Events tab: what the status of a commit's failing resources says (core/openshift/failures.ts), the
+ * warnings Kubernetes reported about its resources, kept with the commit (core/openshift/warnings.ts), then the Normal
+ * events the cluster lists now, as a tree (events-tree.ts): namespace, reason, then the resources it happened to.
  * Enter on a resource opens its events in the resource dialog, where the whole message is.
  */
 import { createEffect, createMemo, createSignal, For, on, Show, untrack } from "solid-js";
@@ -88,6 +88,7 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
   const data = () => props.getCommitData(props.sha);
   const warnings = () => data()?.warnings ?? [];
   const normal = () => data()?.normalEvents ?? [];
+  const failures = () => data()?.failures ?? [];
   const commitLoading = () => props.isLoading?.(props.sha) ?? false;
   const reloadBusy = () => commitLoading() || !!props.loading;
   // An expired token only stops automatic fetches; Reload commit stays the explicit retry, as in Resources.
@@ -99,6 +100,7 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
       isCached: warning => props.isCached?.(warning) ?? false,
       collapsed: collapsed(),
       normal: normal(),
+      failures: failures(),
     }),
   );
   const byKey = createMemo(() => new Map(rows().map(row => [row.key, row])));
@@ -140,8 +142,10 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
     } else if (row?.kind === "namespace" || row?.kind === "reason") toggle(row.key);
     else if (row) {
       const resource = openable(row.warning);
-      // Only its events when the commit holds nothing of it (a replaced pod); a pruned build opens from the cache.
-      if (resource) props.onOpenResource?.(resource, { eventsOnly: !heldResourceOf(row.warning, data()) });
+      // Only its events once the cluster no longer has it and the commit holds nothing of it (a replaced pod); a pruned
+      // build opens from the cache, a build's pod or a ReplicaSet the cluster has opens in full.
+      if (resource)
+        props.onOpenResource?.(resource, { eventsOnly: row.removed && !heldResourceOf(row.warning, data()) });
     }
     return false;
   };
@@ -227,7 +231,7 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
           />
           <box flexGrow={1} />
           <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {row.lastSeen ? `  ${formatRelativeDate(row.lastSeen)}` : ""}
+            {row.status ? `  ${row.status}` : row.lastSeen ? `  ${formatRelativeDate(row.lastSeen)}` : ""}
           </text>
         </>
       ) : (
@@ -244,8 +248,16 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
             selectable={!props.mouseEnabled}
             text={row.kind === "namespace" ? row.namespace : row.reason}
             active={cursored(row.key)}
-            // A warning's reason is what the tab is about: in the warning color, like the graph's count.
-            fg={cursored(row.key) ? t().accent : row.kind === "reason" && row.warning ? t().warning : t().foreground}
+            // A failure in red (why the resource is ✗), a warning in the warning color, as the graph's counts.
+            fg={
+              cursored(row.key)
+                ? t().accent
+                : row.kind === "reason" && row.level === "failure"
+                  ? t().error
+                  : row.kind === "reason" && row.level === "warning"
+                    ? t().warning
+                    : t().foreground
+            }
           />
           <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
             {String(row.count).padStart(3)}
@@ -270,7 +282,7 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
       />
       {/* As Resources: the count once the commit is loaded, the tree when there is one. */}
       <Show when={!!data()}>
-        <ProviderSummaryRow label="total events" count={warnings().length + normal().length} />
+        <ProviderSummaryRow label="total events" count={failures().length + warnings().length + normal().length} />
         <For each={rows()}>{renderRow}</For>
       </Show>
     </box>

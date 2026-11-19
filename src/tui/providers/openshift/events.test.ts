@@ -108,3 +108,18 @@ test("a healthy resource, or one without its object, has nothing to say", () => 
   expect(texts("Deployment", null)).toEqual([]);
   expect(texts("ImageStreamTag", { status: {} })).toEqual([]);
 });
+
+test("a build pod's steps that ended well are plain; only the one that failed is red", () => {
+  const lines = formatOpenShiftStatus("Pod", {
+    status: {
+      phase: "Failed",
+      initContainerStatuses: [{ name: "git-clone", state: { terminated: { reason: "Completed", exitCode: 0 } } }],
+      containerStatuses: [{ name: "docker-build", state: { terminated: { reason: "Error", exitCode: 1 } } }],
+    },
+  });
+  expect(lines.map(line => [line.kind, line.text.split(/\s{2,}/)[0]])).toEqual([
+    ["header", "STATUS"],
+    ["normal", "ended git-clone"],
+    ["error", "ended docker-build"],
+  ]);
+});

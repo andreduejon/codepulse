@@ -101,8 +101,12 @@ export function linkWarningsToCommits(
   warnings: readonly OpenShiftWarning[],
   commits: ReadonlyMap<string, OpenShiftCommitData>,
   controllers: readonly OpenShiftControllerReference[] = [],
+  /** The live list's pods that ran a Build (`<build>-build`): no commit holds them, their Build's commit does. */
+  buildPods: readonly OpenShiftResource[] = [],
 ): Map<string, OpenShiftWarning[]> {
   const byResource = new Map<string, Held[]>();
+  /** The commits holding each Build, by its uid: a build pod's owner. */
+  const buildsByUid = new Map<string, string[]>();
   const workloadsByUid = new Map<string, Held[]>();
   /** The commits whose pods each ReplicaSet or ReplicationController runs. */
   const shasByController = new Map<string, Set<string>>();
@@ -127,6 +131,8 @@ export function linkWarningsToCommits(
         }
       }
       push(byResource, resourceKey(resource.namespace, resource.kind, resource.name), { sha, resource });
+      if (resource.kind === "Build" && resource.uid)
+        push(buildsByUid, `${resource.namespace}\u0000${resource.uid}`, sha);
       if (resource.uid && isWorkload(resource.kind))
         push(workloadsByUid, `${resource.namespace}\u0000${resource.uid}`, { sha, resource });
     }
@@ -166,6 +172,7 @@ export function linkWarningsToCommits(
       return began && entry.lastSeen && entry.lastSeen < began ? [] : [running.sha];
     }
     if (own.length > 0) return [...new Set(own.map(held => held.sha))];
+    if (entry.kind === "Pod") return buildShasOf(entry);
     if (!entry.uid) return [];
     const controllerKey = `${entry.namespace}\u0000${entry.uid}`;
     const byPods = shasByController.get(controllerKey);
@@ -174,6 +181,23 @@ export function linkWarningsToCommits(
     const running = workload ? runningCommit(workloadsByUid.get(workload) ?? []) : undefined;
     return running ? [running.sha] : [];
   };
+  /** A build pod's event: the commits holding its Build, found by the pod's owner or label, else by its name. */
+  function buildShasOf(entry: OpenShiftWarning): string[] {
+    const pod = buildPods.find(
+      candidate =>
+        candidate.namespace === entry.namespace &&
+        candidate.name === entry.name &&
+        (!entry.uid || !candidate.uid || entry.uid === candidate.uid),
+    );
+    const ownerUid = pod?.ownerReferences?.find(owner => owner.kind === "Build")?.uid;
+    const buildName =
+      pod?.labels?.["openshift.io/build.name"] ?? (entry.name.endsWith("-build") ? entry.name.slice(0, -6) : null);
+    const byOwner = ownerUid ? buildsByUid.get(`${entry.namespace}\u0000${ownerUid}`) : undefined;
+    if (byOwner) return [...new Set(byOwner)];
+    if (!buildName) return [];
+    const byName = byResource.get(resourceKey(entry.namespace, "Build", buildName)) ?? [];
+    return [...new Set(byName.map(held => held.sha))];
+  }
   const linked = new Map<string, OpenShiftWarning[]>();
   for (const entry of warnings) for (const sha of shasOf(entry)) push(linked, sha, entry);
   for (const [sha, list] of linked) linked.set(sha, list.sort(newestFirst));

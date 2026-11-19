@@ -253,6 +253,31 @@ describe("OpenShift warnings", () => {
     }
   });
 
+  test("a warning about a build's pod goes to the build's commit: by its owner, its label, or once gone its name", () => {
+    const build = resource({ kind: "Build", name: "shop-api-41", uid: "build-uid", status: "fail" });
+    const commits = new Map([["a".repeat(40), commit("a".repeat(40), [build])]]);
+    const buildPod = resource({
+      kind: "Pod",
+      name: "shop-api-41-build",
+      uid: "build-pod-uid",
+      ownerReferences: [{ kind: "Build", uid: "build-uid" }],
+    });
+    const about = { kind: "Pod", reason: "FailedMount" };
+    const linked = linkWarningsToCommits(
+      [
+        warning({ id: "by-owner", ...about, name: "shop-api-41-build", uid: "build-pod-uid" }),
+        // Its pod is gone with the pruned build's: by its name.
+        warning({ id: "by-name", ...about, name: "shop-api-41-build", uid: "older-build-pod" }),
+        // Another build's pod: no commit holds that build.
+        warning({ id: "other", ...about, name: "shop-api-40-build" }),
+      ],
+      commits,
+      [],
+      [buildPod],
+    );
+    expect(linked.get("a".repeat(40))?.map(entry => entry.id).sort()).toEqual(["by-name", "by-owner"]);
+  });
+
   test("before the live list has its new ReplicaSet, the commit's oldest pod marks its rollout", () => {
     const deployment = resource({ kind: "Deployment", name: "shop-api", uid: "deploy-uid", status: "running" });
     const pod = resource({ kind: "Pod", name: "shop-api-5c6d7-a1b2", updatedAt: "2026-03-02T10:00:00Z" });

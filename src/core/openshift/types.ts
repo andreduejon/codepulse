@@ -5,6 +5,7 @@ import {
   type ProviderCacheLimit,
   type ProviderLimit,
 } from "../provider-settings";
+import type { OpenShiftFailure } from "./failures";
 import type { OpenShiftWarning } from "./warnings";
 
 export type OpenShiftCacheLimit = ProviderCacheLimit;
@@ -70,6 +71,13 @@ export interface OpenShiftControllerReference {
   ownerReferences: OpenShiftOwnerReference[];
 }
 
+/** One thing a resource's status says: `waiting CrashLoopBackOff …`, `Progressing False ProgressDeadlineExceeded …`. */
+export interface OpenShiftStatusRow {
+  status: string;
+  reason: string;
+  message: string;
+}
+
 export interface OpenShiftResource {
   id: string;
   kind: OpenShiftResourceKind;
@@ -86,6 +94,11 @@ export interface OpenShiftResource {
   labels?: Record<string, string>;
   /** Full API object. Kept for Build JSON dialog / disk cache. */
   object?: unknown;
+  /**
+   * What a failing Pod's or workload's status says, kept when it is listed (their objects are not): the Events tab's
+   * failures. A Build's come from its object.
+   */
+  statusRows?: OpenShiftStatusRow[];
   /** A finished Build shown from Codepulse's cache that the cluster has not listed since: `(cached)`. */
   cacheOnly?: boolean;
   /** A Deployment or DeploymentConfig with 0 replicas: it runs nothing, so it marks no namespace. */
@@ -121,6 +134,8 @@ export interface OpenShiftCommitData {
   warnings?: OpenShiftWarning[];
   /** The Normal events the cluster lists now about its resources, newest first: shown, never saved. */
   normalEvents?: OpenShiftWarning[];
+  /** What its failing resources' status says is wrong (failures.ts): the red rows and count, never saved. */
+  failures?: OpenShiftFailure[];
   /** Live inventory was applied or skipped (no digest seed). Not a cache/UI flag. */
   liveFetched: boolean;
 }

@@ -458,3 +458,41 @@ test("a namespace whose event list failed keeps the warnings it listed before, t
   await live.liveOnce();
   expect(h.service.getCommitData(SHA)?.warnings?.map(e => e.id)).toEqual(["backoff"]);
 });
+
+test("a failing pod's status shows as the commit's failures and counts red; a build pod's warning is the build's", async () => {
+  const h = harness();
+  const live = liveCluster(h);
+  const crashing: OpenShiftResource = {
+    ...live.pod("app-1-abcde", "pod-1"),
+    status: "fail",
+    statusRows: [{ status: "waiting", reason: "CrashLoopBackOff", message: "back-off 5m0s" }],
+  };
+  // The pod the build ran in: no commit holds it, its label names the build.
+  const buildPod: OpenShiftResource = {
+    id: "Pod:ns:app-1-build",
+    kind: "Pod",
+    namespace: "ns",
+    name: "app-1-build",
+    uid: "build-pod",
+    status: "pass",
+    imageRefs: [],
+    labels: { "openshift.io/build.name": "app-1" },
+  };
+  const mount = buildWarning({ id: "mount", kind: "Pod", name: "app-1-build", uid: "build-pod", reason: "FailedMount" });
+  h.cluster.warnings = { warnings: [mount], denied: [], failed: [] };
+  live.state.pods = [crashing, buildPod];
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  await live.liveOnce();
+  expect(h.service.getCommitData(SHA)?.failures?.map(f => [f.name, f.reason])).toEqual([
+    ["app-1-abcde", "CrashLoopBackOff"],
+  ]);
+  expect(h.service.getCommitData(SHA)?.warnings?.map(w => w.id)).toEqual(["mount"]);
+  // The build pod is in the cluster: not cached.
+  expect(h.service.warningIsPresent(SHA, mount)).toBe(true);
+  expect(h.app.badges.get(SHA)).toMatchObject({ failureCount: 1, warningCount: 1 });
+  expect(h.app.badges.get(SHA)?.cachedEventCount).toBeUndefined();
+  // Fine again: no failure is kept.
+  live.state.pods = [{ ...crashing, status: "pass", statusRows: undefined }, buildPod];
+  await live.liveOnce();
+  expect(h.service.getCommitData(SHA)?.failures ?? []).toEqual([]);
+});

@@ -2,6 +2,7 @@ import { expect, mock, test } from "bun:test";
 import { RGBA } from "@opentui/core";
 import { testRender } from "@opentui/solid";
 import { createSignal } from "solid-js";
+import type { OpenShiftFailure } from "../../../core/openshift/failures";
 import type { OpenShiftCommitData, OpenShiftResource } from "../../../core/openshift/types";
 import type { OpenShiftWarning } from "../../../core/openshift/warnings";
 import type { DetailNavRef } from "../../components/detail-types";
@@ -31,6 +32,7 @@ async function renderEventsTab(
     removed?: readonly string[];
     pruned?: readonly string[];
     normal?: OpenShiftWarning[];
+    failures?: OpenShiftFailure[];
   } = {},
 ) {
   // The commit holds what the warnings are about, but a removed one; a pruned build only from the cache.
@@ -65,6 +67,7 @@ async function renderEventsTab(
     namespaces,
     warnings,
     ...(options.normal ? { normalEvents: options.normal } : {}),
+    ...(options.failures ? { failures: options.failures } : {}),
   };
   const [cursor, setCursor] = createSignal(0);
   const action = mock((_action: string | null) => {});
@@ -249,7 +252,7 @@ test("a resource whose events of a reason OpenShift deleted says (cached) under 
   }
 });
 
-test("a warning about a ReplicaSet opens its events only: the commit has no ReplicaSet to show in full", async () => {
+test("a warning about a ReplicaSet the cluster has opens it, on its events: no commit holds it", async () => {
   const t = await renderEventsTab([
     warning({ kind: "ReplicaSet", name: "shop-api-7d9f8", uid: "rs-uid", reason: "FailedCreate" }),
   ]);
@@ -258,7 +261,7 @@ test("a warning about a ReplicaSet opens its events only: the commit has no Repl
     expect(t.action).toHaveBeenLastCalledWith("events");
     expect(t.opened).toHaveBeenLastCalledWith(
       expect.objectContaining({ kind: "ReplicaSet", name: "shop-api-7d9f8", uid: "rs-uid" }),
-      { eventsOnly: true },
+      { eventsOnly: false },
     );
   } finally {
     t.renderer.destroy();
@@ -311,6 +314,32 @@ test("Normal events the cluster lists now follow the warnings, in the text color
     expect(t.fgOf("Pulled")).toEqual(RGBA.fromHex(t.theme.foreground));
     // Never (cached) while listed, though no warning list holds its uid.
     expect(t.frame()).not.toContain("(cached)");
+  } finally {
+    t.renderer.destroy();
+  }
+});
+
+test("what a failing resource's status says leads in red, with its part of the status; the total counts it", async () => {
+  const crash: OpenShiftFailure = {
+    ...warning({ id: "status:crash", reason: "CrashLoopBackOff", message: "back-off 5m0s", lastSeen: null }),
+    status: "waiting",
+  };
+  const t = await renderEventsTab([warning({ id: "event-1" })], { failures: [crash] });
+  try {
+    expect(t.lines()).toEqual([
+      "Reload commit live",
+      "total events 2",
+      "└─ ▾ shop-test 2",
+      "├─ ▾ CrashLoopBackOff 1",
+      "│ └─ shop-api-7d9f8-x2k4q waiting",
+      "└─ ▾ BackOff 1",
+      "└─ shop-api-7d9f8-x2k4q 2m ago",
+    ]);
+    expect(t.fgOf("CrashLoopBackOff")).toEqual(RGBA.fromHex(t.theme.error));
+    await t.enterOn("waiting");
+    expect(t.opened).toHaveBeenLastCalledWith(expect.objectContaining({ name: "shop-api-7d9f8-x2k4q" }), {
+      eventsOnly: false,
+    });
   } finally {
     t.renderer.destroy();
   }
