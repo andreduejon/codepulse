@@ -15,7 +15,16 @@ import type { OpenShiftWarning } from "../../../core/openshift/warnings";
 export type EventsLevel = "failure" | "warning" | "normal";
 
 export type EventsRow =
-  | { kind: "namespace"; key: string; prefix: string; namespace: string; count: number; open: boolean }
+  | {
+      kind: "namespace";
+      key: string;
+      prefix: string;
+      namespace: string;
+      count: number;
+      open: boolean;
+      /** Every resource below it is cached: it is over, muted. */
+      cached: boolean;
+    }
   | {
       kind: "reason";
       key: string;
@@ -24,6 +33,8 @@ export type EventsRow =
       count: number;
       open: boolean;
       level: EventsLevel;
+      /** Every resource below it is cached: it is over, muted. */
+      cached: boolean;
     }
   | {
       kind: "resource";
@@ -100,15 +111,6 @@ export function eventsTreeRows(warnings: readonly OpenShiftWarning[], options: E
     const nsLast = nsIndex === namespaces.length - 1;
     const nsKey = namespaceKey(namespace);
     const nsOpen = !options.collapsed.has(nsKey);
-    rows.push({
-      kind: "namespace",
-      key: nsKey,
-      prefix: branch("", nsLast),
-      namespace,
-      count: inNamespace.length,
-      open: nsOpen,
-    });
-    if (!nsOpen) return;
     const nsLead = below("", nsLast);
     // What went wrong leads: what the status says, then the warnings' reasons, then the Normal events'.
     const reasons = LEVELS.flatMap(level =>
@@ -117,32 +119,21 @@ export function eventsTreeRows(warnings: readonly OpenShiftWarning[], options: E
         entry => entry.reason,
       ).map(entries => ({ level, entries })),
     );
-    reasons.forEach(({ level, entries: ofReason }, reasonIndex) => {
-      const first = ofReason[0] as OpenShiftWarning;
-      const reason = first.reason;
+    // Each reason's rows, built also when it is collapsed: a reason whose resources are all cached is muted.
+    const reasonRows = reasons.map(({ level, entries: ofReason }, reasonIndex) => {
+      const reason = (ofReason[0] as OpenShiftWarning).reason;
       const reasonLast = reasonIndex === reasons.length - 1;
       const key = reasonKey(namespace, reason, level);
-      const open = !options.collapsed.has(key);
-      rows.push({
-        kind: "reason",
-        key,
-        prefix: branch(nsLead, reasonLast),
-        reason,
-        count: ofReason.length,
-        open,
-        level,
-      });
-      if (!open) return;
       const reasonLead = below(nsLead, reasonLast);
       // One recreated under its old name is a row each: the one the commit has, then each removed one by its uid, so
       // every one's events stay reachable (Enter opens the row's own object).
       const objectOf = (entry: OpenShiftWarning) =>
         `${entry.kind}:${entry.name}:${options.isPresent(entry) ? "present" : `removed:${entry.uid ?? ""}`}`;
       const resources = groupBy(ofReason, objectOf);
-      resources.forEach((events, index) => {
+      const children = resources.map((events, index): EventsRow => {
         const newest = events[0] as OpenShiftWarning;
         const removed = !options.isPresent(newest);
-        rows.push({
+        return {
           kind: "resource",
           key: `resource:${key}:${objectOf(newest)}`,
           prefix: branch(reasonLead, index === resources.length - 1),
@@ -155,9 +146,31 @@ export function eventsTreeRows(warnings: readonly OpenShiftWarning[], options: E
           lastSeen: newest.lastSeen,
           ...(level === "failure" ? { status: (newest as OpenShiftFailure).status } : {}),
           warning: newest,
-        });
+        };
       });
+      const open = !options.collapsed.has(key);
+      const head: EventsRow = {
+        kind: "reason",
+        key,
+        prefix: branch(nsLead, reasonLast),
+        reason,
+        count: ofReason.length,
+        open,
+        level,
+        cached: children.every(row => row.cached),
+      };
+      return { head, children: open ? children : [] };
     });
+    rows.push({
+      kind: "namespace",
+      key: nsKey,
+      prefix: branch("", nsLast),
+      namespace,
+      count: inNamespace.length,
+      open: nsOpen,
+      cached: reasonRows.every(({ head }) => head.cached),
+    });
+    if (nsOpen) for (const { head, children } of reasonRows) rows.push(head, ...children);
   });
   return rows;
 }

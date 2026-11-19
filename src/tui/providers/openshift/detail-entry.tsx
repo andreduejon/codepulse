@@ -1,5 +1,5 @@
 import type { OpenShiftCommitData, OpenShiftResource } from "../../../core/openshift/types";
-import { type OpenShiftWarning, warningsAbout } from "../../../core/openshift/warnings";
+import { isWarnedNow, type OpenShiftWarning } from "../../../core/openshift/warnings";
 import { scopedMemory } from "../../components/detail-memory";
 import { detailEntry, type ProviderDetailSource } from "../shared/detail-entry";
 import { OpenShiftDetailTab } from "./detail-tab";
@@ -44,6 +44,7 @@ export const openshiftDetail = detailEntry<OpenShiftDetailSource>({
       onOpenResource={props.source.onOpenResource}
       targetResourceId={props.context.target}
       targetColor={props.context.targetColor}
+      isCached={props.source.warningIsCached}
       unavailableReason={props.context.unavailable("openshift", props.source.status)}
       liveUnavailable={liveListFrozen(props.source)}
       loading={props.source.status?.kind === "loading"}
@@ -61,8 +62,9 @@ export const openshiftDetail = detailEntry<OpenShiftDetailSource>({
     ]);
     if (resources.length === 0) return null;
     const warnings = data?.warnings ?? [];
+    const isCached = source.warningIsCached ?? (() => false);
     // `!` is explained only when a row shows it.
-    const warned = warnings.length > 0 && resources.some(resource => warningsAbout(resource, warnings).length > 0);
+    const warned = resources.some(resource => isWarnedNow(resource, warnings, isCached));
     return warned ? [...OPENSHIFT_LEGEND, OPENSHIFT_WARNING_LEGEND] : OPENSHIFT_LEGEND;
   },
 });

@@ -248,15 +248,18 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
             selectable={!props.mouseEnabled}
             text={row.kind === "namespace" ? row.namespace : row.reason}
             active={cursored(row.key)}
-            // A failure in red (why the resource is ✗), a warning in the warning color, as the graph's counts.
+            // A failure in red (why the resource is ✗), a warning in the warning color, as the graph's counts; muted
+            // once only the cache has its events: it is over.
             fg={
               cursored(row.key)
                 ? t().accent
-                : row.kind === "reason" && row.level === "failure"
-                  ? t().error
-                  : row.kind === "reason" && row.level === "warning"
-                    ? t().warning
-                    : t().foreground
+                : row.cached
+                  ? t().foregroundMuted
+                  : row.kind === "reason" && row.level === "failure"
+                    ? t().error
+                    : row.kind === "reason" && row.level === "warning"
+                      ? t().warning
+                      : t().foreground
             }
           />
           <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>

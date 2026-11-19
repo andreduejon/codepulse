@@ -15,8 +15,11 @@ export interface OpenShiftFailure extends OpenShiftWarning {
   status: string;
 }
 
-/** A row that says something is wrong: a step that ended well (`Completed · exit 0`) is not one. */
-export const isStatusProblem = (row: OpenShiftStatusRow) => !!row.reason && !/^Completed\b/.test(row.reason);
+/**
+ * A row that says something is wrong: a step that ended well (`Completed · exit 0`) is not one, nor a finished pod's
+ * `Ready False` (`PodCompleted`).
+ */
+export const isStatusProblem = (row: OpenShiftStatusRow) => !!row.reason && !/^(Pod)?Completed\b/.test(row.reason);
 /** A condition row (`Ready False`): for a Pod, only a symptom of what its containers say. */
 const isCondition = (row: OpenShiftStatusRow) => row.status.endsWith(" False");
 

@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createSignal, For, on, Show, untrack } from "solid-js";
 import type { OpenShiftCommitData, OpenShiftResource, OpenShiftStatus } from "../../../core/openshift/types";
-import { warningsAbout } from "../../../core/openshift/warnings";
+import { isWarnedNow, type OpenShiftWarning } from "../../../core/openshift/warnings";
 import type { StatusCategory } from "../../../core/status";
 import type { DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
@@ -38,6 +38,8 @@ export interface OpenShiftDetailTabProps {
   /** The resource the tab is shown for (the dashboard's event: a build), marked, with the tab's focus starting on it. */
   targetResourceId?: string;
   targetColor?: string;
+  /** Whether only the cache has a warning: OpenShift deleted it, so it no longer gives its resource `!`. */
+  isCached?: (warning: OpenShiftWarning) => boolean;
 }
 
 type NamespaceData = OpenShiftCommitData["namespaces"][number];
@@ -151,15 +153,14 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
   // Namespaces without matched resources are left out of both the tree and the cursor order (no invisible stops).
   const namespaces = createMemo(() => (data()?.namespaces ?? []).filter(ns => namespaceResources(ns).length > 0));
   const resources = createMemo(() => namespaces().flatMap(namespaceResources));
-  /** The resources OpenShift warned about, by id: they get `!`. What it said is in the Events tab. */
+  /** The resources OpenShift still warns about, by id: they get `!`. What it said is in the Events tab. */
   const warned = createMemo(() => {
     const warnings = data()?.warnings ?? [];
-    if (warnings.length === 0) return null;
-    return new Set(
-      resources()
-        .filter(resource => warningsAbout(resource, warnings).length > 0)
-        .map(r => r.id),
-    );
+    const isCached = props.isCached ?? (() => false);
+    const ids = resources()
+      .filter(resource => isWarnedNow(resource, warnings, isCached))
+      .map(r => r.id);
+    return ids.length > 0 ? new Set(ids) : null;
   });
   // Same wording as the CI tabs: the row (re)loads this commit's resources.
   const reloadLabel = () => (data() ? "Reload commit" : "Load commit");

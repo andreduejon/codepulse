@@ -259,7 +259,6 @@ export function heldResourceOf(
   return commit ? resourcesOf(commit).find(resource => sameObject(warning, resource)) : undefined;
 }
 
-/** The warnings about one resource. */
 /**
  * Whether the commit still has what the warning is about: a resource with its name and uid, or, for a ReplicaSet or
  * ReplicationController, one in the live list. Ask only once the live list loaded: before, nothing is known gone.
@@ -278,6 +277,17 @@ export function isAboutPresentResource(
   return commit ? resourcesOf(commit).some(resource => !resource.cacheOnly && sameObject(warning, resource)) : false;
 }
 
+/**
+ * Whether OpenShift still reports a warning about the resource: its `!`. One only the cache keeps (OpenShift deleted
+ * it, or the resource is gone) is over.
+ */
+export const isWarnedNow = (
+  resource: OpenShiftResource,
+  warnings: readonly OpenShiftWarning[],
+  isCached: (warning: OpenShiftWarning) => boolean,
+) => !resource.cacheOnly && warningsAbout(resource, warnings).some(warning => !isCached(warning));
+
+/** The warnings about one resource. */
 export function warningsAbout(resource: OpenShiftResource, warnings: readonly OpenShiftWarning[]): OpenShiftWarning[] {
   return warnings.filter(entry => sameObject(entry, resource));
 }

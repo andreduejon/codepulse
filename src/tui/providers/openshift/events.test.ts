@@ -123,3 +123,17 @@ test("a build pod's steps that ended well are plain; only the one that failed is
     ["error", "ended docker-build"],
   ]);
 });
+
+test("a finished build pod's `Ready False` (PodCompleted) is how it ended, not a problem", () => {
+  const lines = formatOpenShiftStatus("Pod", {
+    status: {
+      phase: "Succeeded",
+      conditions: [
+        { type: "Ready", status: "False", reason: "PodCompleted" },
+        { type: "ContainersReady", status: "False", reason: "PodCompleted" },
+      ],
+      containerStatuses: [{ name: "sti-build", state: { terminated: { reason: "Completed", exitCode: 0 } } }],
+    },
+  });
+  expect(lines.filter(line => line.kind === "error")).toEqual([]);
+});

@@ -60,6 +60,21 @@ describe("the Events tab's tree", () => {
     ]);
   });
 
+  test("a reason or namespace whose resources are all cached is over: muted, also when it is closed", () => {
+    const cachedOf = (collapsed: Set<string>) =>
+      eventsTreeRows(WARNINGS, { isPresent: () => true, isCached: entry => entry.id !== "unhealthy", collapsed })
+        .filter(row => row.kind !== "resource")
+        .map(row => `${row.kind === "namespace" ? row.namespace : row.reason}${row.cached ? " (cached)" : ""}`);
+    const all = ["shop-dev (cached)", "BuildFailed (cached)", "shop-test", "BackOff (cached)", "Unhealthy"];
+    expect(cachedOf(new Set())).toEqual([...all, "ProgressDeadlineExceeded (cached)"]);
+    expect(cachedOf(new Set(["reason:shop-test:BackOff"]))).toEqual([...all, "ProgressDeadlineExceeded (cached)"]);
+    expect(cachedOf(new Set(["namespace:shop-dev"]))).toEqual([
+      "shop-dev (cached)",
+      ...all.slice(2),
+      "ProgressDeadlineExceeded (cached)",
+    ]);
+  });
+
   test("one resource with two events of a reason (another message) is one row: their count, the newer time", () => {
     const rows = eventsTreeRows(
       [

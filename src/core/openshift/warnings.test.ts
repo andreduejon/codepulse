@@ -3,6 +3,7 @@ import type { OpenShiftCommitData, OpenShiftControllerReference, OpenShiftResour
 import {
   heldResourceOf,
   isAboutPresentResource,
+  isWarnedNow,
   linkWarningsToCommits,
   mergeWarnings,
   type OpenShiftWarning,
@@ -99,6 +100,15 @@ describe("OpenShift warnings", () => {
       "event-1",
     ]);
     expect(warningsAbout(resource({ name: "quiet-pod" }), warnings)).toEqual([]);
+  });
+
+  test("a resource's `!` lasts while OpenShift still reports one of its warnings, not once only the cache has them", () => {
+    const pod = resource({ name: "shop-api-7d9f8-pull9" });
+    const warnings = [warning(), warning({ id: "event-2" })];
+    expect(isWarnedNow(pod, warnings, entry => entry.id === "event-1")).toBe(true);
+    expect(isWarnedNow(pod, warnings, () => true)).toBe(false);
+    // One only the cache shows (a pruned Build) is over, whatever its warnings.
+    expect(isWarnedNow({ ...pod, cacheOnly: true }, warnings, () => false)).toBe(false);
   });
 
   test("the resource a warning is about: the commit's own, or one by its name when it is gone", () => {
