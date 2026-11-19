@@ -214,14 +214,17 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
     ];
   });
   const warningCount = () => (events() ?? []).filter(event => event.type === "Warning").length;
-  /** Events show warnings in the warning color and the header muted; log and object lines are plain. */
+  /**
+   * Events: what the status says is wrong in red (why the resource is ✗), warning events in the warning color, the
+   * headers muted. Kubernetes has no error events: red comes only from the status. Log and object lines are plain.
+   */
   const lines = createMemo((): LogViewerLine[] => {
     const mode = viewMode();
     if (mode === "events")
       return eventLines().map((line, index) => ({
         text: line.text,
         lineNo: index + 1,
-        kind: line.kind === "warning" ? "warning" : line.kind === "header" ? "muted" : "normal",
+        kind: line.kind === "header" ? "muted" : line.kind,
       }));
     const text = mode === "log" ? stripTerminalControls(logText() ?? "") : (objectText() ?? "");
     return text.split("\n").map((line, index) => ({ text: line, lineNo: index + 1 }));

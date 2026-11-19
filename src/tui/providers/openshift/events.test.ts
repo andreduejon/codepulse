@@ -27,7 +27,7 @@ test("a crash-looping Pod says why: what it waits on, how its last run ended, it
       ],
     },
   });
-  expect(lines.map(line => line.kind)).toEqual(["header", "warning", "warning", "warning"]);
+  expect(lines.map(line => line.kind)).toEqual(["header", "error", "error", "error"]);
   const [header, waiting, lastRun, ready] = lines.map(line => line.text.trimEnd());
   expect(header).toMatch(/^STATUS\s+REASON\s+MESSAGE$/);
   expect(waiting).toMatch(/^waiting\s+CrashLoopBackOff\s+back-off 5m0s restarting failed container$/);

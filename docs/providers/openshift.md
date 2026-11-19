@@ -144,11 +144,12 @@ that produced them.
   present; otherwise JSON is a live snapshot. Leave the log view or close the
   dialog to abort follow.
 - **Events** starts with what the resource's status says is wrong
-  (`STATUS  REASON  MESSAGE`): what a Pod's containers wait on, how their last run
+  (`STATUS  REASON  MESSAGE`, in red: it is why the resource is `✗`): what a Pod's containers wait on, how their last run
   ended and how often they restarted, its conditions that are False, a workload's failing conditions, a
   Build's failure. The status comes with the object, so it stays after OpenShift
   deletes the events and where events are forbidden. Below it, the events newest
   first: `LAST SEEN  TYPE  REASON  COUNT  MESSAGE`, warnings in the warning colour.
+  Kubernetes events are only `Normal` or `Warning`, so red comes only from the status.
   Events are read when the dialog opens (the warnings only the cache has follow them,
   see Warnings); the title counts the
   warnings (`2 warnings`). OpenShift keeps events for 3 hours by default (plain

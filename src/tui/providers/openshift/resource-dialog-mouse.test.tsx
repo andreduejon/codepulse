@@ -635,7 +635,9 @@ test("the events view starts with what the status says is wrong; the title count
     expect(frame).toMatch(/waiting\s+CrashLoopBackOff\s+back-off 5m0s restarting failed container/);
     expect(frame).toMatch(/last run\s+Error · exit 1/);
     expect(frame.indexOf("STATUS")).toBeLessThan(frame.indexOf("LAST SEEN"));
-    expect(d.cell("CrashLoopBackOff")?.fg).toEqual(RGBA.fromHex(d.theme.warning));
+    // What the status says is wrong is why it is ✗: red, as a CI log's error lines. Warning events are yellow.
+    expect(d.cell("CrashLoopBackOff")?.fg).toEqual(RGBA.fromHex(d.theme.error));
+    expect(d.cell("Unhealthy")?.fg).toEqual(RGBA.fromHex(d.theme.warning));
     // Loaded once when the dialog opened; the events view reuses them (r refetches).
     expect(loadEvents).toHaveBeenCalledTimes(1);
   } finally {

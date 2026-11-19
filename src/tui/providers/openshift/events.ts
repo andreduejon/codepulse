@@ -15,7 +15,8 @@ export const OPENSHIFT_NO_EVENTS = "No recent events. OpenShift keeps them for 3
 
 export interface OpenShiftEventLine {
   text: string;
-  kind: "header" | "warning" | "normal";
+  /** `error`: what the status says is wrong (why the resource is ✗); `warning`: a Warning event. */
+  kind: "header" | "error" | "warning" | "normal";
 }
 
 /** The events view: a header and one aligned row per event, `LAST SEEN  TYPE  REASON  COUNT  MESSAGE`. */
@@ -97,6 +98,6 @@ export function formatOpenShiftStatus(kind: OpenShiftResourceKind, object: unkno
     `${status.padEnd(statusWidth)}  ${reason.padEnd(reasonWidth)}  ${message}`.trimEnd();
   return [
     { text: line("STATUS", "REASON", "MESSAGE"), kind: "header" },
-    ...rows.map(row => ({ text: line(row.status, row.reason, row.message), kind: "warning" as const })),
+    ...rows.map(row => ({ text: line(row.status, row.reason, row.message), kind: "error" as const })),
   ];
 }
