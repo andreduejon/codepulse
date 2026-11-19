@@ -3,6 +3,7 @@ import { type Accessor, createEffect, createSignal, For, type JSX, onCleanup, Sh
 import type { DashboardEvent } from "../../core/dashboard/events";
 import type { CommitInfo } from "../../core/dashboard/load";
 import { DETAIL_DEBOUNCE_MS } from "../../core/git/commit-detail";
+import type { TabNotice } from "../app/app-tab-notice";
 import { useGit } from "../context/git";
 import { useProviderModules } from "../context/provider-modules";
 import { useProviderSet } from "../context/providers";
@@ -12,6 +13,7 @@ import { useT } from "../hooks/use-t";
 import { DetailLegend, type LegendItem } from "../providers/shared/detail-legend";
 import { formatDate } from "../utils/date";
 import { DashboardEventText } from "./dashboard-event-text";
+import MessageBox from "./message-box";
 
 /** How many commits the panel keeps once read. */
 const KEPT_COMMITS = 100;
@@ -48,6 +50,8 @@ export function DashboardDetail(
     renderTab?: (event: DashboardEvent, tab: DetailTab, commit: Accessor<CommitInfo | null>) => JSX.Element;
     /** The legend below: the active tab's own, else the provider's. */
     legend?: () => readonly LegendItem[] | null;
+    /** The active tab's notice, as in its provider's view (the namespaces whose events it lacks). */
+    notice?: () => TabNotice | null;
     /** A click inside the panel gives it the keyboard. */
     onMouseFocus?: () => void;
   }>,
@@ -112,11 +116,11 @@ export function DashboardDetail(
     return props.legend ? props.legend() : markLegend(event.source, modules);
   };
   const tabs = () => (props.event() ? (props.tabs?.() ?? []) : []);
-  /** The shown tab's identity: another event or tab builds its own content. */
+  /** The shown tab's identity: another event, commit (a warning's newest copy moved) or tab builds its own content. */
   const tabKey = (): string | null => {
     const event = props.event();
     const tab = props.activeTab?.();
-    return props.renderTab && event && tab ? `${event.id}\u0000${tab}` : null;
+    return props.renderTab && event && tab ? `${event.id}\u0000${event.sha}\u0000${tab}` : null;
   };
   const [hoveredTab, setHoveredTab] = createSignal<DetailTab | null>(null);
 
@@ -249,6 +253,24 @@ export function DashboardDetail(
           )}
         </Show>
       </scrollbox>
+      <Show when={props.notice?.()}>
+        {notice => (
+          <>
+            <box height={1} flexShrink={0} />
+            <box flexShrink={0}>
+              <MessageBox
+                kind={notice().kind}
+                variant="inset"
+                title={notice().title}
+                message={notice().detail.join("\n")}
+                entries={notice().entries}
+                detail={notice().footer}
+                mouseEnabled={props.mouseEnabled?.() ?? true}
+              />
+            </box>
+          </>
+        )}
+      </Show>
       <Show when={legend()}>
         {items => (
           <>

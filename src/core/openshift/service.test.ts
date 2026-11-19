@@ -361,6 +361,55 @@ test("a warning never writes back a commit the cache dropped: its builds and ano
   expect(h.saved.has(SHA)).toBe(false);
 });
 
+test("a warning whose first save failed is saved with the next change: only a save that landed counts", async () => {
+  const h = harness();
+  const running = { ...build, status: "running" as const };
+  Object.assign(h.api, {
+    fetchOpenShiftInventory: mock(async () => ({
+      data: new Map([
+        [
+          SHA,
+          {
+            sha: SHA,
+            liveFetched: true,
+            namespaces: [
+              {
+                namespace: "ns",
+                builds: [running],
+                imageStreamTags: [],
+                deployments: [],
+                deploymentConfigs: [],
+                pods: [],
+              },
+            ],
+          },
+        ],
+      ]),
+      error: null,
+      failures: [],
+      successfulRequests: 1,
+    })),
+  });
+  // The cache is busy (another writer holds it): the first save writes nothing.
+  const mergeMany = h.cache.mergeMany;
+  let busy = true;
+  h.cache.mergeMany = async (repo, items, merge, isCurrent, options) =>
+    busy ? 0 : mergeMany(repo, items, merge, isCurrent, options);
+  h.cluster.warnings = { warnings: [buildWarning()], denied: [], failed: [] };
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  await Bun.sleep(0);
+  expect(h.saved.has(SHA)).toBe(false);
+  busy = false;
+  h.cluster.warnings = {
+    warnings: [buildWarning({ count: 2, lastSeen: "2026-03-02T09:20:00Z" })],
+    denied: [],
+    failed: [],
+  };
+  await h.service.refresh();
+  await Bun.sleep(0);
+  expect(h.saved.get(SHA)?.warnings?.map(w => w.count)).toEqual([2]);
+});
+
 test("an answer to the warnings that lands after a reset changes nothing", async () => {
   const h = harness();
   let answer!: (list: OpenShiftWarningList) => void;

@@ -173,7 +173,10 @@ export interface OpenShiftServicePorts {
 const sameFailures = (a: readonly OpenShiftFailure[], b: readonly OpenShiftFailure[]) =>
   a.length === b.length && a.every((entry, i) => entry.id === b[i]?.id && entry.message === b[i]?.message);
 
-/** Merge each commit's incoming items into its cached snapshot, in one go, while `isCurrent`. */
+/**
+ * Merge each commit's incoming items into its cached snapshot, in one go, while `isCurrent`: how many it wrote (all of
+ * them or none, in one transaction; none also when it failed).
+ */
 async function persistMerged<I>(
   cache: OpenShiftCachePort,
   repoPath: string,
@@ -182,11 +185,11 @@ async function persistMerged<I>(
   incomingFor: (sha: string) => I[],
   merge: (sha: string, existing: OpenShiftCacheEntry | null, incoming: I[]) => OpenShiftCacheEntry,
   options?: { touch?: boolean },
-): Promise<void> {
-  if (!isCurrent()) return;
+): Promise<number> {
+  if (!isCurrent()) return 0;
   const items = shas.map(sha => ({ sha, incoming: incomingFor(sha) })).filter(item => item.incoming.length > 0);
-  if (items.length === 0) return;
-  await cache.mergeMany(repoPath, items, merge, isCurrent, options);
+  if (items.length === 0) return 0;
+  return cache.mergeMany(repoPath, items, merge, isCurrent, options);
 }
 
 export function createOpenShiftService(ports: OpenShiftServicePorts) {
@@ -212,8 +215,8 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
    */
   const shownFromCache = new Set<string>();
   /**
-   * Commits that had a cache entry this session (read or written). A warning only updates theirs: one the cache limit
-   * dropped stays dropped, so it never comes back without its builds and pushes out another commit's.
+   * Commits that had a cache entry this session (read, or a save that landed). A warning only updates theirs: one the
+   * cache limit dropped stays dropped, so it never comes back without its builds and pushes out another commit's.
    */
   const savedSHAs = new Set<string>();
   const queriedSHAs = new Set<string>();
@@ -316,18 +319,21 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
     }
     // An older commit only shown from the cache keeps its new warnings too, without counting as a use for eviction.
     // A commit new to the cache gets an entry, used; one it had (also one only shown) is only updated, not used.
+    // Only a save that landed counts: one the cache failed leaves the commit new, so the next change saves it.
     const fresh = changed.filter(sha => !savedSHAs.has(sha));
     const saved = changed.filter(sha => savedSHAs.has(sha));
-    for (const sha of fresh) savedSHAs.add(sha);
-    if (fresh.length > 0) void persistWarnings(fresh, true);
+    if (fresh.length > 0)
+      void persistWarnings(fresh, true).then(written => {
+        if (written > 0) for (const sha of fresh) savedSHAs.add(sha);
+      });
     if (saved.length > 0) void persistWarnings(saved, false);
   }
 
-  async function persistWarnings(shas: string[], touch: boolean): Promise<void> {
+  async function persistWarnings(shas: string[], touch: boolean): Promise<number> {
     const epoch = lifecycle().getEpoch();
     const repoPath = app.repoPath();
     try {
-      await persistMerged(
+      const written = await persistMerged(
         ports.cache(),
         repoPath,
         shas,
@@ -340,8 +346,10 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
         }),
         { touch },
       );
+      return lifecycle().isCurrent(epoch, repoPath) ? written : 0;
     } catch (err) {
       debugError("OpenShift", err);
+      return 0;
     }
   }
 
@@ -436,7 +444,8 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
     data: Map<string, OpenShiftCommitData>,
     epoch: number,
   ): Promise<void> {
-    await persistMerged(
+    const withBuilds: string[] = [];
+    const written = await persistMerged(
       ports.cache(),
       repoPath,
       [...data.keys()],
@@ -446,7 +455,7 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
           .flatMap(ns => ns.builds)
           .map(toCachedBuild)
           .filter((build): build is NonNullable<typeof build> => build !== null && isTerminalBuildStatus(build.status));
-        if (builds.length > 0) savedSHAs.add(sha.toLowerCase());
+        if (builds.length > 0) withBuilds.push(sha.toLowerCase());
         return builds;
       },
       (sha, existing, incoming) => ({
@@ -455,6 +464,8 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
         ...(existing?.warnings ? { warnings: existing.warnings } : {}),
       }),
     );
+    // Saved in one transaction: all of them landed, or none (an unchanged one the cache already had, read above).
+    if (written > 0 && lifecycle().isCurrent(epoch, repoPath)) for (const sha of withBuilds) savedSHAs.add(sha);
   }
 
   function eligibleSHAs(): Set<string> {

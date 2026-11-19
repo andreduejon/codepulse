@@ -48,6 +48,8 @@ export type EventsRow =
       status?: string;
       /** Its newest event of this reason: what the resource is (namespace, kind, name, uid), to open it. */
       warning: OpenShiftWarning;
+      /** Its reason's: a failure, a warning or a Normal event. */
+      level: EventsLevel;
     };
 
 export interface EventsTreeOptions {
@@ -146,6 +148,7 @@ export function eventsTreeRows(warnings: readonly OpenShiftWarning[], options: E
           lastSeen: newest.lastSeen,
           ...(level === "failure" ? { status: (newest as OpenShiftFailure).status } : {}),
           warning: newest,
+          level,
         };
       });
       const open = !options.collapsed.has(key);

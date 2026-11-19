@@ -374,3 +374,27 @@ test("the Dashboard's warning is marked in its color and gets the cursor: the po
     t.renderer.destroy();
   }
 });
+
+test("the Dashboard's warning marks its warning row, not the status's red row with the same reason", async () => {
+  const backOff = warning({ id: "event-1", uid: "pod-1" });
+  const status: OpenShiftFailure = { ...backOff, id: "status:backoff", lastSeen: null, status: "waiting" };
+  const t = await renderEventsTab([backOff], { failures: [status], target: warningTarget(backOff) });
+  try {
+    expect(t.lines().slice(2)).toEqual([
+      "└─ ▾ shop-test 2",
+      "├─ ▾ BackOff 1",
+      "│ └─ shop-api-7d9f8-x2k4q waiting",
+      "└─ ▾ BackOff 1",
+      "└─ shop-api-7d9f8-x2k4q 2m ago",
+    ]);
+    const frame = t.frame().split("\n");
+    const bgOf = (text: string) =>
+      t
+        .captureSpans()
+        .lines[frame.findIndex(line => line.includes(text))]?.spans.find(span => span.text.includes("x2k4q"))?.bg;
+    expect(bgOf("2m ago")).toEqual(RGBA.fromHex(t.theme.backgroundElementActive));
+    expect(bgOf("waiting")).not.toEqual(RGBA.fromHex(t.theme.backgroundElementActive));
+  } finally {
+    t.renderer.destroy();
+  }
+});

@@ -206,6 +206,11 @@ export function useDashboardController(opts: {
       if (!event || !tab) return event ? markLegend(event.source, opts.modules) : null;
       return providers.details.legend(tab, event.sha);
     },
+    notice: () => {
+      const event = dashboard.selected();
+      const tab = dashboardActiveTab();
+      return event && tab && tab !== "info" ? providers.tabNotice(event.source, event.sha, tab) : null;
+    },
     renderTab: (event: DashboardEvent, tab: DetailTab, info: Accessor<CommitInfo | null>) =>
       tab === "info" ? (
         <DashboardInfoTab event={event} info={info} />

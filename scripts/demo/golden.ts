@@ -42,7 +42,7 @@ export const GOLDEN_PLAYS: readonly GoldenPlay[] = [
     args: [
       ...COMPACT,
       "--play",
-      "j j enter shot:details tab tab tab tab tab shot:dashboard tab shot:back j shot:after-j",
+      'j j enter shot:details tab tab tab tab tab wait:"shop-cache-0" shot:dashboard tab shot:back j shot:after-j',
     ],
   },
   {

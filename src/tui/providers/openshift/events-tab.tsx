@@ -56,7 +56,7 @@ export interface OpenShiftEventsTabProps {
   isPresent?: (warning: OpenShiftWarning) => boolean;
   /** Enter on a resource or a warning: the resource, with its events shown (only them, for a removed one). */
   onOpenResource?: (resource: OpenShiftResource, options: { eventsOnly: boolean }) => void;
-  /** The Dashboard's warning (`warningTarget`): its row marked, with the tab's focus starting on it. */
+  /** The Dashboard's warning (`warningTarget`): its warning row (not a red one of its reason) marked, focus on it. */
   target?: string;
   targetColor?: string;
 }
@@ -72,7 +72,7 @@ interface EventsMemory {
 const newEventsMemory = (): EventsMemory => ({ sha: null, collapsed: new Set() });
 const newTargetFocus = (): { key: string | null } => ({ key: null });
 const isTarget = (row: EventsRow, target: string | undefined) =>
-  !!target && row.kind === "resource" && warningTarget(row.warning) === target;
+  !!target && row.kind === "resource" && row.level === "warning" && warningTarget(row.warning) === target;
 
 export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
   const t = useT();

@@ -233,6 +233,87 @@ test("with its provider's tabs, the panel shows the tab bar and the provider's o
   }
 });
 
+test("an event read again under another commit (a warning's newest copy) shows that commit's tab", async () => {
+  const warning: DashboardEvent = {
+    id: "/shop:openshift:warning:shop-test/event-1",
+    app: "/shop",
+    source: "openshift",
+    time: Date.parse("2026-03-02T10:52:00Z"),
+    status: "unknown",
+    text: "BackOff · pod shop-api in shop-test",
+    sha: SHA,
+  };
+  const [event, setEvent] = createSignal(warning);
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={createThemeState()}>
+        <DashboardDetail
+          event={event}
+          appName={() => "shop"}
+          loadCommit={async () => null}
+          mouseEnabled={() => true}
+          tabs={() => [{ id: "openshift-events", label: "Events" }]}
+          activeTab={() => "openshift-events"}
+          focused={() => true}
+          onSelectTab={() => {}}
+          renderTab={shown => <text>{`events of ${shown.sha.slice(0, 7)}`}</text>}
+        />
+      </ThemeContext.Provider>
+    ),
+    { width: 70, height: 20 },
+  );
+  try {
+    await setup.renderOnce();
+    expect(setup.captureCharFrame()).toContain("events of e6209dd");
+    setEvent({ ...warning, sha: "b".repeat(40) });
+    await setup.renderOnce();
+    expect(setup.captureCharFrame()).toContain("events of bbbbbbb");
+  } finally {
+    setup.renderer.destroy();
+  }
+});
+
+test("the tab's notice shows under it, as in the provider's view: the events it lacks", async () => {
+  const warning: DashboardEvent = {
+    id: "/shop:openshift:warning:shop-test/event-1",
+    app: "/shop",
+    source: "openshift",
+    time: Date.parse("2026-03-02T10:52:00Z"),
+    status: "unknown",
+    text: "BackOff · pod shop-api in shop-test",
+    sha: SHA,
+  };
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={createThemeState()}>
+        <DashboardDetail
+          event={() => warning}
+          appName={() => "shop"}
+          loadCommit={async () => null}
+          tabs={() => [{ id: "openshift-events", label: "Events" }]}
+          activeTab={() => "openshift-events"}
+          renderTab={() => <text>the events</text>}
+          notice={() => ({
+            key: "events",
+            fromStatus: false,
+            kind: "warning",
+            title: "Could not list events in shop-test",
+            detail: ["Its warnings are the ones listed before."],
+            entries: [],
+          })}
+        />
+      </ThemeContext.Provider>
+    ),
+    { width: 70, height: 24 },
+  );
+  try {
+    await setup.renderOnce();
+    expect(setup.captureCharFrame()).toContain("Could not list events in shop-test");
+  } finally {
+    setup.renderer.destroy();
+  }
+});
+
 test("the commit is read once the cursor rests, for the Info view only; leaving an event stops its read", async () => {
   const event = (id: string, sha: string): DashboardEvent => ({
     id,
