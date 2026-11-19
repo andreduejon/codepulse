@@ -40,5 +40,40 @@ export function openShiftEvents(app: string, entries: readonly OpenShiftCacheEnt
       ],
     });
   }
+  for (const entry of entries)
+    for (const warning of entry.warnings ?? []) {
+      // When it first happened, so repeating never moves it. Namespaces hold no `:`, so no build's id is like it.
+      const time = timeOf(warning.firstSeen) ?? timeOf(warning.lastSeen);
+      const id = `${app}:${OPENSHIFT_ID}:warning:${warning.namespace}/${warning.id}`;
+      if (time === null || events.has(id)) continue;
+      const kind = warning.kind.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
+      events.set(id, {
+        id,
+        app,
+        entry: `${warning.kind}:${warning.namespace}:${warning.name}`,
+        source: OPENSHIFT_ID,
+        time,
+        // Not how something ended: neutral. Its mark is OpenShift's own `!`.
+        status: "unknown",
+        text: [
+          warning.reason,
+          `${kind} ${warning.name} in ${warning.namespace}`,
+          ...(warning.count > 1 ? [`${warning.count} times`] : []),
+        ].join(" · "),
+        sha: entry.sha,
+        facts: [
+          ...fact("Namespace", warning.namespace),
+          ...fact("Resource", `${warning.kind} ${warning.name}`),
+          ...fact("Reason", warning.reason),
+          ...fact("Message", warning.message),
+          ...fact("Times", String(warning.count)),
+          ...fact("Repeated for", warning.count > 1 ? formatDuration(warning.firstSeen, warning.lastSeen) : null),
+        ],
+      });
+    }
   return [...events.values()];
 }
+
+/** Whether an event is a saved warning, not a build. */
+export const isOpenShiftWarningEvent = (event: DashboardEvent) =>
+  event.id.startsWith(`${event.app}:${OPENSHIFT_ID}:warning:`);

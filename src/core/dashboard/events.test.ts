@@ -3,7 +3,7 @@ import { githubEvents } from "../github/events";
 import type { GitHubWorkflowRun } from "../github/types";
 import { jenkinsEvents } from "../jenkins/events";
 import type { JenkinsRun } from "../jenkins/types";
-import { openShiftEvents } from "../openshift/events";
+import { isOpenShiftWarningEvent, openShiftEvents } from "../openshift/events";
 import { snykEvents } from "../snyk/events";
 import { type DashboardEvent, dashboardRows, gitEvents, keepUnchangedRows } from "./events";
 
@@ -205,6 +205,76 @@ describe("events", () => {
         },
       ]),
     ).toEqual([expect.objectContaining({ status: "unknown", severity: null, partial: true })]);
+  });
+});
+
+describe("OpenShift warnings", () => {
+  const warning = {
+    id: "event-backoff",
+    namespace: "shop-test",
+    kind: "Pod",
+    name: "shop-api-7d9f8-x2k4q",
+    uid: "pod-uid",
+    reason: "BackOff",
+    message: "Back-off restarting failed container api in pod shop-api-7d9f8-x2k4q",
+    count: 61,
+    firstSeen: "2026-03-02T09:00:00Z",
+    lastSeen: "2026-03-02T09:30:00Z",
+  };
+
+  test("a saved warning is one event at the time it was first seen, so repeating never moves it", () => {
+    const events = openShiftEvents("/repo/shop", [
+      { sha: SHA, builds: [], warnings: [warning, { ...warning, id: "event-once", reason: "OOMKilling", count: 1 }] },
+    ]);
+    expect(events.map(event => [event.text, event.time, event.sha])).toEqual([
+      ["BackOff · pod shop-api-7d9f8-x2k4q in shop-test · 61 times", at("2026-03-02T09:00:00Z"), SHA],
+      ["OOMKilling · pod shop-api-7d9f8-x2k4q in shop-test", at("2026-03-02T09:00:00Z"), SHA],
+    ]);
+    // A warning, not how something ended: neutral, never a failure. Its mark is OpenShift's own `!`.
+    expect(events[0]?.status).toBe("unknown");
+    expect(isOpenShiftWarningEvent(events[0] as DashboardEvent)).toBe(true);
+    expect(events[0]?.facts).toEqual([
+      { label: "Namespace", value: "shop-test" },
+      { label: "Resource", value: "Pod shop-api-7d9f8-x2k4q" },
+      { label: "Reason", value: "BackOff" },
+      { label: "Message", value: "Back-off restarting failed container api in pod shop-api-7d9f8-x2k4q" },
+      { label: "Times", value: "61" },
+      { label: "Repeated for", value: "30m 00s" },
+    ]);
+    // Its tab marks the resource it is about.
+    expect(events[0]?.entry).toBe("Pod:shop-test:shop-api-7d9f8-x2k4q");
+  });
+
+  test("one warning saved with two commits is one event; one without a time is left out", () => {
+    const events = openShiftEvents("/repo/shop", [
+      { sha: SHA, builds: [], warnings: [warning] },
+      {
+        sha: "b".repeat(40),
+        builds: [],
+        warnings: [warning, { ...warning, id: "no-time", firstSeen: null, lastSeen: null }],
+      },
+    ]);
+    expect(events.map(event => event.id)).toEqual([`/repo/shop:openshift:warning:shop-test/event-backoff`]);
+  });
+
+  test("a build's event is not a warning", () => {
+    const [build] = openShiftEvents("/repo/shop", [
+      {
+        sha: SHA,
+        builds: [
+          {
+            id: "Build/shop-api-13",
+            name: "shop-api-13",
+            namespace: "shop-dev",
+            status: "pass",
+            imageRefs: [],
+            commitSha: SHA,
+            updatedAt: "2026-03-02T10:20:00Z",
+          },
+        ],
+      },
+    ]);
+    expect(isOpenShiftWarningEvent(build as DashboardEvent)).toBe(false);
   });
 });
 

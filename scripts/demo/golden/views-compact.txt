@@ -67,6 +67,8 @@
    █      3447db9  main                  08:30  docs: rewrite the README for the new cart flow 🚀 and explain how discounts are rounded
    │
    █      64ddc8a  main                  06:45  ✗ main #41 failed
+   █      64ddc8a  main                  06:15  ! BuildFailed · build shop-api-41 in shop-dev
+   █      64ddc8a  main                  06:12  ! FailedMount · pod shop-api-41-build in shop-dev · 2 times
    │
    █      6adc455  feature/payments-re…  04:31  ✗ CI #815 failed
    │
@@ -80,13 +82,11 @@
    │      ────────────────────────────── Yesterday · Sun, Mar 1 ──────────────────────────────────────────────────────────────────────────────────────────────
    █      917f7b3  main                  13:30  perf(cart): cache price lookups
    │
-   │      ────────────────────────────── Sat, Feb 28 ─────────────────────────────────────────────────────────────────────────────────────────────────────────
-   █      1bb16fb  main                  01:30  Merge pull request #23 from demo/feature/i18n
 
   │
   │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                                       Git   GitHub   Jenkins   OpenShift   Snyk
   │
-  │   customer-notification-service   shop   shop-web                                                                                             34 events
+  │   customer-notification-service   shop   shop-web                                                                                             36 events
   │
 
                                                                                                             tab Git · enter details · r refresh · ↑/↓ navigate

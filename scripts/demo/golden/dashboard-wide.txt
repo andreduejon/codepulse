@@ -11,15 +11,23 @@
    █      bf08113  dev                   09:27  ✓ build shop-api-44 complete in shop-dev
    █      3447db9  main                  09:01  ✓ Deploy to shop-prod with a long workflow name #77 passed                                    ▾ CRITICAL                                             1
    █      3447db9  main                  09:00  ✓ main #42 passed                                                                             └─ ▸ CVE-2022-23540                                9.1 ●
-   │                                                                                                                                          ▾ HIGH                                                 3
-   █      3447db9  main                  08:55  ✓ CI #813 passed                                                                              ├─ ▸ CVE-2026-10001                                8.2 ●
-   █      e6209dd  dev                   08:44  ○ CI #811 cancelled                                                                           ├─ ▸ CVE-2020-8203                                 7.5 ●
-   █      e6209dd  dev                   08:43  ○ dev #6 aborted                                                                              └─ ▸ CVE-2024-4068                                 7.5 ●
-   █      3447db9  main                  08:40  ✓ build shop-api-43 complete in shop-dev                                                      · MEDIUM                                               0
-   █      64ddc8a  main                  08:38  ✗ CI #812 failed                                                                              · LOW                                                  0
+   █      64ddc8a  main                  09:00  ! BackOff · pod shop-api-7d9f8-x2k4q in shop-test · 61 times                                  ▾ HIGH                                                 3
+   │                                                                                                                                          ├─ ▸ CVE-2026-10001                                8.2 ●
+   █      64ddc8a  main                  08:59  ! Unhealthy · pod shop-api-7d9f8-x2k4q in shop-test · 42 times                                ├─ ▸ CVE-2020-8203                                 7.5 ●
+   █      3447db9  main                  08:55  ✓ CI #813 passed                                                                              └─ ▸ CVE-2024-4068                                 7.5 ●
+   █      e6209dd  dev                   08:44  ○ CI #811 cancelled                                                                           · MEDIUM                                               0
+   █      e6209dd  dev                   08:43  ○ dev #6 aborted                                                                              · LOW                                                  0
+   █      64ddc8a  main                  08:42  ! OOMKilling · pod shop-api-7d9f8-oom7k in shop-test
+   █      3447db9  main                  08:40  ✓ build shop-api-43 complete in shop-dev
+   █      64ddc8a  main                  08:38  ✗ CI #812 failed
+   █      64ddc8a  main                  08:35  ! BackOff · pod shop-cache-0 in shop-test · 3 times
    █      3447db9  main                  08:30  docs: rewrite the README for the new cart flow 🚀 and explain how discounts are rounded
+   █      64ddc8a  main                  08:30  ! FailedCreate · replica set shop-api-7d9f8 in shop-test · 3 times
+   █      64ddc8a  main                  08:20  ! ProgressDeadlineExceeded · deployment shop-api in shop-test
    │
    █      64ddc8a  main                  06:45  ✗ main #41 failed
+   █      64ddc8a  main                  06:15  ! BuildFailed · build shop-api-41 in shop-dev
+   █      64ddc8a  main                  06:12  ! FailedMount · pod shop-api-41-build in shop-dev · 2 times
    │
    █      6adc455  feature/payments-re…  04:31  ✗ CI #815 failed
    │
@@ -27,19 +35,11 @@
    █      64ddc8a  main                  03:10  ✓ build shop-api-42 complete in shop-dev
    │
    █      64ddc8a  main                  02:54  ✗ build shop-api-41 failed in shop-dev
-   █      64ddc8a  main                  02:49  ○ build shop-api-39 cancelled in shop-dev
-   █      64ddc8a  main                  02:30  feat(payments): retry failed payments with..., and a subject long enough to need cutting
-   │
-   │      ────────────────────────────── Yesterday · Sun, Mar 1 ──────────────────────────────────────────────────────────────────────────
-   █      917f7b3  main                  13:30  perf(cart): cache price lookups
-   │
-   │      ────────────────────────────── Sat, Feb 28 ─────────────────────────────────────────────────────────────────────────────────────
-   █      1bb16fb  main                  01:30  Merge pull request #23 from demo/feature/i18n
 
   │
   │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                   Git   GitHub   Jenkins   OpenShift   Snyk
   │
-  │   customer-notification-service   shop   shop-web                                                                         34 events
+  │   customer-notification-service   shop   shop-web                                                                         42 events
   │
 
                                                                        tab Git · enter show in Snyk · → details · r refresh · ↑/↓ navigate           ● upgrade  ● override  ● no fix  ! mature exploit
@@ -58,15 +58,23 @@
    █      bf08113  dev                   09:27  ✓ build shop-api-44 complete in shop-dev
    █      3447db9  main                  09:01  ✓ Deploy to shop-prod with a long workflow name #77 passed
    █      3447db9  main                  09:00  ✓ main #42 passed
+   █      64ddc8a  main                  09:00  ! BackOff · pod shop-api-7d9f8-x2k4q in shop-test · 61 times
    │
+   █      64ddc8a  main                  08:59  ! Unhealthy · pod shop-api-7d9f8-x2k4q in shop-test · 42 times
    █      3447db9  main                  08:55  ✓ CI #813 passed
    █      e6209dd  dev                   08:44  ○ CI #811 cancelled
    █      e6209dd  dev                   08:43  ○ dev #6 aborted
+   █      64ddc8a  main                  08:42  ! OOMKilling · pod shop-api-7d9f8-oom7k in shop-test
    █      3447db9  main                  08:40  ✓ build shop-api-43 complete in shop-dev
    █      64ddc8a  main                  08:38  ✗ CI #812 failed
+   █      64ddc8a  main                  08:35  ! BackOff · pod shop-cache-0 in shop-test · 3 times
    █      3447db9  main                  08:30  docs: rewrite the README for the new cart flow 🚀 and explain how discounts are rounded
+   █      64ddc8a  main                  08:30  ! FailedCreate · replica set shop-api-7d9f8 in shop-test · 3 times
+   █      64ddc8a  main                  08:20  ! ProgressDeadlineExceeded · deployment shop-api in shop-test
    │
    █      64ddc8a  main                  06:45  ✗ main #41 failed
+   █      64ddc8a  main                  06:15  ! BuildFailed · build shop-api-41 in shop-dev
+   █      64ddc8a  main                  06:12  ! FailedMount · pod shop-api-41-build in shop-dev · 2 times
    │
    █      6adc455  feature/payments-re…  04:31  ✗ CI #815 failed
    │
@@ -74,19 +82,11 @@
    █      64ddc8a  main                  03:10  ✓ build shop-api-42 complete in shop-dev
    │
    █      64ddc8a  main                  02:54  ✗ build shop-api-41 failed in shop-dev
-   █      64ddc8a  main                  02:49  ○ build shop-api-39 cancelled in shop-dev
-   █      64ddc8a  main                  02:30  feat(payments): retry failed payments with..., and a subject long enough to need cutting
-   │
-   │      ────────────────────────────── Yesterday · Sun, Mar 1 ──────────────────────────────────────────────────────────────────────────
-   █      917f7b3  main                  13:30  perf(cart): cache price lookups
-   │
-   │      ────────────────────────────── Sat, Feb 28 ─────────────────────────────────────────────────────────────────────────────────────
-   █      1bb16fb  main                  01:30  Merge pull request #23 from demo/feature/i18n
 
   │
   │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                   Git   GitHub   Jenkins   OpenShift   Snyk
   │
-  │   customer-notification-service   shop   shop-web                                                                         34 events
+  │   customer-notification-service   shop   shop-web                                                                         42 events
   │
 
                                                             tab Git · enter show in GitHub · → details · o open · r refresh · ↑/↓ navigate       ✓ passed  ● running  ✗ failed  – skipped  ○ cancelled
@@ -105,15 +105,23 @@
    █      bf08113  dev                   09:27  ✓ build shop-api-44 complete in shop-dev
    █      3447db9  main                  09:01  ✓ Deploy to shop-prod with a long workflow name #77 passed
    █      3447db9  main                  09:00  ✓ main #42 passed
+   █      64ddc8a  main                  09:00  ! BackOff · pod shop-api-7d9f8-x2k4q in shop-test · 61 times
    │
+   █      64ddc8a  main                  08:59  ! Unhealthy · pod shop-api-7d9f8-x2k4q in shop-test · 42 times
    █      3447db9  main                  08:55  ✓ CI #813 passed
    █      e6209dd  dev                   08:44  ○ CI #811 cancelled
    █      e6209dd  dev                   08:43  ○ dev #6 aborted
+   █      64ddc8a  main                  08:42  ! OOMKilling · pod shop-api-7d9f8-oom7k in shop-test
    █      3447db9  main                  08:40  ✓ build shop-api-43 complete in shop-dev
    █      64ddc8a  main                  08:38  ✗ CI #812 failed
+   █      64ddc8a  main                  08:35  ! BackOff · pod shop-cache-0 in shop-test · 3 times
    █      3447db9  main                  08:30  docs: rewrite the README for the new cart flow 🚀 and explain how discounts are rounded
+   █      64ddc8a  main                  08:30  ! FailedCreate · replica set shop-api-7d9f8 in shop-test · 3 times
+   █      64ddc8a  main                  08:20  ! ProgressDeadlineExceeded · deployment shop-api in shop-test
    │
    █      64ddc8a  main                  06:45  ✗ main #41 failed
+   █      64ddc8a  main                  06:15  ! BuildFailed · build shop-api-41 in shop-dev
+   █      64ddc8a  main                  06:12  ! FailedMount · pod shop-api-41-build in shop-dev · 2 times
    │
    █      6adc455  feature/payments-re…  04:31  ✗ CI #815 failed
    │
@@ -121,19 +129,11 @@
    █      64ddc8a  main                  03:10  ✓ build shop-api-42 complete in shop-dev
    │
    █      64ddc8a  main                  02:54  ✗ build shop-api-41 failed in shop-dev
-   █      64ddc8a  main                  02:49  ○ build shop-api-39 cancelled in shop-dev
-   █      64ddc8a  main                  02:30  feat(payments): retry failed payments with..., and a subject long enough to need cutting
-   │
-   │      ────────────────────────────── Yesterday · Sun, Mar 1 ──────────────────────────────────────────────────────────────────────────
-   █      917f7b3  main                  13:30  perf(cart): cache price lookups
-   │
-   │      ────────────────────────────── Sat, Feb 28 ─────────────────────────────────────────────────────────────────────────────────────
-   █      1bb16fb  main                  01:30  Merge pull request #23 from demo/feature/i18n
 
   │
   │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                   Git   GitHub   Jenkins   OpenShift   Snyk
   │
-  │   customer-notification-service   shop   shop-web                                                                         34 events
+  │   customer-notification-service   shop   shop-web                                                                         42 events
   │
 
                                                               tab Git · enter collapse · o open · esc back · ←/→ switch tab · ↑/↓ navigate       ✓ passed  ● running  ✗ failed  – skipped  ○ cancelled
@@ -152,15 +152,23 @@
    █      bf08113  dev                   09:27  ✓ build shop-api-44 complete in shop-dev
    █      3447db9  main                  09:01  ✓ Deploy to shop-prod with a long workflow name #77 passed
    █      3447db9  main                  09:00  ✓ main #42 passed
+   █      64ddc8a  main                  09:00  ! BackOff · pod shop-api-7d9f8-x2k4q in shop-test · 61 times
    │
+   █      64ddc8a  main                  08:59  ! Unhealthy · pod shop-api-7d9f8-x2k4q in shop-test · 42 times
    █      3447db9  main                  08:55  ✓ CI #813 passed
    █      e6209dd  dev                   08:44  ○ CI #811 cancelled
    █      e6209dd  dev                   08:43  ○ dev #6 aborted
+   █      64ddc8a  main                  08:42  ! OOMKilling · pod shop-api-7d9f8-oom7k in shop-test
    █      3447db9  main                  08:40  ✓ build shop-api-43 complete in shop-dev
    █      64ddc8a  main                  08:38  ✗ CI #812 failed
+   █      64ddc8a  main                  08:35  ! BackOff · pod shop-cache-0 in shop-test · 3 times
    █      3447db9  main                  08:30  docs: rewrite the README for the new cart flow 🚀 and explain how discounts are rounded
+   █      64ddc8a  main                  08:30  ! FailedCreate · replica set shop-api-7d9f8 in shop-test · 3 times
+   █      64ddc8a  main                  08:20  ! ProgressDeadlineExceeded · deployment shop-api in shop-test
    │
    █      64ddc8a  main                  06:45  ✗ main #41 failed
+   █      64ddc8a  main                  06:15  ! BuildFailed · build shop-api-41 in shop-dev
+   █      64ddc8a  main                  06:12  ! FailedMount · pod shop-api-41-build in shop-dev · 2 times
    │
    █      6adc455  feature/payments-re…  04:31  ✗ CI #815 failed
    │
@@ -168,19 +176,11 @@
    █      64ddc8a  main                  03:10  ✓ build shop-api-42 complete in shop-dev
    │
    █      64ddc8a  main                  02:54  ✗ build shop-api-41 failed in shop-dev
-   █      64ddc8a  main                  02:49  ○ build shop-api-39 cancelled in shop-dev
-   █      64ddc8a  main                  02:30  feat(payments): retry failed payments with..., and a subject long enough to need cutting
-   │
-   │      ────────────────────────────── Yesterday · Sun, Mar 1 ──────────────────────────────────────────────────────────────────────────
-   █      917f7b3  main                  13:30  perf(cart): cache price lookups
-   │
-   │      ────────────────────────────── Sat, Feb 28 ─────────────────────────────────────────────────────────────────────────────────────
-   █      1bb16fb  main                  01:30  Merge pull request #23 from demo/feature/i18n
 
   │
   │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                   Git   GitHub   Jenkins   OpenShift   Snyk
   │
-  │   customer-notification-service   shop   shop-web                                                                         34 events
+  │   customer-notification-service   shop   shop-web                                                                         42 events
   │
 
                                                               tab Git · enter view log · o open · esc back · ←/→ switch tab · ↑/↓ navigate       ✓ passed  ● running  ✗ failed  – skipped  ○ cancelled
@@ -199,15 +199,23 @@
    █      bf08113  dev                   09:27  ✓ build shop-api-44 complete in shop-dev
    █      3447db9  main                  09:01  ✓ Deploy to shop-prod with a long workflow name #77 passed
    █      3447db9  main                  09:00  ✓ main #42 passed
+   █      64ddc8a  main                  09:00  ! BackOff · pod shop-api-7d9f8-x2k4q in shop-test · 61 times
    │
+   █      64ddc8a  main                  08:59  ! Unhealthy · pod shop-api-7d9f8-x2k4q in shop-test · 42 times
    █      3447db9  main                  08:55  ✓ CI #813 passed
    █      e6209dd  dev                   08:44  ○ CI #811 cancelled
    █      e6209dd  dev                   08:43  ○ dev #6 aborted
+   █      64ddc8a  main                  08:42  ! OOMKilling · pod shop-api-7d9f8-oom7k in shop-test
    █      3447db9  main                  08:40  ✓ build shop-api-43 complete in shop-dev
    █      64ddc8a  main                  08:38  ✗ CI #812 failed
+   █      64ddc8a  main                  08:35  ! BackOff · pod shop-cache-0 in shop-test · 3 times
    █      3447db9  main                  08:30  docs: rewrite the README for the new cart flow 🚀 and explain how discounts are rounded
+   █      64ddc8a  main                  08:30  ! FailedCreate · replica set shop-api-7d9f8 in shop-test · 3 times
+   █      64ddc8a  main                  08:20  ! ProgressDeadlineExceeded · deployment shop-api in shop-test
    │
    █      64ddc8a  main                  06:45  ✗ main #41 failed
+   █      64ddc8a  main                  06:15  ! BuildFailed · build shop-api-41 in shop-dev
+   █      64ddc8a  main                  06:12  ! FailedMount · pod shop-api-41-build in shop-dev · 2 times
    │
    █      6adc455  feature/payments-re…  04:31  ✗ CI #815 failed
    │
@@ -215,19 +223,11 @@
    █      64ddc8a  main                  03:10  ✓ build shop-api-42 complete in shop-dev
    │
    █      64ddc8a  main                  02:54  ✗ build shop-api-41 failed in shop-dev
-   █      64ddc8a  main                  02:49  ○ build shop-api-39 cancelled in shop-dev
-   █      64ddc8a  main                  02:30  feat(payments): retry failed payments with..., and a subject long enough to need cutting
-   │
-   │      ────────────────────────────── Yesterday · Sun, Mar 1 ──────────────────────────────────────────────────────────────────────────
-   █      917f7b3  main                  13:30  perf(cart): cache price lookups
-   │
-   │      ────────────────────────────── Sat, Feb 28 ─────────────────────────────────────────────────────────────────────────────────────
-   █      1bb16fb  main                  01:30  Merge pull request #23 from demo/feature/i18n
 
   │
   │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                   Git   GitHub   Jenkins   OpenShift   Snyk
   │
-  │   customer-notification-service   shop   shop-web                                                                         34 events
+  │   customer-notification-service   shop   shop-web                                                                         42 events
   │
 
                                                             tab Git · enter show in GitHub · → details · o open · r refresh · ↑/↓ navigate       ✓ passed  ● running  ✗ failed  – skipped  ○ cancelled

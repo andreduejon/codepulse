@@ -1,15 +1,17 @@
 /** OpenShift as a provider module. */
 
 import { openShiftProvider } from "../../../core/openshift/definition";
-import { openShiftEvents } from "../../../core/openshift/events";
+import { isOpenShiftWarningEvent, openShiftEvents } from "../../../core/openshift/events";
 import { OPENSHIFT_EVENTS_TAB } from "../../../core/openshift/id";
 import type { OpenShiftResource } from "../../../core/openshift/types";
 import type { TabNotice } from "../../app/app-tab-notice";
+import { statusIcon } from "../../utils/status-icon";
 import { providerModule } from "../module";
+import { statusColor } from "../shared/status";
 import { type OpenShiftDetailSource, openshiftDetail, openshiftEventsDetail } from "./detail-entry";
 import { OPENSHIFT_GRAPH_COLUMNS } from "./graph-columns";
 import { OPENSHIFT_HELP } from "./help";
-import { OPENSHIFT_LEGEND } from "./legend";
+import { OPENSHIFT_LEGEND, OPENSHIFT_WARNING_LEGEND } from "./legend";
 import { buildOpenShiftProviderItems } from "./menu-items";
 import OpenShiftResourceDialog from "./resource-dialog";
 import { useOpenShift } from "./use-openshift";
@@ -80,5 +82,11 @@ export const openShiftModule = providerModule({
     buildOpenShiftProviderItems(menu.settings, undefined, menu.update, menu.lastRefresh, menu.tokenIsSet),
   detailEntries: { [openShiftProvider.id]: openshiftDetail, [OPENSHIFT_EVENTS_TAB]: openshiftEventsDetail },
   help: OPENSHIFT_HELP,
-  legend: OPENSHIFT_LEGEND,
+  legend: [...OPENSHIFT_LEGEND, OPENSHIFT_WARNING_LEGEND],
+  // A saved warning: the `!` its resource shows in the Resources tab. A build: how it ended.
+  eventMark: event => {
+    if (isOpenShiftWarningEvent(event)) return { icon: "!", color: theme => theme.warning };
+    const status = event.status;
+    return status && { icon: statusIcon(status), color: theme => statusColor(theme, status) };
+  },
 });

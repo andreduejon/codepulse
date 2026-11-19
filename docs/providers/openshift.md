@@ -219,6 +219,11 @@ resource that is gone says `(cached)` until the cluster's list drops it).
   Normal events it lists now, muted for those shown from the cache (a warning OpenShift
   deleted, or an event or failure about a resource that is gone).
 - In **Resources**, a resource OpenShift warned about shows `!` before its status mark.
+- On the **Dashboard** each saved warning is one event at the time it was first seen,
+  with its yellow `!` and how often it happened (`! BackOff · pod shop-api-x2k4q in
+  shop-test · 61 times`); repeating never moves it. Its details mark the resource it is
+  about. Failures from a resource's status and Normal events are not saved, so they are
+  not on the Dashboard.
 - The **Events** tab starts with **Reload commit** and the count (`total events`), then a
   tree: namespace, each reason (failures in red, then the warnings' in the warning colour,
   then the Normal events', each newest first), then the resources it happened to, newest

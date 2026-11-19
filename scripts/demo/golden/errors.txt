@@ -53,29 +53,29 @@
    █      3447db9  main    09:30  ▲ scan · 4 vulnerabilities · 1 critical · 3 high · 0 medium · 0 low                                         Rescan commit
    █      bf08113  dev     09:30  ▲ scan · 4 vulnerabilities · 1 critical · 3 high · 0 medium · 0 low                                         Copy scan as JSON
    █      bf08113  dev     09:27  ✓ build shop-api-44 complete in shop-dev
-   │                                                                                                                                          Group by                                      [severity]
-   █      3447db9  main    08:40  ✓ build shop-api-43 complete in shop-dev                                                                    Enter vulnerability filter...                          4
-   █      3447db9  main    08:30  docs: rewrite the README for the new cart flow 🚀 and explain how discounts are rounded
-   │                                                                                                                                          ▾ CRITICAL                                             1
-   █      64ddc8a  main    03:10  ✓ build shop-api-42 complete in shop-dev                                                                    └─ ▸ CVE-2022-23540                                9.1 ●
-   │                                                                                                                                          ▾ HIGH                                                 3
-   █      64ddc8a  main    02:54  ✗ build shop-api-41 failed in shop-dev                                                                      ├─ ▸ CVE-2026-10001                                8.2 ●
-   █      64ddc8a  main    02:49  ○ build shop-api-39 cancelled in shop-dev                                                                   ├─ ▸ CVE-2020-8203                                 7.5 ●
-   █      64ddc8a  main    02:30  feat(payments): retry failed payments with expone...backoff, and a subject long enough to need cutting      └─ ▸ CVE-2024-4068                                 7.5 ●
+   █      64ddc8a  main    09:00  ! BackOff · pod shop-api-7d9f8-x2k4q in shop-test · 61 times                                                Group by                                      [severity]
+   │                                                                                                                                          Enter vulnerability filter...                          4
+   █      64ddc8a  main    08:59  ! Unhealthy · pod shop-api-7d9f8-x2k4q in shop-test · 42 times
+   █      64ddc8a  main    08:42  ! OOMKilling · pod shop-api-7d9f8-oom7k in shop-test                                                        ▾ CRITICAL                                             1
+   █      3447db9  main    08:40  ✓ build shop-api-43 complete in shop-dev                                                                    └─ ▸ CVE-2022-23540                                9.1 ●
+   █      64ddc8a  main    08:35  ! BackOff · pod shop-cache-0 in shop-test · 3 times                                                         ▾ HIGH                                                 3
+   █      3447db9  main    08:30  docs: rewrite the README for the new cart flow 🚀 and explain how discounts are rounded                     ├─ ▸ CVE-2026-10001                                8.2 ●
+   █      64ddc8a  main    08:30  ! FailedCreate · replica set shop-api-7d9f8 in shop-test · 3 times                                          ├─ ▸ CVE-2020-8203                                 7.5 ●
+   █      64ddc8a  main    08:20  ! ProgressDeadlineExceeded · deployment shop-api in shop-test                                               └─ ▸ CVE-2024-4068                                 7.5 ●
    │                                                                                                                                          · MEDIUM                                               0
-   │      ──────────────── Yesterday · Sun, Mar 1 ────────────────────────────────────────────────────────────────────────────────────────    · LOW                                                  0
+   █      64ddc8a  main    06:15  ! BuildFailed · build shop-api-41 in shop-dev                                                               · LOW                                                  0
+   █      64ddc8a  main    06:12  ! FailedMount · pod shop-api-41-build in shop-dev · 2 times
+   │
+   █      64ddc8a  main    03:10  ✓ build shop-api-42 complete in shop-dev
+   │
+   █      64ddc8a  main    02:54  ✗ build shop-api-41 failed in shop-dev
+   █      64ddc8a  main    02:49  ○ build shop-api-39 cancelled in shop-dev
+   █      64ddc8a  main    02:30  feat(payments): retry failed payments with expone...backoff, and a subject long enough to need cutting
+   │
+   │      ──────────────── Yesterday · Sun, Mar 1 ────────────────────────────────────────────────────────────────────────────────────────
    █      917f7b3  main    13:30  perf(cart): cache price lookups
    │
    │      ──────────────── Sat, Feb 28 ───────────────────────────────────────────────────────────────────────────────────────────────────
-   █      1bb16fb  main    01:30  Merge pull request #23 from demo/feature/i18n
-   │
-   │      ──────────────── Fri, Feb 27 ───────────────────────────────────────────────────────────────────────────────────────────────────
-   █      fe7db4d  main    21:30  Merge pull request #9 from demo/feature/search
-   │
-   █      179f8b7  main    15:30  Merge pull request #20 from demo/feature/a11y
-   │
-   █      0d02d96  main    11:30  Merge pull request #22 from demo/chore/eslint-9
-   │
 
   │
   │     Errors from GitHub and Jenkins                                                                                              ✕
@@ -86,7 +86,7 @@
   │
   │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                   Git   GitHub   Jenkins   OpenShift   Snyk
   │
-  │   customer-notification-service   shop   shop-web                                                                         22 events
+  │   customer-notification-service   shop   shop-web                                                                         30 events
   │
 
                                                                        tab Git · enter show in Snyk · → details · r refresh · ↑/↓ navigate           ● upgrade  ● override  ● no fix  ! mature exploit

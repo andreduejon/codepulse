@@ -763,14 +763,18 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
   return {
     /** A commit's builds and resources, or null. Not reactive: the adapter makes it so. */
     getCommitData: (sha: string) => commits.get(sha.toLowerCase()) ?? null,
-    /** Every build held for the open repository, shaped like cache entries. Not reactive: the adapter makes it so. */
+    /**
+     * Every build and saved warning held for the open repository, shaped like cache entries. Not reactive: the adapter
+     * makes it so.
+     */
     heldEntries: (): OpenShiftCacheEntry[] =>
-      [...commits.values()].map(commit => ({
+      [...commits].map(([sha, commit]) => ({
         sha: commit.sha,
         builds: commit.namespaces
           .flatMap(namespace => namespace.builds)
           .map(toCachedBuild)
           .filter(build => build !== null),
+        warnings: warningsBySha.get(sha) ?? [],
       })),
     queriedSHAs,
     /** Whether the commit still has what the warning is about (the Events tab's sections, the graph's count). */
