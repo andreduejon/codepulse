@@ -46,13 +46,13 @@ describe("provider column widths", () => {
     const lanes = { live: { failCount: 1, runningCount: 1, unknownCount: 1, passCount: 1 } };
     expect(OPENSHIFT_GRAPH_COLUMNS.widths(new Map([["a", badge({ lanes })]])).first).toBe(15 + 2);
     // Four ` 1 ` chips (15), a gap and ` 12 `, then the padding.
-    const cached = OPENSHIFT_GRAPH_COLUMNS.widths(new Map([["a", badge({ lanes, cachedCount: 12 })]]));
+    const cached = OPENSHIFT_GRAPH_COLUMNS.widths(new Map([["a", badge({ lanes, counts: { cached: 12 } })]]));
     expect(cached.first).toBe(15 + 1 + 4 + 2);
   });
 
   test("OpenShift Events fits the warning count and the muted cached one", () => {
     const widths = OPENSHIFT_GRAPH_COLUMNS.widths(
-      new Map([["a", badge({ warningCount: 120, cachedEventCount: 3400 })]]),
+      new Map([["a", badge({ counts: { warnings: 120, cachedEvents: 3400 } })]]),
     );
     // ` 120 ` (5), a gap, ` 3400 ` (6): wider than the Date column.
     expect(widths.second).toBe(Math.max(DATE_COL_WIDTH, 5 + 1 + 6));

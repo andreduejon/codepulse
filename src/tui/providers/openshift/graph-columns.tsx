@@ -1,3 +1,4 @@
+import { openShiftBadgeCounts } from "../../../core/openshift/resources";
 import type { OpenShiftStatus } from "../../../core/openshift/types";
 import type { GraphBadge } from "../../../core/provider-model";
 import { AUTHOR_COL_WIDTH, DATE_COL_WIDTH } from "../../constants";
@@ -24,7 +25,7 @@ const cachedChip = (theme: Theme, count: number | undefined): StatusChip[] =>
 
 /** Resources: the status counts of what the cluster lists now, then how many only the cache has. */
 function resourceChips(theme: Theme, badge: GraphBadge | undefined): StatusChip[] {
-  return [...statusCountChips(theme, badge?.lanes?.live), ...cachedChip(theme, badge?.cachedCount)];
+  return [...statusCountChips(theme, badge?.lanes?.live), ...cachedChip(theme, openShiftBadgeCounts(badge).cached)];
 }
 
 /**
@@ -32,13 +33,14 @@ function resourceChips(theme: Theme, badge: GraphBadge | undefined): StatusChip[
  * the warning color, the Normal events it lists now in the pass color, then how many only the cache has.
  */
 function eventChips(theme: Theme, badge: GraphBadge | undefined): StatusChip[] {
+  const counts = eventCounts(badge);
   const chip = (count: number | undefined, bg: string): StatusChip[] =>
     count ? [{ text: String(count), fg: theme.background, bg }] : [];
   return [
-    ...chip(badge?.failureCount, statusColor(theme, "fail")),
-    ...chip(badge?.warningCount, theme.warning),
-    ...chip(badge?.normalEventCount, statusColor(theme, "pass")),
-    ...cachedChip(theme, badge?.cachedEventCount),
+    ...chip(counts.failures, statusColor(theme, "fail")),
+    ...chip(counts.warnings, theme.warning),
+    ...chip(counts.normal, statusColor(theme, "pass")),
+    ...cachedChip(theme, counts.cachedEvents),
   ];
 }
 
@@ -46,10 +48,16 @@ function eventChips(theme: Theme, badge: GraphBadge | undefined): StatusChip[] {
 const resourceTexts = (badge: GraphBadge) => {
   const live = badge.lanes?.live;
   const counts = live ? [live.failCount, live.runningCount, live.unknownCount, live.passCount] : [];
-  return [...counts, badge.cachedCount ?? 0].filter(count => count > 0).map(String);
+  return [...counts, openShiftBadgeCounts(badge).cached ?? 0].filter(count => count > 0).map(String);
 };
+/** The Events column's counts, in the order drawn. */
+function eventCounts(badge: GraphBadge | undefined) {
+  const { failures = 0, warnings = 0, normal = 0, cachedEvents = 0 } = openShiftBadgeCounts(badge);
+  return { failures, warnings, normal, cachedEvents };
+}
+
 const eventTexts = (badge: GraphBadge) =>
-  [badge.failureCount ?? 0, badge.warningCount ?? 0, badge.normalEventCount ?? 0, badge.cachedEventCount ?? 0]
+  Object.values(eventCounts(badge))
     .filter(count => count > 0)
     .map(String);
 

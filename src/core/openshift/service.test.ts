@@ -7,6 +7,7 @@ import type { ProviderStatus } from "../provider-status";
 import { OPENSHIFT_BANNER } from "./banner";
 import { commitDataFromCacheEntry } from "./commit-data";
 import type { OpenShiftCacheEntry } from "./merge";
+import { openShiftBadgeCounts } from "./resources";
 import { createOpenShiftService, type OpenShiftApiPort, type OpenShiftCachePort } from "./service";
 import type { OpenShiftResource } from "./types";
 import { DEFAULT_OPENSHIFT_CONFIG } from "./types";
@@ -272,15 +273,15 @@ test("a warning about a resource the live list no longer has is not present; the
       .sort(),
   ).toEqual(["event-1", "event-pod"]);
   expect(h.service.warningIsPresent(SHA, podWarning)).toBe(true);
-  expect(h.app.badges.get(SHA)).toMatchObject({ warningCount: 2 });
-  expect(h.app.badges.get(SHA)?.cachedEventCount).toBeUndefined();
+  expect(openShiftBadgeCounts(h.app.badges.get(SHA))).toMatchObject({ warnings: 2 });
+  expect(openShiftBadgeCounts(h.app.badges.get(SHA)).cachedEvents).toBeUndefined();
   // The pod was replaced by another one with the same commit.
   listed = liveList([pod("app-1-fghij", "pod-2")]);
   await liveOnce();
   expect(h.service.warningIsPresent(SHA, podWarning)).toBe(false);
   expect(h.service.warningIsPresent(SHA, buildWarning())).toBe(true);
   expect(h.service.getCommitData(SHA)?.warnings).toHaveLength(2);
-  expect(h.app.badges.get(SHA)).toMatchObject({ warningCount: 1, cachedEventCount: 1 });
+  expect(openShiftBadgeCounts(h.app.badges.get(SHA))).toMatchObject({ warnings: 1, cachedEvents: 1 });
 });
 
 test("a finished build the cluster prunes while the app runs is shown from the cache from the next list on", async () => {
@@ -303,7 +304,7 @@ test("a finished build the cluster prunes while the app runs is shown from the c
   expect(h.service.getCommitData(SHA)?.namespaces[0]?.builds.map(b => [b.name, b.cacheOnly])).toEqual([
     ["app-1", true],
   ]);
-  expect(h.app.badges.get(SHA)?.cachedCount).toBe(1);
+  expect(openShiftBadgeCounts(h.app.badges.get(SHA)).cached).toBe(1);
 });
 
 test("a build only the cache has gives its saved log, or none: the cluster no longer has it to ask", async () => {
@@ -387,7 +388,7 @@ test("Normal events show with the commit while the cluster lists them, and are n
   expect(h.service.getCommitData(SHA)?.warnings?.map(e => e.id)).toEqual(["event-1"]);
   expect(h.saved.get(SHA)?.warnings?.map(e => e.id)).toEqual(["event-1"]);
   // The graph's Events column counts it apart from the warnings: green while listed.
-  expect(h.app.badges.get(SHA)).toMatchObject({ warningCount: 1, normalEventCount: 1 });
+  expect(openShiftBadgeCounts(h.app.badges.get(SHA))).toMatchObject({ warnings: 1, normal: 1 });
   // The cluster no longer lists it: it is gone, no cache keeps it.
   h.cluster.warnings = { warnings: [buildWarning()], normal: [], denied: [], failed: [] };
   await h.service.refresh();
@@ -441,7 +442,7 @@ test("a Normal event about a pod that is gone stays, cached, while the cluster s
   live.state.pods = [live.pod("app-1-fghij", "pod-2")];
   await live.liveOnce();
   expect(h.service.getCommitData(SHA)?.normalEvents?.map(e => e.id)).toEqual(["killing"]);
-  expect(h.app.badges.get(SHA)).toMatchObject({ cachedEventCount: 1 });
+  expect(openShiftBadgeCounts(h.app.badges.get(SHA))).toMatchObject({ cachedEvents: 1 });
   // OpenShift deleted the event: it is gone, nothing keeps a Normal event.
   h.cluster.warnings = { warnings: [], normal: [], denied: [], failed: [] };
   await h.service.refresh();
@@ -499,8 +500,8 @@ test("a failing pod's status shows as the commit's failures and counts red; a bu
   expect(h.service.getCommitData(SHA)?.warnings?.map(w => w.id)).toEqual(["mount"]);
   // The build pod is in the cluster: not cached.
   expect(h.service.warningIsPresent(SHA, mount)).toBe(true);
-  expect(h.app.badges.get(SHA)).toMatchObject({ failureCount: 1, warningCount: 1 });
-  expect(h.app.badges.get(SHA)?.cachedEventCount).toBeUndefined();
+  expect(openShiftBadgeCounts(h.app.badges.get(SHA))).toMatchObject({ failures: 1, warnings: 1 });
+  expect(openShiftBadgeCounts(h.app.badges.get(SHA)).cachedEvents).toBeUndefined();
   // Fine again: no failure is kept.
   live.state.pods = [{ ...crashing, status: "pass", statusRows: undefined }, buildPod];
   await live.liveOnce();

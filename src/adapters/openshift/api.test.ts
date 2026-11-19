@@ -7,6 +7,7 @@ import {
   buildOpenShiftNamespaceMarkers,
   commitLabelSelector,
   commitShaFromItem,
+  openShiftBadgeCounts,
   resourceFromWatchObject,
 } from "../../core/openshift/resources";
 import type { OpenShiftCommitData, OpenShiftResource } from "../../core/openshift/types";
@@ -907,7 +908,7 @@ describe("buildOpenShiftGraphBadges", () => {
     ]);
     const badge = buildOpenShiftGraphBadges(data).get(SHA);
     expect(badge?.lanes?.live).toEqual({ passCount: 1, failCount: 1, runningCount: 1, unknownCount: 0 });
-    expect(badge?.cachedCount).toBe(1);
+    expect(openShiftBadgeCounts(badge).cached).toBe(1);
   });
 
   test("Events counts the warnings the cluster still reports; the rest apart, also when only they are left", () => {
@@ -924,19 +925,18 @@ describe("buildOpenShiftGraphBadges", () => {
     };
     const withResources = buildOpenShiftCommitMap([{ ...resource("pod-1", "pass"), commitSha: SHA }]);
     const quiet = buildOpenShiftGraphBadges(withResources).get(SHA);
-    expect(quiet?.warningCount).toBeUndefined();
-    expect(quiet?.cachedEventCount).toBeUndefined();
+    expect(openShiftBadgeCounts(quiet).warnings).toBeUndefined();
+    expect(openShiftBadgeCounts(quiet).cachedEvents).toBeUndefined();
     const commit = withResources.get(SHA) as OpenShiftCommitData;
     const three = [warning, { ...warning, id: "event-2", count: 40 }, { ...warning, id: "event-3" }];
     const cachedOnes = (_sha: string, entry: { id: string }) => entry.id === "event-3";
     const warned = buildOpenShiftGraphBadges(new Map([[SHA, { ...commit, warnings: three }]]), cachedOnes).get(SHA);
-    expect(warned).toMatchObject({ warningCount: 2, cachedEventCount: 1 });
+    expect(openShiftBadgeCounts(warned)).toMatchObject({ warnings: 2, cachedEvents: 1 });
     // The pod is gone; its warnings stay with the commit, only in the cache.
     const onlyWarnings = new Map([[SHA, { sha: SHA, namespaces: [], liveFetched: true, warnings: [warning] }]]);
-    expect(buildOpenShiftGraphBadges(onlyWarnings, () => true).get(SHA)).toMatchObject({
-      cachedEventCount: 1,
-      resourceCount: 0,
-    });
+    const left = buildOpenShiftGraphBadges(onlyWarnings, () => true).get(SHA);
+    expect(left?.resourceCount).toBe(0);
+    expect(openShiftBadgeCounts(left)).toMatchObject({ cachedEvents: 1 });
     // Normal events the cluster lists now: green while their resource is there; about a gone one, with the cached.
     const normal = [
       { ...warning, id: "pulled", reason: "Pulled" },
@@ -948,8 +948,8 @@ describe("buildOpenShiftGraphBadges", () => {
       () => false,
       (_sha, entry) => entry.id === "killing",
     ).get(SHA);
-    expect(live).toMatchObject({ normalEventCount: 2, cachedEventCount: 1 });
-    expect(live?.warningCount).toBeUndefined();
+    expect(openShiftBadgeCounts(live)).toMatchObject({ normal: 2, cachedEvents: 1 });
+    expect(openShiftBadgeCounts(live).warnings).toBeUndefined();
   });
 });
 

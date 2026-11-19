@@ -648,6 +648,28 @@ export function buildOpenShiftNamespaceMarkers(
  * A commit's badges: the status counts of what the cluster lists now, and how many resources only the cache has;
  * the warnings the cluster still reports, and how many only the cache has (`isCachedWarning`; by default none).
  */
+/** OpenShift's own counts on a graph badge (`GraphBadge.counts`), each only above zero. */
+export interface OpenShiftBadgeCounts {
+  /** Its resources only the cache has: the cluster no longer lists them (Resources, muted). */
+  cached?: number;
+  /** What its failing resources' status says is wrong (Events, red). */
+  failures?: number;
+  /** The warnings the cluster still reports (Events, the warning color). */
+  warnings?: number;
+  /** The Normal events the cluster lists now (Events, green). */
+  normal?: number;
+  /** Its events shown from the cache: a warning OpenShift deleted, or one about a resource that is gone (Events, muted). */
+  cachedEvents?: number;
+}
+
+/** A badge's OpenShift counts. */
+export const openShiftBadgeCounts = (badge: GraphBadge | undefined): OpenShiftBadgeCounts => badge?.counts ?? {};
+
+function badgeCounts(counts: Required<OpenShiftBadgeCounts>): Pick<GraphBadge, "counts"> {
+  const above = Object.entries(counts).filter(([, count]) => count > 0);
+  return above.length > 0 ? { counts: Object.fromEntries(above) } : {};
+}
+
 export function buildOpenShiftGraphBadges(
   data: Map<string, OpenShiftCommitData>,
   isCachedWarning: (sha: string, warning: OpenShiftWarning) => boolean = () => false,
@@ -687,11 +709,13 @@ export function buildOpenShiftGraphBadges(
       lanes: { live: statusCounts(listed) },
       latestRunAt: "",
       latestStatus: badge,
-      ...(cachedCount > 0 ? { cachedCount } : {}),
-      ...(failureCount > 0 ? { failureCount } : {}),
-      ...(warningCount > 0 ? { warningCount } : {}),
-      ...(normalEventCount > 0 ? { normalEventCount } : {}),
-      ...(cachedEventCount > 0 ? { cachedEventCount } : {}),
+      ...badgeCounts({
+        cached: cachedCount,
+        failures: failureCount,
+        warnings: warningCount,
+        normal: normalEventCount,
+        cachedEvents: cachedEventCount,
+      }),
     });
   }
   return badges;

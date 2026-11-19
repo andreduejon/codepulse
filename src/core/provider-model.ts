@@ -50,19 +50,11 @@ export interface GraphBadge {
   resourceCount?: number;
   /** Named status-count lanes (OpenShift `live`: what the cluster lists now). */
   lanes?: Record<string, GraphStatusCounts>;
-  /** OpenShift: its resources only the cache has, the cluster no longer lists them (a muted chip after the counts). */
-  cachedCount?: number;
-  /** OpenShift: the warnings the cluster still reports about its resources (a yellow chip). */
-  warningCount?: number;
-  /** OpenShift: what its failing resources' status says is wrong (a red chip, before the warnings). */
-  failureCount?: number;
-  /** OpenShift: the Normal events the cluster lists now about its resources (a green chip). */
-  normalEventCount?: number;
   /**
-   * OpenShift: its events shown from the cache: a warning OpenShift deleted, or an event about a resource that is gone
-   * (a muted chip).
+   * A provider's own named counts for its graph columns, only those above zero: the provider names, fills and draws
+   * them (OpenShift's are `OpenShiftBadgeCounts` in core/openshift/resources.ts).
    */
-  cachedEventCount?: number;
+  counts?: Readonly<Record<string, number>>;
   /** OpenShift: the namespaces whose workloads run this commit now, shown with the refs in the graph. */
   namespaces?: NamespaceMarker[];
   /** Severity counts used by scan/quality providers. */
