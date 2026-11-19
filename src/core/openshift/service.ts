@@ -585,7 +585,10 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
     listedNormal = [...keptOf(listedNormal), ...(list.normal ?? [])];
     for (const namespace of config.namespaces) {
       if (unanswered.has(namespace)) continue;
-      listedIds.set(namespace, new Set(list.warnings.filter(entry => entry.namespace === namespace).map(entry => entry.id)));
+      listedIds.set(
+        namespace,
+        new Set(list.warnings.filter(entry => entry.namespace === namespace).map(entry => entry.id)),
+      );
     }
   }
 

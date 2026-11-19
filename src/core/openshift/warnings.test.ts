@@ -120,9 +120,9 @@ describe("OpenShift warnings", () => {
       status: "unknown",
     });
     // A ReplicaSet the commit doesn't hold: by its name and uid, for its events.
-    expect(resourceOfWarning(warning({ kind: "ReplicaSet", name: "shop-api-7d9f8", uid: "rs-uid" }), data)).toMatchObject(
-      { kind: "ReplicaSet", name: "shop-api-7d9f8", uid: "rs-uid" },
-    );
+    expect(
+      resourceOfWarning(warning({ kind: "ReplicaSet", name: "shop-api-7d9f8", uid: "rs-uid" }), data),
+    ).toMatchObject({ kind: "ReplicaSet", name: "shop-api-7d9f8", uid: "rs-uid" });
     // A kind codepulse doesn't know has none.
     expect(resourceOfWarning(warning({ kind: "HorizontalPodAutoscaler", name: "shop-api" }), data)).toBeNull();
   });
@@ -275,7 +275,12 @@ describe("OpenShift warnings", () => {
       [],
       [buildPod],
     );
-    expect(linked.get("a".repeat(40))?.map(entry => entry.id).sort()).toEqual(["by-name", "by-owner"]);
+    expect(
+      linked
+        .get("a".repeat(40))
+        ?.map(entry => entry.id)
+        .sort(),
+    ).toEqual(["by-name", "by-owner"]);
   });
 
   test("before the live list has its new ReplicaSet, the commit's oldest pod marks its rollout", () => {

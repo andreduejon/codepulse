@@ -376,7 +376,11 @@ test("the warnings of a commit codepulse no longer holds are let go with it", as
 
 test("Normal events show with the commit while the cluster lists them, and are never saved", async () => {
   const h = harness();
-  const started = buildWarning({ id: "event-normal", reason: "BuildStarted", message: "Build ns/app-1 is now running" });
+  const started = buildWarning({
+    id: "event-normal",
+    reason: "BuildStarted",
+    message: "Build ns/app-1 is now running",
+  });
   h.cluster.warnings = { warnings: [buildWarning()], normal: [started], denied: [], failed: [] };
   await h.lifecycle.fetchInitial(undefined, undefined, true);
   expect(h.service.getCommitData(SHA)?.normalEvents?.map(e => e.id)).toEqual(["event-normal"]);
@@ -478,7 +482,13 @@ test("a failing pod's status shows as the commit's failures and counts red; a bu
     imageRefs: [],
     labels: { "openshift.io/build.name": "app-1" },
   };
-  const mount = buildWarning({ id: "mount", kind: "Pod", name: "app-1-build", uid: "build-pod", reason: "FailedMount" });
+  const mount = buildWarning({
+    id: "mount",
+    kind: "Pod",
+    name: "app-1-build",
+    uid: "build-pod",
+    reason: "FailedMount",
+  });
   h.cluster.warnings = { warnings: [mount], denied: [], failed: [] };
   live.state.pods = [crashing, buildPod];
   await h.lifecycle.fetchInitial(undefined, undefined, true);
