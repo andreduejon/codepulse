@@ -113,6 +113,7 @@ function harness() {
   );
   return {
     app,
+    cache,
     saved,
     touched,
     api,
@@ -199,6 +200,16 @@ test("a namespace whose events the token may not list is named, until it may", a
   h.cluster.warnings = { warnings: [], denied: [], failed: [] };
   await h.service.refresh();
   expect(h.service.warningsDenied()).toEqual([]);
+});
+
+test("a namespace whose event list failed is named too, until it answers", async () => {
+  const h = harness();
+  h.cluster.warnings = { warnings: [], denied: [], failed: ["ns"] };
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  expect(h.service.warningsFailed()).toEqual(["ns"]);
+  h.cluster.warnings = { warnings: [], denied: [], failed: [] };
+  await h.service.refresh();
+  expect(h.service.warningsFailed()).toEqual([]);
 });
 
 test("a warning is cached when its namespace's last list lacks it; a failed list changes nothing", async () => {
@@ -332,6 +343,22 @@ test("a warning about an older commit only shown from the cache is saved without
   expect(h.touched.get(OLD)).toBe(false);
   // The window's commit is used as before.
   expect(h.touched.get(SHA)).toBe(true);
+});
+
+test("a warning never writes back a commit the cache dropped: its builds and another commit's log stay", async () => {
+  const h = harness();
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  expect(h.saved.get(SHA)?.builds).toHaveLength(1);
+  // The cache limit drops the commit (another commit's builds were saved) just before its new warning is.
+  const mergeMany = h.cache.mergeMany;
+  h.cache.mergeMany = (repo, items, merge, isCurrent, options) => {
+    if (items.some(item => item.incoming.some(entry => "reason" in (entry as object)))) h.saved.delete(SHA);
+    return mergeMany(repo, items, merge, isCurrent, options);
+  };
+  h.cluster.warnings = { warnings: [buildWarning()], denied: [], failed: [] };
+  await h.service.refresh();
+  expect(h.service.getCommitData(SHA)?.warnings?.map(w => w.id)).toEqual(["event-1"]);
+  expect(h.saved.has(SHA)).toBe(false);
 });
 
 test("an answer to the warnings that lands after a reset changes nothing", async () => {

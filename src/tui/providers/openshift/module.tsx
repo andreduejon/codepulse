@@ -16,15 +16,26 @@ import { buildOpenShiftProviderItems } from "./menu-items";
 import OpenShiftResourceDialog from "./resource-dialog";
 import { useOpenShift } from "./use-openshift";
 
-/** Under the Events tab: the namespaces whose warnings it cannot show, and the permission that would. */
-export function eventsDeniedNotice(namespaces: readonly string[]): TabNotice | null {
-  if (namespaces.length === 0) return null;
+/**
+ * Under the Events tab: the namespaces whose warnings it lacks, the token's (and the permission that would let it) or
+ * a list that failed (its warnings are the ones listed before).
+ */
+export function eventsNotice(denied: readonly string[], failed: readonly string[]): TabNotice | null {
+  if (denied.length === 0 && failed.length === 0) return null;
+  const failedText = `Could not list events in ${failed.join(", ")}`;
   return {
-    key: `${OPENSHIFT_EVENTS_TAB}:${namespaces.join(",")}`,
+    key: `${OPENSHIFT_EVENTS_TAB}:${denied.join(",")}:${failed.join(",")}`,
     fromStatus: false,
     kind: "warning",
-    title: `No permission to list events in ${namespaces.join(", ")}`,
-    detail: ["The token needs list on events."],
+    title: denied.length > 0 ? `No permission to list events in ${denied.join(", ")}` : failedText,
+    detail: [
+      ...(denied.length > 0 ? ["The token needs list on events."] : []),
+      ...(failed.length === 0
+        ? []
+        : denied.length > 0
+          ? [`${failedText}: its warnings are the ones listed before.`]
+          : ["Its warnings are the ones listed before."]),
+    ],
     entries: [],
   };
 }
@@ -73,8 +84,9 @@ export const openShiftModule = providerModule({
       heldEvents: app => openShiftEvents(app, openShift.heldEntries()),
       detailSource,
       graphColumns: OPENSHIFT_GRAPH_COLUMNS,
-      // Namespaces whose events the token may not read: their warnings are missing from the Events tab.
-      tabNotice: (_sha, tab) => (tab === OPENSHIFT_EVENTS_TAB ? eventsDeniedNotice(openShift.warningsDenied()) : null),
+      // Namespaces whose events the token may not read, or whose list failed: the Events tab lacks their warnings.
+      tabNotice: (_sha, tab) =>
+        tab === OPENSHIFT_EVENTS_TAB ? eventsNotice(openShift.warningsDenied(), openShift.warningsFailed()) : null,
     };
   },
   colors: theme => ({ bg: theme.openShiftBg, fg: theme.openShiftFg }),

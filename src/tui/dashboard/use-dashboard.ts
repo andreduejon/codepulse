@@ -162,9 +162,9 @@ export function useDashboard(
     for (const event of held) {
       if (event.time < since) continue;
       // The newer wins: a run going again under its id (a GitHub re-run) over its cached end, a cached end over a
-      // provider's older copy.
+      // provider's older copy. At the same time the provider's own, when it changed: a warning keeps its first time.
       const known = byId.get(event.id);
-      if (known && known.time >= event.time) continue;
+      if (known && (known.time > event.time || (known.time === event.time && known.text === event.text))) continue;
       const branch = event.branch ?? known?.branch ?? branches.get(event.sha);
       byId.set(event.id, branch ? { ...event, branch } : event);
       changed = true;

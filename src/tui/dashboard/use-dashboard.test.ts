@@ -277,6 +277,27 @@ test("a run going again under the same id (a GitHub re-run) shows as it is now, 
   expect(texts).toEqual(["CI #9 running"]);
 });
 
+test("an event read again at the same time but changed (a warning that repeated) shows as the provider has it", async () => {
+  const saved: DashboardEvent = {
+    id: "/shop:openshift:warning:shop-test/event-backoff",
+    app: "/shop",
+    source: "openshift",
+    time: NOW - 30 * 60_000,
+    status: "unknown",
+    text: "BackOff · pod shop-api in shop-test",
+    sha: "c".repeat(40),
+  };
+  const [live] = createSignal<DashboardEvent[]>([{ ...saved, text: "BackOff · pod shop-api in shop-test · 61 times" }]);
+  const [active] = createSignal(true);
+  const state = createRoot(dispose => {
+    cleanup.push(dispose);
+    return useDashboard({ app: () => SHOP, active, now: () => NOW, live, load: async () => [saved] });
+  });
+  await settle();
+  const texts = state.rows().flatMap(row => (row.kind === "event" ? [row.event.text] : []));
+  expect(texts).toEqual(["BackOff · pod shop-api in shop-test · 61 times"]);
+});
+
 test("only an app's first read shows as reading: reading it again keeps its events and stays quiet", async () => {
   const [active] = createSignal(true);
   let release: () => void = () => {};

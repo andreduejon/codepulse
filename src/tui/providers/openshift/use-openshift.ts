@@ -62,6 +62,7 @@ export interface UseOpenShiftResult {
   warningsAboutResource: (resource: OpenShiftResource) => OpenShiftWarning[];
   /** The namespaces whose warnings the token may not read. Reactive. */
   warningsDenied: () => readonly string[];
+  warningsFailed: () => readonly string[];
 }
 
 export function useOpenShift(opts: {
@@ -213,6 +214,10 @@ export function useOpenShift(opts: {
     warningsDenied: () => {
       dataVersion();
       return service.warningsDenied();
+    },
+    warningsFailed: () => {
+      dataVersion();
+      return service.warningsFailed();
     },
   };
 }

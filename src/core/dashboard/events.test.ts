@@ -4,6 +4,7 @@ import type { GitHubWorkflowRun } from "../github/types";
 import { jenkinsEvents } from "../jenkins/events";
 import type { JenkinsRun } from "../jenkins/types";
 import { isOpenShiftWarningEvent, openShiftEvents } from "../openshift/events";
+import { warningTarget } from "../openshift/warnings";
 import { snykEvents } from "../snyk/events";
 import { type DashboardEvent, dashboardRows, gitEvents, keepUnchangedRows } from "./events";
 
@@ -241,8 +242,8 @@ describe("OpenShift warnings", () => {
       { label: "Times", value: "61" },
       { label: "Repeated for", value: "30m 00s" },
     ]);
-    // Its tab marks the resource it is about.
-    expect(events[0]?.entry).toBe("Pod:shop-test:shop-api-7d9f8-x2k4q");
+    // Its details open on the Events tab, marking its own row: its reason and the pod by uid.
+    expect([events[0]?.tab, events[0]?.entry]).toEqual(["openshift-events", warningTarget(warning)]);
   });
 
   test("one warning saved with two commits is one event; one without a time is left out", () => {
@@ -255,6 +256,25 @@ describe("OpenShift warnings", () => {
       },
     ]);
     expect(events.map(event => event.id)).toEqual([`/repo/shop:openshift:warning:shop-test/event-backoff`]);
+  });
+
+  test("of one warning saved with two commits, the newest copy shows, with the same commit whatever the order", () => {
+    const older = {
+      sha: "b".repeat(40),
+      builds: [],
+      warnings: [{ ...warning, count: 1, lastSeen: warning.firstSeen }],
+    };
+    const newer = { sha: SHA, builds: [], warnings: [warning] };
+    for (const entries of [
+      [older, newer],
+      [newer, older],
+    ]) {
+      const [event] = openShiftEvents("/repo/shop", entries);
+      expect([event?.text, event?.sha]).toEqual(["BackOff · pod shop-api-7d9f8-x2k4q in shop-test · 61 times", SHA]);
+    }
+    // The same copy in both: the same commit either way.
+    const twice = [newer, { ...newer, sha: "b".repeat(40) }];
+    expect(openShiftEvents("/repo/shop", twice)[0]?.sha).toBe(openShiftEvents("/repo/shop", twice.reverse())[0]?.sha);
   });
 
   test("a build's event is not a warning", () => {

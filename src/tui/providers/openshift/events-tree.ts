@@ -125,10 +125,10 @@ export function eventsTreeRows(warnings: readonly OpenShiftWarning[], options: E
       const reasonLast = reasonIndex === reasons.length - 1;
       const key = reasonKey(namespace, reason, level);
       const reasonLead = below(nsLead, reasonLast);
-      // One recreated under its old name is a row each: the one the commit has, then each removed one by its uid, so
-      // every one's events stay reachable (Enter opens the row's own object).
+      // One recreated under its old name is a row each, by its uid (also before the live list says which one is
+      // there), so every one's events stay reachable (Enter opens the row's own object).
       const objectOf = (entry: OpenShiftWarning) =>
-        `${entry.kind}:${entry.name}:${options.isPresent(entry) ? "present" : `removed:${entry.uid ?? ""}`}`;
+        `${entry.kind}:${entry.name}:${options.isPresent(entry) ? "present" : "removed"}:${entry.uid ?? ""}`;
       const resources = groupBy(ofReason, objectOf);
       const children = resources.map((events, index) => {
         const newest = events[0] as OpenShiftWarning;

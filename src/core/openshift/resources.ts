@@ -278,8 +278,11 @@ export function openShiftStatusRows(kind: OpenShiftResourceKind, object: unknown
       .map(value => obj(value) ?? {})
       .filter(condition => PROBLEM_CONDITIONS[String(condition.type)] === condition.status)
       .map(condition => row(`${condition.type} ${condition.status}`, str(condition.reason), condition.message));
-  if (kind === "Build" && buildStatus(object) === "fail")
-    return [row(str(status.phase) ?? "Failed", str(status.reason), status.message)];
+  if (kind === "Build" && buildStatus(object) === "fail") {
+    // Its reason is optional: without one, the phase says it failed.
+    const phase = str(status.phase) ?? "Failed";
+    return [row(phase, str(status.reason) ?? phase, status.message)];
+  }
   return [];
 }
 

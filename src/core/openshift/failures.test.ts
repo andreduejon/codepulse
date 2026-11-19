@@ -112,4 +112,18 @@ describe("a commit's failures", () => {
     // Each failure has its own id.
     expect(new Set(failures.map(entry => entry.id)).size).toBe(failures.length);
   });
+
+  test("a failed build without a reason still says it failed: its phase, with its message", () => {
+    const build = extractBuild(
+      "shop-test",
+      {
+        metadata: { name: "shop-api-42", uid: "build-42", labels: { "dev/commit-sha": SHA } },
+        status: { phase: "Failed", message: "Build failed" },
+      },
+      "dev/commit-sha",
+    ) as OpenShiftResource;
+    expect(commitFailures(commit([build])).map(entry => [entry.reason, entry.status, entry.message])).toEqual([
+      ["Failed", "Failed", "Build failed"],
+    ]);
+  });
 });

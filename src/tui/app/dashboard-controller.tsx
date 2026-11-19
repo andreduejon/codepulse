@@ -153,11 +153,16 @@ export function useDashboardController(opts: {
     if (!event) return [];
     return [...state.providers.set.tabsOf(event.source), { id: "info", label: "Info" }];
   };
-  /** The tab shown: the one chosen for this event's provider, else its first. */
+  /** The tab an event opens on: the one it names (an OpenShift warning: Events), else its provider's first. */
+  const firstTabOf = (event: DashboardEvent | null): DetailTab | null => {
+    const tabs = dashboardTabsFor(event);
+    return tabs.find(tab => tab.id === event?.tab)?.id ?? tabs[0]?.id ?? null;
+  };
+  /** The tab shown: the one chosen for this event's provider, else the one it opens on. */
   const dashboardActiveTab = (): DetailTab | null => {
     const tabs = dashboardTabsFor(dashboard.selected());
     const chosen = detail.detailActiveTab();
-    return tabs.some(tab => tab.id === chosen) ? chosen : (tabs[0]?.id ?? null);
+    return tabs.some(tab => tab.id === chosen) ? chosen : firstTabOf(dashboard.selected());
   };
   /** The provider tab takes the keyboard (→ beside the events, the compact dialog). */
   const focusDashboardTab = (tab: DetailTab | null = dashboardActiveTab()) => {
@@ -170,7 +175,7 @@ export function useDashboardController(opts: {
     });
     return true;
   };
-  // Another event: its first tab, at the top, and the events keep the keyboard. The same event shown again (a re-read
+  // Another event: the tab it opens on, at the top, and the events keep the keyboard. The same event shown again (a re-read
   // gives a new object, or the dashboard comes back) keeps its details as they were left: only another id counts (a
   // mutable ref, so it outlives the effect's runs and the dashboard's absence).
   const shownEvent = { key: null as string | null };
@@ -181,7 +186,7 @@ export function useDashboardController(opts: {
     untrack(() => {
       batch(() => {
         setDetail.setDetailCursorAction(null);
-        setDetail.setDetailActiveTab(dashboardTabsFor(dashboard.selected())[0]?.id ?? "info");
+        setDetail.setDetailActiveTab(firstTabOf(dashboard.selected()) ?? "info");
         setDetail.setDetailCursorIndex(0);
         if (dialog() !== "dashboard-event") setDetail.setDetailFocused(false);
       });

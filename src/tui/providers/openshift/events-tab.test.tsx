@@ -4,7 +4,7 @@ import { testRender } from "@opentui/solid";
 import { createSignal } from "solid-js";
 import type { OpenShiftFailure } from "../../../core/openshift/failures";
 import type { OpenShiftCommitData, OpenShiftResource } from "../../../core/openshift/types";
-import type { OpenShiftWarning } from "../../../core/openshift/warnings";
+import { type OpenShiftWarning, warningTarget } from "../../../core/openshift/warnings";
 import type { DetailNavRef } from "../../components/detail-types";
 import { createThemeState, ThemeContext } from "../../context/theme";
 import { OpenShiftEventsTab } from "./events-tab";
@@ -33,6 +33,7 @@ async function renderEventsTab(
     pruned?: readonly string[];
     normal?: OpenShiftWarning[];
     failures?: OpenShiftFailure[];
+    target?: string;
   } = {},
 ) {
   // The commit holds what the warnings are about, but a removed one; a pruned build only from the cache.
@@ -99,6 +100,8 @@ async function renderEventsTab(
             onOpenResource={opened}
             isCached={entry => options.cached?.includes(entry.id) ?? false}
             isPresent={entry => !options.removed?.includes(entry.id) && !options.pruned?.includes(entry.id)}
+            target={options.target}
+            targetColor="#ff00ff"
           />
         </box>
       </ThemeContext.Provider>
@@ -340,6 +343,33 @@ test("what a failing resource's status says leads in red, with its part of the s
     expect(t.opened).toHaveBeenLastCalledWith(expect.objectContaining({ name: "shop-api-7d9f8-x2k4q" }), {
       eventsOnly: false,
     });
+  } finally {
+    t.renderer.destroy();
+  }
+});
+
+test("the Dashboard's warning is marked in its color and gets the cursor: the pod it was about, not one under its name", async () => {
+  const gone = warning({ id: "event-old", uid: "pod-1", lastSeen: minutesAgo(30) });
+  const t = await renderEventsTab([warning({ id: "event-new", uid: "pod-2" }), gone], {
+    removed: ["event-old"],
+    target: warningTarget(gone),
+  });
+  try {
+    const rows = t.lines().slice(2);
+    expect(rows).toEqual([
+      "└─ ▾ shop-test 2",
+      "└─ ▾ BackOff 2",
+      "├─ shop-api-7d9f8-x2k4q 2m ago",
+      "└─ shop-api-7d9f8-x2k4q (cached) 30m ago",
+    ]);
+    // Reload commit is the first stop, then each row: the removed pod is the fourth.
+    await t.settle();
+    const line = t
+      .frame()
+      .split("\n")
+      .findIndex(text => text.includes("(cached)"));
+    const cursorBg = t.captureSpans().lines[line]?.spans.find(span => span.text.includes("x2k4q"))?.bg;
+    expect(cursorBg).toEqual(RGBA.fromHex(t.theme.backgroundElementActive));
   } finally {
     t.renderer.destroy();
   }

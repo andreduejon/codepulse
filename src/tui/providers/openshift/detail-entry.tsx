@@ -88,6 +88,8 @@ export const openshiftEventsDetail = detailEntry<OpenShiftDetailSource>({
       isCached={props.source.warningIsCached}
       isPresent={warning => props.source.warningIsPresent?.(props.context.sha, warning) ?? true}
       onOpenResource={(resource, options) => props.source.onOpenResource?.(resource, "events", options.eventsOnly)}
+      target={props.context.target}
+      targetColor={props.context.targetColor}
       {...props.context.cursor}
     />
   ),

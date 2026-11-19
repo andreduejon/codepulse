@@ -38,6 +38,8 @@ export interface DashboardEvent {
   url?: string;
   /** Its entry in its provider's tab (a run's, a build's id): the details open and mark it. */
   entry?: string;
+  /** The tab the details open on, when not its provider's first (an OpenShift warning: Events). */
+  tab?: string;
   /** What the side panel shows beside the commit. */
   facts?: DashboardFact[];
 }

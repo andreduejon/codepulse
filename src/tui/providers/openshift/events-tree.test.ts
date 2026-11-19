@@ -98,6 +98,17 @@ describe("the Events tab's tree", () => {
     ]);
   });
 
+  test("before the live list says which pod is there, two pods under one name are still a row each", () => {
+    const rows = eventsTreeRows(
+      [warning({ id: "new", uid: "pod-2" }), warning({ id: "old", uid: "pod-1", lastSeen: "2026-03-02T08:00:00Z" })],
+      { isPresent: () => true, isCached: () => true, collapsed: new Set() },
+    );
+    expect(rows.map(text).slice(2)).toEqual([
+      "      ├─ Pod shop-api-7d9f8-x2k4q (cached)",
+      "      └─ Pod shop-api-7d9f8-x2k4q (cached)",
+    ]);
+  });
+
   test("a pod recreated twice under its name is a row for each: every one's warnings stay reachable", () => {
     const rows = eventsTreeRows(
       [

@@ -6,7 +6,12 @@
  */
 import { createEffect, createMemo, createSignal, For, on, Show, untrack } from "solid-js";
 import type { OpenShiftCommitData, OpenShiftResource } from "../../../core/openshift/types";
-import { heldResourceOf, type OpenShiftWarning, resourceOfWarning } from "../../../core/openshift/warnings";
+import {
+  heldResourceOf,
+  type OpenShiftWarning,
+  resourceOfWarning,
+  warningTarget,
+} from "../../../core/openshift/warnings";
 import type { DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
 import { useT } from "../../hooks/use-t";
@@ -51,6 +56,9 @@ export interface OpenShiftEventsTabProps {
   isPresent?: (warning: OpenShiftWarning) => boolean;
   /** Enter on a resource or a warning: the resource, with its events shown (only them, for a removed one). */
   onOpenResource?: (resource: OpenShiftResource, options: { eventsOnly: boolean }) => void;
+  /** The Dashboard's warning (`warningTarget`): its row marked, with the tab's focus starting on it. */
+  target?: string;
+  targetColor?: string;
 }
 
 const RELOAD = "reload";
@@ -62,6 +70,9 @@ interface EventsMemory {
 }
 
 const newEventsMemory = (): EventsMemory => ({ sha: null, collapsed: new Set() });
+const newTargetFocus = (): { key: string | null } => ({ key: null });
+const isTarget = (row: EventsRow, target: string | undefined) =>
+  !!target && row.kind === "resource" && warningTarget(row.warning) === target;
 
 export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
   const t = useT();
@@ -134,6 +145,19 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
       if (index >= 0 && index !== untrack(props.detailCursorIndex)) props.setDetailCursorIndex(index);
     }),
   );
+
+  // The Dashboard's warning: the tab's focus starts on its row, once per commit (kept in the memory, as in Resources).
+  const targetFocus = props.memory?.("eventsTargetFocus", newTargetFocus) ?? newTargetFocus();
+  createEffect(() => {
+    const target = props.target;
+    if (!target || !props.detailFocused()) return;
+    const key = `${props.sha}\u0000${target}`;
+    if (targetFocus.key === key) return;
+    const row = rows().find(candidate => isTarget(candidate, target));
+    if (!row) return;
+    targetFocus.key = key;
+    props.setDetailCursorIndex(indexOf(row.key));
+  });
 
   const activate = () => {
     const row = current();
@@ -226,7 +250,11 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
             tail={row.cached ? " (cached)" : ""}
             tailFg={t().foregroundMuted}
             active={cursored(row.key)}
-            fg={fg(row.key, row.cached)}
+            fg={
+              !cursored(row.key) && isTarget(row, props.target) && props.targetColor
+                ? props.targetColor
+                : fg(row.key, row.cached)
+            }
             grow={false}
           />
           <box flexGrow={1} />

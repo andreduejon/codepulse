@@ -287,6 +287,13 @@ export const isWarnedNow = (
   isCached: (warning: OpenShiftWarning) => boolean,
 ) => !resource.cacheOnly && warningsAbout(resource, warnings).some(warning => !isCached(warning));
 
+/**
+ * A warning's row in the Events tab: its reason and the one object it is about (by uid, so not a pod recreated under
+ * its name). The Dashboard's warning marks it.
+ */
+export const warningTarget = (warning: OpenShiftWarning) =>
+  [warning.namespace, warning.reason, warning.kind, warning.name, warning.uid ?? ""].join("\u0000");
+
 /** The warnings about one resource. */
 export function warningsAbout(resource: OpenShiftResource, warnings: readonly OpenShiftWarning[]): OpenShiftWarning[] {
   return warnings.filter(entry => sameObject(entry, resource));

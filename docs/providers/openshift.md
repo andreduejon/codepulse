@@ -218,11 +218,13 @@ resource that is gone says `(cached)` until the cluster's list drops it).
   red for its failures, yellow for the warnings the cluster still reports, green for the
   Normal events it lists now, muted for those shown from the cache (a warning OpenShift
   deleted, or an event or failure about a resource that is gone).
-- In **Resources**, a resource OpenShift warned about shows `!` before its status mark.
+- In **Resources**, a resource OpenShift warns about shows `!` before its status mark,
+  while the cluster still lists one of its warnings.
 - On the **Dashboard** each saved warning is one event at the time it was first seen,
   with its yellow `!` and how often it happened (`! BackOff · pod shop-api-x2k4q in
-  shop-test · 61 times`); repeating never moves it. Its details mark the resource it is
-  about. Failures from a resource's status and Normal events are not saved, so they are
+  shop-test · 61 times`); repeating never moves it. Its details open on the **Events**
+  tab with its own row marked: the object it was about, also a pod gone or recreated
+  under its name. A warning saved with two commits is one event, its newest copy. Failures from a resource's status and Normal events are not saved, so they are
   not on the Dashboard.
 - The **Events** tab starts with **Reload commit** and the count (`total events`), then a
   tree: namespace, each reason (failures in red, then the warnings' in the warning colour,
@@ -232,8 +234,10 @@ resource that is gone says `(cached)` until the cluster's list drops it).
   BackOff row. A resource with two
   events of one reason (another message) is one row. Enter (or a click) on a resource
   opens its dialog on the events view, where the whole message is; `o` opens it in the
-  web console. A namespace whose events the token may not list is named in a notice
-  under the tab.
+  web console. A namespace whose events the token may not list, or whose list failed, is
+  named in a notice under the tab; a failed one shows the warnings it listed before.
+- A reason whose resources are all `(cached)` is muted: it is over. The namespace above
+  it is never muted.
 - The resource dialog's events view ends with a section **Cached (no longer in the
   cluster)**: the warnings kept about the resource that the cluster's events no longer
   have, newest first, in the same columns. When the events cannot load, the section is
@@ -274,8 +278,8 @@ muted, in **Resources** and **Events** alike.
   one's events open.
 - Enter on a cached pod opens its dialog on its events only: there is no log, object or
   console page for it any more. A pruned Build opens in full: its log and object are
-  cached. A ReplicaSet or ReplicationController also opens on its events only, since no
-  commit holds one.
+  cached. A ReplicaSet or ReplicationController the cluster still has opens in full,
+  although no commit holds one; a gone one opens on its events only.
 - In the graph, what only the cache has is the muted count at the end of each column.
 - A finished Build OpenShift prunes while codepulse runs turns `(cached)` with the next build
   list; one of a commit below the fetch size is never asked about, so it is always shown
