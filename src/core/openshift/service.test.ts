@@ -150,6 +150,10 @@ test("an expired token freezes the live list until a Reload, which starts it aga
   expect(h.service.getCommitData(SHA)?.namespaces[0]?.builds).toHaveLength(1);
 });
 
+/** Whether a save carries warnings (a warning's own, or a build list's with the kept ones). */
+const carriesWarnings = (items: readonly { incoming: readonly unknown[] }[]) =>
+  items.some(item => item.incoming.some(entry => !!(entry as { warnings?: unknown[] }).warnings?.length));
+
 const buildWarning = (overrides: Partial<OpenShiftWarning> = {}): OpenShiftWarning => ({
   id: "event-1",
   namespace: "ns",
@@ -352,7 +356,7 @@ test("a warning about a commit the cache dropped writes it back whole, as the bu
   // The cache limit drops the commit (another commit's builds were saved) just before its new warning is.
   const mergeMany = h.cache.mergeMany;
   h.cache.mergeMany = (repo, items, merge, isCurrent, options) => {
-    if (items.some(item => item.incoming.some(entry => "reason" in (entry as object)))) h.saved.delete(SHA);
+    if (carriesWarnings(items)) h.saved.delete(SHA);
     return mergeMany(repo, items, merge, isCurrent, options);
   };
   h.cluster.warnings = { warnings: [buildWarning()], denied: [], failed: [] };
@@ -417,8 +421,12 @@ test("a warning save that lands after its commit left never writes it back witho
   let release!: () => void;
   const gate = new Promise<void>(resolve => (release = resolve));
   const mergeMany = h.cache.mergeMany;
+  let held = false;
   h.cache.mergeMany = async (repo, items, merge, isCurrent, options) => {
-    if (items.some(item => item.incoming.some(entry => "reason" in (entry as object)))) await gate;
+    if (!held && carriesWarnings(items)) {
+      held = true;
+      await gate;
+    }
     return mergeMany(repo, items, merge, isCurrent, options);
   };
   h.cluster.warnings = { warnings: [buildWarning()], denied: [], failed: [] };
@@ -447,6 +455,106 @@ test("a warning whose save failed is saved by a later refresh, also when it did 
   await Bun.sleep(0);
   expect(h.saved.has(SHA)).toBe(false);
   busy = false;
+  await h.service.refresh();
+  await Bun.sleep(0);
+  expect(h.saved.get(SHA)?.warnings?.map(w => w.id)).toEqual(["event-1"]);
+});
+
+/** What the next build lists answer: each commit with these builds (none: a commit only its image stream names). */
+function answer(h: ReturnType<typeof harness>, commits: Record<string, OpenShiftResource[]>) {
+  const data = new Map(
+    Object.entries(commits).map(([sha, builds]) => [
+      sha,
+      {
+        sha,
+        liveFetched: true,
+        namespaces: [
+          { namespace: "ns", builds, imageStreamTags: [], deployments: [], deploymentConfigs: [], pods: [] },
+        ],
+      },
+    ]),
+  );
+  Object.assign(h.api, {
+    fetchOpenShiftInventory: mock(async () => ({ data, error: null, failures: [], successfulRequests: 1 })),
+  });
+}
+
+/** Holds the first save of a warning until `release`; later saves go on. */
+function holdWarningSaves(h: ReturnType<typeof harness>) {
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => (release = resolve));
+  const mergeMany = h.cache.mergeMany;
+  let held = false;
+  h.cache.mergeMany = async (repo, items, merge, isCurrent, options) => {
+    if (!held && carriesWarnings(items)) {
+      held = true;
+      await gate;
+    }
+    return mergeMany(repo, items, merge, isCurrent, options);
+  };
+  return () => release();
+}
+
+test("a warning save held while its build finished writes the finished build too", async () => {
+  const h = harness();
+  answer(h, { [SHA]: [{ ...build, status: "running" }] });
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  const release = holdWarningSaves(h);
+  h.cluster.warnings = { warnings: [buildWarning()], denied: [], failed: [] };
+  await h.service.refresh();
+  // The build finishes and is saved; then the cache limit drops the commit while the warning's save still waits.
+  answer(h, { [SHA]: [build] });
+  await h.service.refresh();
+  expect(h.saved.get(SHA)?.builds.map(b => b.name)).toEqual(["app-1"]);
+  h.saved.delete(SHA);
+  release();
+  await Bun.sleep(5);
+  expect(h.saved.get(SHA)?.builds.map(b => b.name)).toEqual(["app-1"]);
+});
+
+test("a build list that writes back a dropped commit keeps the finished builds codepulse holds", async () => {
+  const h = harness();
+  h.cluster.warnings = { warnings: [buildWarning()], denied: [], failed: [] };
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  await Bun.sleep(0);
+  h.saved.delete(SHA);
+  // OpenShift pruned the build; the commit is still listed (its image).
+  answer(h, { [SHA]: [] });
+  await h.service.refresh();
+  await Bun.sleep(0);
+  expect(h.saved.get(SHA)?.builds.map(b => b.name)).toEqual(["app-1"]);
+});
+
+test("an older commit only shown from the cache is never written back by a build list, also when it is all it lists", async () => {
+  const h = harness();
+  const OLD = "d".repeat(40);
+  const oldBuild = { ...build, id: "Build:ns:app-0", name: "app-0", commitSha: OLD };
+  h.saved.set(OLD, {
+    sha: OLD,
+    builds: [oldBuild] as never,
+    warnings: [buildWarning({ id: "event-old", name: "app-0" })],
+  });
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  expect(h.service.getCommitData(OLD)?.warnings?.map(w => w.id)).toEqual(["event-old"]);
+  h.saved.delete(OLD);
+  answer(h, { [OLD]: [] });
+  await h.service.refresh();
+  await Bun.sleep(0);
+  expect(h.saved.has(OLD)).toBe(false);
+});
+
+test("a kept warning whose save failed is saved by a later build list, also once the cluster lists nothing of its commit", async () => {
+  const h = harness();
+  answer(h, { [SHA]: [{ ...build, status: "running" }] });
+  const mergeMany = h.cache.mergeMany;
+  let busy = true;
+  h.cache.mergeMany = async (repo, items, merge, isCurrent, options) =>
+    busy ? 0 : mergeMany(repo, items, merge, isCurrent, options);
+  h.cluster.warnings = { warnings: [buildWarning()], denied: [], failed: [] };
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  await Bun.sleep(0);
+  busy = false;
+  answer(h, {});
   await h.service.refresh();
   await Bun.sleep(0);
   expect(h.saved.get(SHA)?.warnings?.map(w => w.id)).toEqual(["event-1"]);

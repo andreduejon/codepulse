@@ -25,7 +25,7 @@ import {
   selectOpenShiftCandidateSHAs,
 } from "./commit-data";
 import { commitFailures, type OpenShiftFailure } from "./failures";
-import { mergeById, type OpenShiftCacheEntry, toCachedBuild } from "./merge";
+import { mergeById, type OpenShiftCachedBuild, type OpenShiftCacheEntry, toCachedBuild } from "./merge";
 import {
   applyOpenShiftWatchEvent,
   buildOpenShiftCommitMap,
@@ -319,29 +319,51 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
     // An older commit only shown from the cache keeps its new warnings too, without counting as a use for eviction.
     const used = changed.filter(sha => !shownFromCache.has(sha));
     const shown = changed.filter(sha => shownFromCache.has(sha));
-    if (used.length > 0) void persistWarnings(used, true);
-    if (shown.length > 0) void persistWarnings(shown, false);
+    if (used.length > 0) void persistHeld(used, true);
+    if (shown.length > 0) void persistHeld(shown, false);
   }
 
-  async function persistWarnings(shas: string[], touch: boolean): Promise<void> {
-    const epoch = lifecycle().getEpoch();
+  /** What codepulse holds of a commit for its snapshot: its finished builds and its kept warnings. */
+  const heldOf = (sha: string) => ({
+    builds: terminalBuildsOf(commits.get(sha)),
+    warnings: warningsBySha.get(sha) ?? [],
+  });
+
+  /**
+   * Saves the commits' snapshots: what the cache has, with everything codepulse holds of each, read when the save starts
+   * and again when the cache merges (a build may finish, or a refresh let the commit go, in between), then `fresh`
+   * builds (the build list's). So a snapshot never has less than the cache or the app had, and one the cache limit
+   * dropped comes back whole. `touch: false` (an older commit only shown) only updates one the cache still has.
+   */
+  async function persistHeld(
+    shas: readonly string[],
+    touch: boolean,
+    fresh: ReadonlyMap<string, OpenShiftCachedBuild[]> = new Map(),
+    epoch = lifecycle().getEpoch(),
+  ): Promise<void> {
     const repoPath = app.repoPath();
-    // Read now: by the time the cache merges, a refresh may have let the commit go.
-    const held = new Map(shas.map(sha => [sha, terminalBuildsOf(commits.get(sha))]));
+    const atStart = new Map(shas.map(sha => [sha, heldOf(sha)]));
     try {
       await persistMerged(
         ports.cache(),
         repoPath,
         shas,
         () => lifecycle().isCurrent(epoch, repoPath) && !app.suspended(),
-        sha => warningsBySha.get(sha) ?? [],
-        (sha, existing, incoming: OpenShiftWarning[]) => ({
-          sha,
-          // A commit the cache dropped (the limit) comes back whole, as the build list writes it: never without its
-          // finished builds.
-          builds: existing?.builds ?? held.get(sha) ?? [],
-          warnings: mergeWarnings(existing?.warnings ?? [], incoming),
-        }),
+        sha => {
+          const held = atStart.get(sha);
+          const something = !!held?.builds.length || !!held?.warnings.length || !!fresh.get(sha)?.length;
+          return something && held ? [held] : [];
+        },
+        (sha, existing, [atStartHeld]) => {
+          const now = heldOf(sha);
+          const builds = mergeById(mergeById(atStartHeld?.builds ?? [], now.builds), fresh.get(sha) ?? []);
+          const warnings = mergeWarnings(existing?.warnings ?? [], [...(atStartHeld?.warnings ?? []), ...now.warnings]);
+          return {
+            sha,
+            builds: mergeById(existing?.builds ?? [], builds),
+            ...(warnings.length > 0 ? { warnings } : {}),
+          };
+        },
         { touch },
       );
     } catch (err) {
@@ -434,32 +456,14 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
     if (changed) ports.onDataChange();
   }
 
-  /** Each build list: the held commits' finished builds and kept warnings, into their snapshots. */
-  async function persistTerminalBuilds(
-    repoPath: string,
-    data: Map<string, OpenShiftCommitData>,
-    epoch: number,
-  ): Promise<void> {
-    await persistMerged(
-      ports.cache(),
-      repoPath,
-      [...data.keys()],
-      () => lifecycle().isCurrent(epoch, repoPath),
-      sha => {
-        const builds = terminalBuildsOf(data.get(sha));
-        // Its kept warnings too: one whose own save failed is saved now, also when it did not change.
-        const warnings = warningsBySha.get(sha.toLowerCase()) ?? [];
-        return builds.length > 0 || warnings.length > 0 ? [{ builds, warnings }] : [];
-      },
-      (sha, existing, [incoming]) => {
-        const warnings = mergeWarnings(existing?.warnings ?? [], incoming?.warnings ?? []);
-        return {
-          sha,
-          builds: mergeById(existing?.builds ?? [], incoming?.builds ?? []),
-          ...(warnings.length > 0 ? { warnings } : {}),
-        };
-      },
-    );
+  /**
+   * Each build list: the commits it lists and those codepulse holds, with their finished builds and kept warnings (one
+   * whose own save failed is saved now). An older commit only shown from the cache is left as it is.
+   */
+  async function persistTerminalBuilds(data: Map<string, OpenShiftCommitData>, epoch: number): Promise<void> {
+    const fresh = new Map([...data].map(([sha, commit]) => [sha.toLowerCase(), terminalBuildsOf(commit)]));
+    const shas = new Set([...fresh.keys(), ...commits.keys()].filter(sha => !shownFromCache.has(sha)));
+    await persistHeld([...shas], true, fresh, epoch);
   }
 
   function eligibleSHAs(): Set<string> {
@@ -475,7 +479,9 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
       if (allowed.has(key) || ((commits.has(sha) || commits.has(key)) && !shownFromCache.has(key)))
         next.set(sha, commit);
     }
-    return next.size > 0 ? next : data;
+    if (next.size > 0) return next;
+    // No window yet (the graph is loading): what it lists, but never an older commit only shown from the cache.
+    return new Map([...data].filter(([sha]) => !shownFromCache.has(sha.toLowerCase())));
   }
 
   async function runBuildInventory(args: { signal?: AbortSignal; showStatus: boolean; epoch: number }) {
@@ -519,7 +525,7 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
         seeds.keys(),
       );
       const forDisk = filterToEligible(result.data);
-      await persistTerminalBuilds(repoPath, forDisk, args.epoch);
+      await persistTerminalBuilds(forDisk, args.epoch);
       if (!lifecycle().isCurrent(args.epoch, repoPath)) return;
       const allowed = eligibleSHAs();
       for (const sha of [...commits.keys()]) {

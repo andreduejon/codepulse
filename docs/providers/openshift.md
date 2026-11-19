@@ -215,9 +215,10 @@ resource that is gone says `(cached)` until the cluster's list drops it).
 - Warnings are saved in the commit's snapshot (see Cache), so they outlast the cluster's
   copy and are evicted with the snapshot by the cache limit. A new warning about a commit
   in the fetch window counts as a use, as a new build does: a snapshot the limit dropped
-  comes back whole, with the finished builds codepulse holds; an older commit only shown
-  from the cache is updated but never written back. Each build list saves the kept
-  warnings with the builds, so one whose own save failed is saved then.
+  comes back whole, with everything codepulse holds of the commit (its finished builds,
+  also pruned ones, and its warnings); an older commit only shown from the cache is
+  updated but never written back. Each build list saves every commit codepulse holds this
+  way, so a warning whose own save failed is saved then; one unchanged writes nothing.
 - The graph's **Events** column counts a commit's events, not how often each happened:
   red for its failures, yellow for the warnings the cluster still reports, green for the
   Normal events it lists now, muted for those shown from the cache (a warning OpenShift
