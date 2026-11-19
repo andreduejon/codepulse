@@ -22,7 +22,7 @@ import { useDetailTree } from "../shared/detail-tree";
 import { type RowShortcut, useOpenRowShortcut } from "../shared/open-row";
 import { openShiftConsoleUrl } from "./console";
 import { OPENSHIFT_EVENT_KINDS } from "./events";
-import { type EventsRow, eventsTreeRows } from "./events-tree";
+import { type EventsRow, eventsTreeRows, namespaceKey, reasonKey } from "./events-tree";
 
 export interface OpenShiftEventsTabProps {
   sha: string;
@@ -154,9 +154,19 @@ export function OpenShiftEventsTab(props: Readonly<OpenShiftEventsTabProps>) {
     const key = `${props.sha}\u0000${target}`;
     if (targetFocus.key === key) return;
     const row = rows().find(candidate => isTarget(candidate, target));
-    if (!row) return;
+    if (!row) {
+      // Under a closed namespace or reason: open them, and the rows that follow have it.
+      const [namespace = "", reason = ""] = target.split("\u0000");
+      const closed = [namespaceKey(namespace), reasonKey(namespace, reason)].filter(name => collapsed().has(name));
+      if (closed.length > 0) {
+        kept.collapsed = new Set([...collapsed()].filter(name => !closed.includes(name)));
+        setCollapsed(kept.collapsed);
+      }
+      return;
+    }
     targetFocus.key = key;
     props.setDetailCursorIndex(indexOf(row.key));
+    props.navRef?.scrollToCursor?.();
   });
 
   const activate = () => {

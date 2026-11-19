@@ -24,6 +24,7 @@ import { openGraphDetails } from "../hooks/handle-graph-keys";
 import { providerColors } from "../providers/colors";
 import type { AnyProviderModule } from "../providers/module";
 import { repoDisplayName } from "../utils/group-repos";
+import { scheduleScrollIntoView, scrollElementIntoView } from "../utils/scroll";
 import type { DialogHost, LayoutMode } from "./dialogs";
 import type { ProviderHost } from "./providers";
 import type { RepoSettings } from "./repo-settings";
@@ -192,7 +193,28 @@ export function useDashboardController(opts: {
       });
     });
   });
+  /** The tab's notices closed with `✕` or `:clear`, by key: a new one (another namespace) shows again. */
+  const [dismissedNotices, setDismissedNotices] = createSignal<ReadonlySet<string>>(new Set());
+  /** The provider's notice under its tab, as in its view (the namespaces whose events it lacks). */
+  const dashboardNotice = () => {
+    const event = dashboard.selected();
+    const tab = dashboardActiveTab();
+    const notice = event && tab && tab !== "info" ? providers.tabNotice(event.source, event.sha, tab) : null;
+    return notice && !dismissedNotices().has(notice.key) ? notice : null;
+  };
+  /** `✕`, or `:clear` while the Dashboard shows. */
+  const dismissDashboardNotice = () => {
+    const notice = dashboardShown() ? dashboardNotice() : null;
+    if (notice) setDismissedNotices(keys => new Set([...keys, notice.key]));
+  };
   let dashboardDetailScrollbox: ScrollBoxRenderable | undefined;
+  // A tab that moves the cursor itself (onto the event's own row) brings it into view, in either layout.
+  detailNavRef.scrollToCursor = () =>
+    scheduleScrollIntoView(detailNavRef, () => {
+      const scrollbox = dialog() === "dashboard-event" ? dashboardDialogScrollbox : dashboardDetailScrollbox;
+      const row = detailNavRef.itemRefs[detail.detailCursorIndex()];
+      return !!scrollbox && !!row && scrollElementIntoView(scrollbox, row, 1);
+    });
   /** The provider tab in the dashboard's details (both layouts): the same tab as in that provider's view. */
   const dashboardTabProps = () => ({
     tabs: () => dashboardTabsFor(dashboard.selected()),
@@ -206,11 +228,8 @@ export function useDashboardController(opts: {
       if (!event || !tab) return event ? markLegend(event.source, opts.modules) : null;
       return providers.details.legend(tab, event.sha);
     },
-    notice: () => {
-      const event = dashboard.selected();
-      const tab = dashboardActiveTab();
-      return event && tab && tab !== "info" ? providers.tabNotice(event.source, event.sha, tab) : null;
-    },
+    notice: dashboardNotice,
+    onDismissNotice: dismissDashboardNotice,
     renderTab: (event: DashboardEvent, tab: DetailTab, info: Accessor<CommitInfo | null>) =>
       tab === "info" ? (
         <DashboardInfoTab event={event} info={info} />
@@ -405,6 +424,7 @@ export function useDashboardController(opts: {
     dashboardAppName,
     showSelectedInGraph,
     dashboardTabProps,
+    dismissDashboardNotice,
     refreshDashboard,
     handleDashboardKey,
     openFromDashboardDialog,

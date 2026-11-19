@@ -273,7 +273,8 @@ test("an event read again under another commit (a warning's newest copy) shows t
   }
 });
 
-test("the tab's notice shows under it, as in the provider's view: the events it lacks", async () => {
+test("the tab's notice shows under it, as in the provider's view: the events it lacks; ✕ closes it", async () => {
+  const dismissed = mock(() => {});
   const warning: DashboardEvent = {
     id: "/shop:openshift:warning:shop-test/event-1",
     app: "/shop",
@@ -293,6 +294,7 @@ test("the tab's notice shows under it, as in the provider's view: the events it 
           tabs={() => [{ id: "openshift-events", label: "Events" }]}
           activeTab={() => "openshift-events"}
           renderTab={() => <text>the events</text>}
+          onDismissNotice={dismissed}
           notice={() => ({
             key: "events",
             fromStatus: false,
@@ -304,11 +306,16 @@ test("the tab's notice shows under it, as in the provider's view: the events it 
         />
       </ThemeContext.Provider>
     ),
-    { width: 70, height: 24 },
+    { width: 70, height: 24, useMouse: true },
   );
   try {
     await setup.renderOnce();
-    expect(setup.captureCharFrame()).toContain("Could not list events in shop-test");
+    const frame = setup.captureCharFrame();
+    expect(frame).toContain("Could not list events in shop-test");
+    const lines = frame.split("\n");
+    const y = lines.findIndex(line => line.includes("Could not list events"));
+    await setup.mockMouse.click(lines[y]?.indexOf("✕") ?? 0, y, MouseButtons.LEFT);
+    expect(dismissed).toHaveBeenCalled();
   } finally {
     setup.renderer.destroy();
   }

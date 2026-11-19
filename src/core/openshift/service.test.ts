@@ -345,7 +345,7 @@ test("a warning about an older commit only shown from the cache is saved without
   expect(h.touched.get(SHA)).toBe(true);
 });
 
-test("a warning never writes back a commit the cache dropped: its builds and another commit's log stay", async () => {
+test("a warning about a commit the cache dropped writes it back whole, as the build list does: never without its builds", async () => {
   const h = harness();
   await h.lifecycle.fetchInitial(undefined, undefined, true);
   expect(h.saved.get(SHA)?.builds).toHaveLength(1);
@@ -358,7 +358,8 @@ test("a warning never writes back a commit the cache dropped: its builds and ano
   h.cluster.warnings = { warnings: [buildWarning()], denied: [], failed: [] };
   await h.service.refresh();
   expect(h.service.getCommitData(SHA)?.warnings?.map(w => w.id)).toEqual(["event-1"]);
-  expect(h.saved.has(SHA)).toBe(false);
+  expect(h.saved.get(SHA)?.builds.map(b => b.name)).toEqual(["app-1"]);
+  expect(h.saved.get(SHA)?.warnings?.map(w => w.id)).toEqual(["event-1"]);
 });
 
 test("a warning whose first save failed is saved with the next change: only a save that landed counts", async () => {

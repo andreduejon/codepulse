@@ -52,6 +52,8 @@ export function DashboardDetail(
     legend?: () => readonly LegendItem[] | null;
     /** The active tab's notice, as in its provider's view (the namespaces whose events it lacks). */
     notice?: () => TabNotice | null;
+    /** `✕` on the notice (and `:clear`). */
+    onDismissNotice?: () => void;
     /** A click inside the panel gives it the keyboard. */
     onMouseFocus?: () => void;
   }>,
@@ -266,6 +268,7 @@ export function DashboardDetail(
                 entries={notice().entries}
                 detail={notice().footer}
                 mouseEnabled={props.mouseEnabled?.() ?? true}
+                onDismiss={props.onDismissNotice}
               />
             </box>
           </>

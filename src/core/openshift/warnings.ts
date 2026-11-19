@@ -289,7 +289,7 @@ export const isWarnedNow = (
 
 /**
  * A warning's row in the Events tab: its reason and the one object it is about (by uid, so not a pod recreated under
- * its name). The Dashboard's warning marks it.
+ * its name). The Dashboard's warning marks it. Its namespace and reason come first: the tab opens them to show it.
  */
 export const warningTarget = (warning: OpenShiftWarning) =>
   [warning.namespace, warning.reason, warning.kind, warning.name, warning.uid ?? ""].join("\u0000");

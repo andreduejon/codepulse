@@ -5,9 +5,11 @@ import { createSignal } from "solid-js";
 import type { OpenShiftFailure } from "../../../core/openshift/failures";
 import type { OpenShiftCommitData, OpenShiftResource } from "../../../core/openshift/types";
 import { type OpenShiftWarning, warningTarget } from "../../../core/openshift/warnings";
+import { createDetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
 import { createThemeState, ThemeContext } from "../../context/theme";
 import { OpenShiftEventsTab } from "./events-tab";
+import { namespaceKey, reasonKey } from "./events-tree";
 
 const SHA = "a".repeat(40);
 const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
@@ -34,6 +36,8 @@ async function renderEventsTab(
     normal?: OpenShiftWarning[];
     failures?: OpenShiftFailure[];
     target?: string;
+    /** Namespaces and reasons closed before the tab opens (its memory). */
+    collapsed?: readonly string[];
   } = {},
 ) {
   // The commit holds what the warnings are about, but a removed one; a pruned build only from the cache.
@@ -83,6 +87,8 @@ async function renderEventsTab(
     scrollToFile: () => {},
   };
   const theme = createThemeState();
+  const memory = createDetailMemory();
+  if (options.collapsed) memory("events", () => ({ sha: SHA, collapsed: new Set(options.collapsed) }));
   const setup = await testRender(
     () => (
       <ThemeContext.Provider value={theme}>
@@ -101,6 +107,7 @@ async function renderEventsTab(
             isCached={entry => options.cached?.includes(entry.id) ?? false}
             isPresent={entry => !options.removed?.includes(entry.id) && !options.pruned?.includes(entry.id)}
             target={options.target}
+            memory={memory}
             targetColor="#ff00ff"
           />
         </box>
@@ -394,6 +401,25 @@ test("the Dashboard's warning marks its warning row, not the status's red row wi
         .lines[frame.findIndex(line => line.includes(text))]?.spans.find(span => span.text.includes("x2k4q"))?.bg;
     expect(bgOf("2m ago")).toEqual(RGBA.fromHex(t.theme.backgroundElementActive));
     expect(bgOf("waiting")).not.toEqual(RGBA.fromHex(t.theme.backgroundElementActive));
+  } finally {
+    t.renderer.destroy();
+  }
+});
+
+test("the Dashboard's warning under a closed reason or namespace opens them to show its row", async () => {
+  const backOff = warning({ id: "event-1", uid: "pod-1" });
+  const t = await renderEventsTab([backOff, warning({ id: "event-2", reason: "Unhealthy" })], {
+    target: warningTarget(backOff),
+    collapsed: [namespaceKey("shop-test"), reasonKey("shop-test", "BackOff")],
+  });
+  try {
+    expect(t.lines().slice(2)).toEqual([
+      "└─ ▾ shop-test 2",
+      "├─ ▾ BackOff 1",
+      "│ └─ shop-api-7d9f8-x2k4q 2m ago",
+      "└─ ▾ Unhealthy 1",
+      "└─ shop-api-7d9f8-x2k4q 2m ago",
+    ]);
   } finally {
     t.renderer.destroy();
   }

@@ -291,6 +291,7 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
     if (index < 0) return;
     targetFocus.key = key;
     props.setDetailCursorIndex(index);
+    props.navRef?.scrollToCursor?.();
   });
 
   const renderResourceRow = (resource: OpenShiftResource, lead: string, connector: string) => {

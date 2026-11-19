@@ -260,6 +260,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
       openRepoSelector: () => setRepoSelectorVisible(true),
       clearScreenMessage: () => {
         dismissTabNotice();
+        dashboardController.dismissDashboardNotice();
         clearScreenMessage();
       },
       setAnchor,
