@@ -332,8 +332,9 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
   /**
    * Saves the commits' snapshots: what the cache has, with everything codepulse holds of each, read when the save starts
    * and again when the cache merges (a build may finish, or a refresh let the commit go, in between), then `fresh`
-   * builds (the build list's). So a snapshot never has less than the cache or the app had, and one the cache limit
-   * dropped comes back whole. `touch: false` (an older commit only shown) only updates one the cache still has.
+   * builds (the build list's). So a snapshot never has less than the cache has or the app holds at either read, and one
+   * the cache limit dropped comes back whole. `touch: false` (an older commit only shown) only updates one the cache
+   * still has.
    */
   async function persistHeld(
     shas: readonly string[],
