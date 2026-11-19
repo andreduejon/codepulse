@@ -108,6 +108,26 @@ describe("events", () => {
         },
       ]),
     ).toEqual([expect.objectContaining({ status: "cancelled", text: "build shop-api-13 cancelled in shop-dev" })]);
+    // One cached as failed before cancelled was a status of its own: its saved object says it was cancelled.
+    expect(
+      openShiftEvents("/repo/shop", [
+        {
+          sha: SHA,
+          builds: [
+            {
+              id: "Build/shop-api-14",
+              name: "shop-api-14",
+              namespace: "shop-dev",
+              status: "fail",
+              imageRefs: [],
+              commitSha: SHA,
+              updatedAt: "2026-03-02T10:20:00Z",
+              object: { status: { phase: "Cancelled" } },
+            },
+          ],
+        },
+      ]),
+    ).toEqual([expect.objectContaining({ status: "cancelled", text: "build shop-api-14 cancelled in shop-dev" })]);
     // A finished build's own end time, also when the build carries no creation time.
     expect(
       openShiftEvents("/repo/shop", [

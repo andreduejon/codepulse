@@ -1214,6 +1214,19 @@ export function openShiftWorld(state: DemoState, phase: Phase): OpenShiftWorld {
       ],
     ],
     [
+      // A warning about a ReplicaSet, which no commit holds: the Events tab opens it on its events only.
+      "shop-test/ReplicaSet/shop-api-7d9f8",
+      [
+        event(
+          "Warning",
+          "FailedCreate",
+          'Error creating: pods "shop-api-7d9f8-" is forbidden: exceeded quota: compute-resources, requested: limits.memory=1Gi',
+          3,
+          30,
+        ),
+      ],
+    ],
+    [
       "shop-dev/Pod/shop-api-7d9f8-pull9",
       [
         event("Normal", "Scheduled", "Successfully assigned shop-dev/shop-api-7d9f8-pull9 to worker-1", 1, 2),

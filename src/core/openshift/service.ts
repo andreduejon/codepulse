@@ -137,6 +137,8 @@ export interface OpenShiftCachePort {
     items: readonly { sha: string; incoming: readonly I[] }[],
     merge: (sha: string, existing: OpenShiftCacheEntry | null, incoming: I[]) => OpenShiftCacheEntry,
     isCurrent?: () => boolean,
+    /** `touch: false`: an entry only shown keeps its place for eviction. */
+    options?: { touch?: boolean },
   ) => Promise<number>;
 }
 
@@ -174,11 +176,12 @@ async function persistMerged<I>(
   isCurrent: () => boolean,
   incomingFor: (sha: string) => I[],
   merge: (sha: string, existing: OpenShiftCacheEntry | null, incoming: I[]) => OpenShiftCacheEntry,
+  options?: { touch?: boolean },
 ): Promise<void> {
   if (!isCurrent()) return;
   const items = shas.map(sha => ({ sha, incoming: incomingFor(sha) })).filter(item => item.incoming.length > 0);
   if (items.length === 0) return;
-  await cache.mergeMany(repoPath, items, merge, isCurrent);
+  await cache.mergeMany(repoPath, items, merge, isCurrent, options);
 }
 
 export function createOpenShiftService(ports: OpenShiftServicePorts) {
@@ -251,12 +254,14 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
       if (commit.warnings !== warnings)
         commits.set(sha, warnings ? { ...commit, warnings } : { ...commit, warnings: undefined });
     }
-    // An older commit only shown from the cache is not saved again: that would count as a use for eviction.
-    const toSave = changed.filter(sha => !shownFromCache.has(sha));
-    if (toSave.length > 0) void persistWarnings(toSave);
+    // An older commit only shown from the cache keeps its new warnings too, without counting as a use for eviction.
+    const used = changed.filter(sha => !shownFromCache.has(sha));
+    const shown = changed.filter(sha => shownFromCache.has(sha));
+    if (used.length > 0) void persistWarnings(used, true);
+    if (shown.length > 0) void persistWarnings(shown, false);
   }
 
-  async function persistWarnings(shas: string[]): Promise<void> {
+  async function persistWarnings(shas: string[], touch: boolean): Promise<void> {
     const epoch = lifecycle().getEpoch();
     const repoPath = app.repoPath();
     try {
@@ -271,6 +276,7 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
           builds: existing?.builds ?? [],
           warnings: mergeWarnings(existing?.warnings ?? [], incoming),
         }),
+        { touch },
       );
     } catch (err) {
       debugError("OpenShift", err);
@@ -428,8 +434,11 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
         app.setStatus(providerError(result.error));
         return;
       }
-      await refreshWarnings(requestConfig, token, args.signal);
+      const warningList = await fetchWarnings(requestConfig, token, args.signal);
       if (args.signal?.aborted || !lifecycle().isCurrent(args.epoch, repoPath)) return;
+      // An expired token on the warnings: the builds still show, then requests stop as after any 401.
+      const warningsAuth = warningList?.failure === "auth";
+      if (warningList && !warningsAuth) applyWarningList(requestConfig, warningList);
       seeds.clear();
       for (const [sha, commit] of result.data) seeds.set(sha.toLowerCase(), commit);
       // Window commits and cached older ones take the builds the cluster still lists for them.
@@ -445,6 +454,7 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
         if (allowed.has(sha.toLowerCase()) || candidates.has(sha) || seeds.has(sha)) continue;
         if (cachedSHAs.has(sha.toLowerCase())) continue;
         commits.delete(sha);
+        warningsBySha.delete(sha);
       }
       for (const sha of candidates) {
         const commit = seeds.get(sha);
@@ -467,6 +477,12 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
       if (live.listed) applyLive(live.listed);
       else publish();
       lifecycle().noteFetchStarted();
+      if (warningsAuth) {
+        lifecycle().noteFetchResult(false);
+        freezeAuth();
+        app.setStatus(providerError(OPENSHIFT_BANNER.tokenExpired));
+        return;
+      }
       // Some namespaces answered: a warning, not a failure to back off from.
       lifecycle().noteFetchResult(true);
       // A status the live list set (a live 401 that froze requests, a failed list) is the live list's to clear.
@@ -489,25 +505,29 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
     }
   }
 
-  /** Reads the warnings again; they are linked to commits when the commits are published. */
-  async function refreshWarnings(config: OpenShiftClusterConfig, token: string, signal?: AbortSignal): Promise<void> {
+  /** Reads the warnings again, or null when the request failed: the warnings keep what they had. */
+  async function fetchWarnings(
+    config: OpenShiftClusterConfig,
+    token: string,
+    signal?: AbortSignal,
+  ): Promise<OpenShiftWarningList | null> {
     try {
-      const list = await ports.api.fetchOpenShiftWarnings(config, token, signal);
-      // An expired token shows on the next request that needs it: the warnings keep what they had.
-      if (list.failure === "auth") return;
-      listedWarnings = list.warnings;
-      warningsDenied = list.denied;
-      const unanswered = new Set([...list.denied, ...list.failed]);
-      for (const namespace of config.namespaces) {
-        if (unanswered.has(namespace)) continue;
-        listedIds.set(
-          namespace,
-          new Set(list.warnings.filter(entry => entry.namespace === namespace).map(entry => entry.id)),
-        );
-      }
+      return await ports.api.fetchOpenShiftWarnings(config, token, signal);
     } catch (err) {
       if (signal?.aborted) throw err;
       debugError("OpenShift", err);
+      return null;
+    }
+  }
+
+  /** Keeps what the cluster listed; the warnings are linked to commits when the commits are published. */
+  function applyWarningList(config: OpenShiftClusterConfig, list: OpenShiftWarningList): void {
+    listedWarnings = list.warnings;
+    warningsDenied = list.denied;
+    const unanswered = new Set([...list.denied, ...list.failed]);
+    for (const namespace of config.namespaces) {
+      if (unanswered.has(namespace)) continue;
+      listedIds.set(namespace, new Set(list.warnings.filter(entry => entry.namespace === namespace).map(entry => entry.id)));
     }
   }
 

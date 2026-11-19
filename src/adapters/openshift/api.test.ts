@@ -1176,6 +1176,17 @@ describe("fetchOpenShiftEvents", () => {
     });
   });
 
+  test("a resource with a uid asks for its own events: not those of one recreated under its name", async () => {
+    await withFetch(new Response(JSON.stringify({ items: [] }), { status: 200 }), async url => {
+      await fetchOpenShiftEvents("https://api.example.com:6443", "token", { ...pod, uid: "pod-uid" });
+      expect(url()).toBe(
+        `https://api.example.com:6443/api/v1/namespaces/dev/events?fieldSelector=${encodeURIComponent(
+          "involvedObject.kind=Pod,involvedObject.name=api-7f9c,involvedObject.uid=pod-uid",
+        )}`,
+      );
+    });
+  });
+
   test("a missing events permission says which permission", async () => {
     await withFetch(new Response("forbidden", { status: 403 }), async () => {
       await expect(fetchOpenShiftEvents("https://api.example.com:6443", "token", pod)).rejects.toThrow(

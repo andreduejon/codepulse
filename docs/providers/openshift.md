@@ -197,12 +197,13 @@ own status.
 
 - A warning belongs to the commit whose resource it is about: the same name, and the same
   uid, so a resource recreated under its old name is another one. One about a ReplicaSet
-  or ReplicationController goes to its Deployment's or DeploymentConfig's commit. A
-  Deployment keeps its name across commits, so its warning goes to the commit it runs
-  only when it happened after that commit's rollout began (the later of its newest
-  ReplicaSet's creation and the commit's oldest pod there); an earlier one was the
-  previous commit's and is left out. A warning about a resource no commit has is not
-  kept.
+  or ReplicationController goes to the commit whose pods it runs, else to its
+  Deployment's or DeploymentConfig's commit. A Deployment keeps its name across commits,
+  and during a rollout the previous commit still holds it through its old pods: its
+  warning goes only to the commit it runs (the one it names), and only when it happened
+  after that commit's rollout began (the later of its newest ReplicaSet's creation and
+  the commit's oldest pod there); an earlier one was the previous commit's and is left
+  out. A warning about a resource no commit has is not kept.
 - Warnings are saved in the commit's snapshot (see Cache), so they outlast the cluster's
   copy and are evicted with the snapshot by the cache limit.
 - The graph's **Events** column counts a commit's warnings, not how often each happened:
@@ -218,7 +219,9 @@ own status.
   under the tab.
 - The resource dialog's events view ends with a section **Cached (no longer in the
   cluster)**: the warnings kept about the resource that the cluster's events no longer
-  have, newest first, in the same columns.
+  have, newest first, in the same columns. When the events cannot load, the section is
+  **Saved warnings** and lists every kept one: nothing says whether the cluster still
+  has them.
 
 ## Cached
 
@@ -237,7 +240,8 @@ muted, in **Resources** and **Events** alike.
   under its old name is two rows: the one running, then the cached one.
 - Enter on a cached pod opens its dialog on its events only: there is no log, object or
   console page for it any more. A pruned Build opens in full: its log and object are
-  cached.
+  cached. A ReplicaSet or ReplicationController also opens on its events only, since no
+  commit holds one.
 - In the graph, what only the cache has is the muted count at the end of each column.
 - A finished Build OpenShift prunes while codepulse runs turns `(cached)` with the next build
   list; one of a commit below the fetch size is never asked about, so it is always shown
@@ -286,7 +290,7 @@ rules:
     resources: ["deploymentconfigs"]
     verbs: ["get", "list", "watch"]
   - apiGroups: [""]
-    resources: ["pods", "pods/log", "replicationcontrollers"]
+    resources: ["pods", "pods/log", "replicationcontrollers", "events"]
     verbs: ["get", "list", "watch"]
 ```
 

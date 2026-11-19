@@ -79,63 +79,101 @@ const sameObject = (warning: OpenShiftWarning, resource: OpenShiftResource) =>
 
 const isWorkload = (kind: string) => kind === "Deployment" || kind === "DeploymentConfig";
 
+interface Held {
+  sha: string;
+  resource: OpenShiftResource;
+}
+
 /**
  * Each commit's warnings: those about a resource it holds (by namespace, kind and name, and uid), and those about a
- * ReplicaSet or ReplicationController whose Deployment or DeploymentConfig it holds. A Deployment keeps its name
- * across commits, so its warning goes to the commit it runs only when it happened after that commit's rollout began:
- * the later of its newest ReplicaSet or ReplicationController's creation and the commit's oldest pod there (the live
- * list lists ReplicaSets but watches only pods). An earlier one was the previous commit's. A warning
- * about a resource no commit holds is left out: there is nowhere to show it.
+ * ReplicaSet or ReplicationController: the commit whose pods it runs, else its Deployment or DeploymentConfig's.
+ * A resource several commits hold (a pod two of them match) has its warnings in each. A Deployment keeps its name
+ * across commits, and during a rollout the previous commit holds it too through its old pods: its warning goes only
+ * to the commit it runs (the commit it names, else the one whose rollout began last), and only when it happened after
+ * that commit's rollout began: the later of its newest ReplicaSet or ReplicationController's creation and the
+ * commit's oldest pod there (the live list lists ReplicaSets but watches only pods). An earlier one was the previous
+ * commit's. A warning about a resource no commit holds is left out: there is nowhere to show it. The result does not
+ * depend on the order of `commits`.
  */
 export function linkWarningsToCommits(
   warnings: readonly OpenShiftWarning[],
   commits: ReadonlyMap<string, OpenShiftCommitData>,
   controllers: readonly OpenShiftControllerReference[] = [],
 ): Map<string, OpenShiftWarning[]> {
-  const byResource = new Map<string, { sha: string; resource: OpenShiftResource }>();
-  const shaByWorkloadUid = new Map<string, string>();
+  const byResource = new Map<string, Held[]>();
+  const workloadsByUid = new Map<string, Held[]>();
+  /** The commits whose pods each ReplicaSet or ReplicationController runs. */
+  const shasByController = new Map<string, Set<string>>();
   /** Each commit's oldest pod per namespace: its rollout there began no later (pods are watched, ReplicaSets not). */
   const oldestPod = new Map<string, string>();
+  const push = <K, V>(map: Map<K, V[]>, key: K, value: V) => {
+    const list = map.get(key) ?? [];
+    list.push(value);
+    map.set(key, list);
+  };
   for (const [sha, commit] of commits)
     for (const resource of resourcesOf(commit)) {
-      if (resource.kind === "Pod" && resource.updatedAt) {
-        const key = `${sha}\u0000${resource.namespace}`;
-        const oldest = oldestPod.get(key);
-        if (!oldest || resource.updatedAt < oldest) oldestPod.set(key, resource.updatedAt);
+      if (resource.kind === "Pod") {
+        if (resource.updatedAt) {
+          const key = `${sha}\u0000${resource.namespace}`;
+          const oldest = oldestPod.get(key);
+          if (!oldest || resource.updatedAt < oldest) oldestPod.set(key, resource.updatedAt);
+        }
+        for (const owner of resource.ownerReferences ?? []) {
+          const key = `${resource.namespace}\u0000${owner.uid}`;
+          shasByController.set(key, (shasByController.get(key) ?? new Set()).add(sha));
+        }
       }
-      byResource.set(resourceKey(resource.namespace, resource.kind, resource.name), { sha, resource });
+      push(byResource, resourceKey(resource.namespace, resource.kind, resource.name), { sha, resource });
       if (resource.uid && isWorkload(resource.kind))
-        shaByWorkloadUid.set(`${resource.namespace}\u0000${resource.uid}`, sha);
+        push(workloadsByUid, `${resource.namespace}\u0000${resource.uid}`, { sha, resource });
     }
-  const shaByController = new Map<string, string>();
+  const rolloutBegan = (sha: string, namespace: string) => oldestPod.get(`${sha}\u0000${namespace}`) ?? "";
+  /** The one commit a workload runs: the one it names; without a name, the one whose rollout began last. */
+  const runningCommit = (held: readonly Held[]): Held | undefined => {
+    const named = held.find(entry => entry.resource.commitSha);
+    if (named) return held.find(entry => entry.sha === named.resource.commitSha?.toLowerCase());
+    return [...held].sort(
+      (a, b) =>
+        rolloutBegan(b.sha, b.resource.namespace).localeCompare(rolloutBegan(a.sha, a.resource.namespace)) ||
+        b.sha.localeCompare(a.sha),
+    )[0];
+  };
   /** When each workload's newest rollout began: its newest controller's creation. */
   const rolloutStart = new Map<string, string>();
+  const workloadOfController = new Map<string, string>();
   for (const controller of controllers)
     for (const owner of controller.ownerReferences) {
       const key = `${controller.namespace}\u0000${owner.uid}`;
-      const sha = shaByWorkloadUid.get(key);
-      if (sha) shaByController.set(`${controller.namespace}\u0000${controller.uid}`, sha);
+      workloadOfController.set(`${controller.namespace}\u0000${controller.uid}`, key);
       if (controller.createdAt && controller.createdAt > (rolloutStart.get(key) ?? ""))
         rolloutStart.set(key, controller.createdAt);
     }
-  const linked = new Map<string, OpenShiftWarning[]>();
-  for (const entry of warnings) {
-    const held = byResource.get(resourceKey(entry.namespace, entry.kind, entry.name));
-    const own = held && sameObject(entry, held.resource) ? held : undefined;
-    if (own && isWorkload(entry.kind) && own.resource.uid) {
+  const shasOf = (entry: OpenShiftWarning): string[] => {
+    const own = (byResource.get(resourceKey(entry.namespace, entry.kind, entry.name)) ?? []).filter(held =>
+      sameObject(entry, held.resource),
+    );
+    if (own.length > 0 && isWorkload(entry.kind)) {
+      const running = runningCommit(own);
+      if (!running) return [];
       const starts = [
-        rolloutStart.get(`${entry.namespace}\u0000${own.resource.uid}`),
-        oldestPod.get(`${own.sha}\u0000${entry.namespace}`),
+        running.resource.uid ? rolloutStart.get(`${entry.namespace}\u0000${running.resource.uid}`) : undefined,
+        oldestPod.get(`${running.sha}\u0000${entry.namespace}`),
       ].filter((time): time is string => !!time);
       const began = starts.sort().at(-1);
-      if (began && entry.lastSeen && entry.lastSeen < began) continue;
+      return began && entry.lastSeen && entry.lastSeen < began ? [] : [running.sha];
     }
-    const sha = own?.sha ?? (entry.uid ? shaByController.get(`${entry.namespace}\u0000${entry.uid}`) : undefined);
-    if (!sha) continue;
-    const list = linked.get(sha) ?? [];
-    list.push(entry);
-    linked.set(sha, list);
-  }
+    if (own.length > 0) return [...new Set(own.map(held => held.sha))];
+    if (!entry.uid) return [];
+    const controllerKey = `${entry.namespace}\u0000${entry.uid}`;
+    const byPods = shasByController.get(controllerKey);
+    if (byPods) return [...byPods];
+    const workload = workloadOfController.get(controllerKey);
+    const running = workload ? runningCommit(workloadsByUid.get(workload) ?? []) : undefined;
+    return running ? [running.sha] : [];
+  };
+  const linked = new Map<string, OpenShiftWarning[]>();
+  for (const entry of warnings) for (const sha of shasOf(entry)) push(linked, sha, entry);
   for (const [sha, list] of linked) linked.set(sha, list.sort(newestFirst));
   return linked;
 }
@@ -157,11 +195,14 @@ const RESOURCE_KINDS: ReadonlySet<string> = new Set<OpenShiftResourceKind>([
   "Deployment",
   "DeploymentConfig",
   "Pod",
+  "ReplicaSet",
+  "ReplicationController",
 ]);
 
 /**
- * The resource a warning is about, to open: the commit's own, or one with only its name when the commit no longer has
- * it (a pod that was replaced). Null for a kind codepulse doesn't show (a ReplicaSet).
+ * The resource a warning is about, to open: the commit's own, or one with only its name and uid when the commit no
+ * longer has it (a pod that was replaced, a ReplicaSet, which no commit holds): the uid keeps a pod recreated under the
+ * name out of its events. Null for a kind codepulse doesn't know.
  */
 export function resourceOfWarning(
   warning: OpenShiftWarning,
@@ -175,6 +216,7 @@ export function resourceOfWarning(
     kind: warning.kind as OpenShiftResourceKind,
     namespace: warning.namespace,
     name: warning.name,
+    ...(warning.uid ? { uid: warning.uid } : {}),
     status: "unknown",
     imageRefs: [],
   };

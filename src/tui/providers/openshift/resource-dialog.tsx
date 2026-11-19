@@ -188,11 +188,13 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
 
   const statusLines = createMemo(() => formatOpenShiftStatus(props.resource.kind, objectValue()));
   /**
-   * The kept warnings the cluster's events no longer have: once the events loaded, so none shows twice, or failed, when
-   * they are all that is left.
+   * The kept warnings the cluster's events no longer have: once the events loaded, so none shows twice; or, when they
+   * failed, every kept one, without saying the cluster no longer has them.
    */
   const cachedLines = createMemo(() =>
-    events() === null && !eventsError() ? [] : formatCachedWarnings(props.savedWarnings?.() ?? [], events() ?? []),
+    events() === null && !eventsError()
+      ? []
+      : formatCachedWarnings(props.savedWarnings?.() ?? [], eventsError() ? null : (events() ?? [])),
   );
   /** The view has more than the live events: with them failed or gone, a muted line says so instead of replacing it. */
   const hasMoreThanEvents = () => statusLines().length > 0 || cachedLines().length > 0;

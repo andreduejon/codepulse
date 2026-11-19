@@ -581,6 +581,34 @@ test("the events view ends with the warnings only the cache has, newest first, n
   }
 });
 
+test("when the events cannot load, the saved warnings show without saying the cluster no longer has them", async () => {
+  const failing = async (): Promise<OpenShiftEvent[]> => {
+    throw new Error("OpenShift events failed: 500");
+  };
+  const saved: OpenShiftWarning = {
+    id: "old-1",
+    namespace: "test-ns",
+    kind: "Pod",
+    name: "test-resource",
+    reason: "OOMKilling",
+    message: "OOMKilling message",
+    count: 1,
+    firstSeen: null,
+    lastSeen: "2026-01-01T01:00:00Z",
+  };
+  const d = await renderResource("Pod", false, true, undefined, failing, undefined, "events", [saved]);
+  try {
+    await Bun.sleep(0);
+    await d.flush();
+    expect(d.frame()).toContain("OpenShift events failed: 500");
+    expect(d.frame()).toContain("Saved warnings");
+    expect(d.frame()).toContain("OOMKilling message");
+    expect(d.frame()).not.toContain("Cached (no longer in the cluster)");
+  } finally {
+    d.renderer.destroy();
+  }
+});
+
 test("a resource that is gone shows only its events: no log or object to switch to, nothing to open", async () => {
   const loadEvents = mock(
     async (): Promise<OpenShiftEvent[]> => [

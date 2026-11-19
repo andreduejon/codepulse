@@ -307,6 +307,10 @@ function resourceObjectPath(resource: OpenShiftResource): string {
       return `/apis/apps.openshift.io/v1/namespaces/${ns}/deploymentconfigs/${name}`;
     case "Pod":
       return `/api/v1/namespaces/${ns}/pods/${name}`;
+    case "ReplicaSet":
+      return `/apis/apps/v1/namespaces/${ns}/replicasets/${name}`;
+    case "ReplicationController":
+      return `/api/v1/namespaces/${ns}/replicationcontrollers/${name}`;
   }
 }
 
@@ -611,7 +615,10 @@ export async function fetchOpenShiftEvents(
   resource: OpenShiftResource,
   signal?: AbortSignal,
 ): Promise<OpenShiftEvent[]> {
-  const selector = `involvedObject.kind=${resource.kind},involvedObject.name=${resource.name}`;
+  // By uid too when it is known: a pod recreated under the same name is another object, with events of its own.
+  const selector = `involvedObject.kind=${resource.kind},involvedObject.name=${resource.name}${
+    resource.uid ? `,involvedObject.uid=${resource.uid}` : ""
+  }`;
   const path = `/api/v1/namespaces/${encodeURIComponent(resource.namespace)}/events?fieldSelector=${encodeURIComponent(selector)}`;
   const res = await fetchWithRetry(
     openShiftApiUrl(serverUrl, path),

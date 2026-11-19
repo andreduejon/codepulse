@@ -238,12 +238,17 @@ test("a resource whose events of a reason OpenShift deleted says (cached) under 
   }
 });
 
-test("a warning about a resource without events of its own (a ReplicaSet) has no Enter", async () => {
-  const t = await renderEventsTab([warning({ kind: "ReplicaSet", name: "shop-api-7d9f8", reason: "FailedCreate" })]);
+test("a warning about a ReplicaSet opens its events only: the commit has no ReplicaSet to show in full", async () => {
+  const t = await renderEventsTab([
+    warning({ kind: "ReplicaSet", name: "shop-api-7d9f8", uid: "rs-uid", reason: "FailedCreate" }),
+  ]);
   try {
     await t.enterOn("─ shop-api-7d9f8");
-    expect(t.action).toHaveBeenLastCalledWith(null);
-    expect(t.opened).not.toHaveBeenCalled();
+    expect(t.action).toHaveBeenLastCalledWith("events");
+    expect(t.opened).toHaveBeenLastCalledWith(
+      expect.objectContaining({ kind: "ReplicaSet", name: "shop-api-7d9f8", uid: "rs-uid" }),
+      { eventsOnly: true },
+    );
   } finally {
     t.renderer.destroy();
   }

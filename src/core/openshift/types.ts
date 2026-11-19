@@ -40,7 +40,18 @@ export const DEFAULT_OPENSHIFT_CONFIG: OpenShiftProviderConfig = {
   autoRefreshSeconds: DEFAULT_OPENSHIFT_AUTO_REFRESH_SECONDS,
 };
 
-export type OpenShiftResourceKind = "Build" | "ImageStreamTag" | "Deployment" | "DeploymentConfig" | "Pod";
+/**
+ * What a resource can be. A commit holds the first five; a ReplicaSet or ReplicationController is only what a warning
+ * is about, opened for its events.
+ */
+export type OpenShiftResourceKind =
+  | "Build"
+  | "ImageStreamTag"
+  | "Deployment"
+  | "DeploymentConfig"
+  | "Pod"
+  | "ReplicaSet"
+  | "ReplicationController";
 export type OpenShiftInventoryKind = OpenShiftResourceKind | "ReplicaSet" | "ReplicationController";
 /** `cancelled`: a Build stopped before it ended, neutral like a cancelled CI run. */
 export type OpenShiftStatus = "pass" | "fail" | "running" | "cancelled" | "unknown";

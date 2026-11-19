@@ -30,13 +30,18 @@ function harness() {
     rows: [{ commit: { hash: SHA, refs: [] } }] as unknown as GraphRow[],
   };
   const saved = new Map<string, OpenShiftCacheEntry>();
+  /** Each saved commit and whether the save marked it as used. */
+  const touched = new Map<string, boolean>();
   const cache: OpenShiftCachePort = {
     read: async (_repo, sha) => saved.get(sha) ?? null,
     peekAll: async () => [...saved.values()],
     readLog: async () => null,
     writeLog: async () => {},
-    mergeMany: async (_repo, items, merge) => {
-      for (const item of items) saved.set(item.sha, merge(item.sha, saved.get(item.sha) ?? null, [...item.incoming]));
+    mergeMany: async (_repo, items, merge, _isCurrent, options) => {
+      for (const item of items) {
+        saved.set(item.sha, merge(item.sha, saved.get(item.sha) ?? null, [...item.incoming]));
+        touched.set(item.sha, options?.touch !== false);
+      }
       return items.length;
     },
   };
@@ -106,6 +111,7 @@ function harness() {
   return {
     app,
     saved,
+    touched,
     api,
     service,
     lifecycle,
@@ -309,4 +315,59 @@ test("a build only the cache has gives its saved log, or none: the cluster no lo
   expect(fetchLog).not.toHaveBeenCalled();
   // A listed build still asks.
   expect(await h.service.loadBuildLog(build, true)).toBe("from the cluster");
+});
+
+test("a warning about an older commit only shown from the cache is saved without marking it as used", async () => {
+  const h = harness();
+  const OLD = "d".repeat(40);
+  const oldBuild = { ...build, id: "Build:ns:app-0", name: "app-0", commitSha: OLD };
+  h.saved.set(OLD, { sha: OLD, builds: [oldBuild] as never });
+  h.cluster.warnings = { warnings: [buildWarning({ id: "event-old", name: "app-0" })], denied: [], failed: [] };
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  expect(h.service.getCommitData(OLD)?.warnings?.map(w => w.id)).toEqual(["event-old"]);
+  expect(h.saved.get(OLD)?.warnings?.map(w => w.id)).toEqual(["event-old"]);
+  expect(h.touched.get(OLD)).toBe(false);
+  // The window's commit is used as before.
+  expect(h.touched.get(SHA)).toBe(true);
+});
+
+test("an answer to the warnings that lands after a reset changes nothing", async () => {
+  const h = harness();
+  let answer!: (list: OpenShiftWarningList) => void;
+  Object.assign(h.api, {
+    fetchOpenShiftWarnings: mock(() => new Promise<OpenShiftWarningList>(resolve => (answer = resolve))),
+  });
+  const run = h.lifecycle.fetchInitial(undefined, undefined, true);
+  await Bun.sleep(5);
+  h.lifecycle.resetCaches();
+  answer({ warnings: [buildWarning()], denied: ["ns"], failed: [] });
+  await run;
+  expect(h.service.warningsDenied()).toEqual([]);
+  // Nothing was listed after the reset: the warning is not known to the cluster.
+  expect(h.service.warningIsCached(buildWarning())).toBe(true);
+});
+
+test("an expired token on the warnings freezes automatic requests and says so", async () => {
+  const h = harness();
+  h.cluster.warnings = { warnings: [], denied: [], failed: [], failure: "auth" };
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  expect(h.service.isFrozen()).toBe(true);
+  expect(h.app.status).toEqual({ kind: "error", message: OPENSHIFT_BANNER.tokenExpired });
+});
+
+test("the warnings of a commit codepulse no longer holds are let go with it", async () => {
+  const h = harness();
+  h.cluster.warnings = { warnings: [buildWarning()], denied: [], failed: [] };
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  expect(h.service.warningsAboutResource(build).map(w => w.id)).toEqual(["event-1"]);
+  // Another history, and the cache no longer has the commit.
+  h.app.rows = [{ commit: { hash: "e".repeat(40), refs: [] } }] as unknown as GraphRow[];
+  h.saved.clear();
+  h.cluster.warnings = { warnings: [], denied: [], failed: [] };
+  Object.assign(h.api, {
+    fetchOpenShiftInventory: mock(async () => ({ data: new Map(), error: null, failures: [], successfulRequests: 1 })),
+  });
+  await h.service.refresh();
+  expect(h.service.getCommitData(SHA)).toBeNull();
+  expect(h.service.warningsAboutResource(build)).toEqual([]);
 });

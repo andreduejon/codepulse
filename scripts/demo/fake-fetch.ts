@@ -486,6 +486,10 @@ function openshift(url: URL, signal: AbortSignal | null | undefined): Response {
     const kind = selector.match(/involvedObject\.kind=([^,]+)/)?.[1];
     const object = selector.match(/involvedObject\.name=([^,]+)/)?.[1];
     const key = `${ns}/${kind}/${object}`;
+    // Asked by uid: none when another object has its name now (a gone one's events outlive it, as in a cluster).
+    const uid = selector.match(/involvedObject\.uid=([^,]+)/)?.[1];
+    const current = kind && object ? uidOf(ns, kind, object).uid : undefined;
+    if (uid && current && current !== uid) return json({ kind: "EventList", items: [] });
     const items = (world.events.get(key) ?? []).map(event => ({
       ...event,
       metadata: { ...(event.metadata as object), uid: eventUid(key, event) },

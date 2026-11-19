@@ -113,8 +113,18 @@ describe("OpenShift warnings", () => {
       status: "unknown",
       imageRefs: [],
     });
-    // A kind codepulse doesn't show as a resource has none.
-    expect(resourceOfWarning(warning({ kind: "ReplicaSet", name: "shop-api-7d9f8" }), data)).toBeNull();
+    // One recreated under its name is another object: the gone one keeps its uid, so its events are its own.
+    expect(resourceOfWarning(warning({ uid: "older-pod-uid" }), data)).toMatchObject({
+      name: "shop-api-7d9f8-pull9",
+      uid: "older-pod-uid",
+      status: "unknown",
+    });
+    // A ReplicaSet the commit doesn't hold: by its name and uid, for its events.
+    expect(resourceOfWarning(warning({ kind: "ReplicaSet", name: "shop-api-7d9f8", uid: "rs-uid" }), data)).toMatchObject(
+      { kind: "ReplicaSet", name: "shop-api-7d9f8", uid: "rs-uid" },
+    );
+    // A kind codepulse doesn't know has none.
+    expect(resourceOfWarning(warning({ kind: "HorizontalPodAutoscaler", name: "shop-api" }), data)).toBeNull();
   });
 
   test("a Deployment's warning from before its commit's rollout is not that commit's", () => {
@@ -174,6 +184,73 @@ describe("OpenShift warnings", () => {
     expect(heldResourceOf(warning({ name: "replaced-pod" }), withPruned)).toBeUndefined();
     // Its mark in Resources follows the same rule.
     expect(warningsAbout(pod, [warning({ uid: "older-pod-uid" })])).toEqual([]);
+  });
+
+  test("during a rollout a Deployment's warning goes to the commit it runs, whatever order the commits are in", () => {
+    const A = "a".repeat(40);
+    const B = "b".repeat(40);
+    // B's rollout: the Deployment names B; A still holds it through its old pods.
+    const deployment = resource({ kind: "Deployment", name: "shop-api", uid: "deploy-uid", commitSha: B });
+    const oldPod = resource({
+      name: "shop-api-old-1",
+      updatedAt: "2026-03-02T08:00:00Z",
+      ownerReferences: [{ kind: "ReplicaSet", uid: "old-rs" }],
+    });
+    const newPod = resource({
+      name: "shop-api-new-1",
+      updatedAt: "2026-03-02T10:00:00Z",
+      ownerReferences: [{ kind: "ReplicaSet", uid: "new-rs" }],
+    });
+    const controllers: OpenShiftControllerReference[] = [
+      {
+        kind: "ReplicaSet",
+        namespace: "shop-dev",
+        uid: "old-rs",
+        createdAt: "2026-03-02T08:00:00Z",
+        ownerReferences: [{ kind: "Deployment", uid: "deploy-uid" }],
+      },
+      {
+        kind: "ReplicaSet",
+        namespace: "shop-dev",
+        uid: "new-rs",
+        createdAt: "2026-03-02T10:00:00Z",
+        ownerReferences: [{ kind: "Deployment", uid: "deploy-uid" }],
+      },
+    ];
+    const warnings = [
+      warning({
+        id: "deploy",
+        kind: "Deployment",
+        name: "shop-api",
+        uid: "deploy-uid",
+        reason: "ProgressDeadlineExceeded",
+        lastSeen: "2026-03-02T10:30:00Z",
+      }),
+      // A ReplicaSet's warning goes to the commit whose pods it runs.
+      warning({ id: "old-rs", kind: "ReplicaSet", name: "shop-api-old", uid: "old-rs", reason: "FailedCreate" }),
+      warning({ id: "new-rs", kind: "ReplicaSet", name: "shop-api-new", uid: "new-rs", reason: "FailedCreate" }),
+    ];
+    const a = commit(A, [deployment, oldPod]);
+    const b = commit(B, [deployment, newPod]);
+    for (const order of [
+      new Map([
+        [A, a],
+        [B, b],
+      ]),
+      new Map([
+        [B, b],
+        [A, a],
+      ]),
+    ]) {
+      const linked = linkWarningsToCommits(warnings, order, controllers);
+      expect(linked.get(A)?.map(entry => entry.id)).toEqual(["old-rs"]);
+      expect(
+        linked
+          .get(B)
+          ?.map(entry => entry.id)
+          .sort(),
+      ).toEqual(["deploy", "new-rs"]);
+    }
   });
 
   test("before the live list has its new ReplicaSet, the commit's oldest pod marks its rollout", () => {

@@ -90,14 +90,21 @@ export function toCachedBuild(resource: OpenShiftResource): OpenShiftCachedBuild
   };
 }
 
+/**
+ * How a saved build ended. Its saved object says so: a build cached before cancelled was a status of its own was saved
+ * as failed. The Resources tab and the Dashboard read it the same way.
+ */
+export function cachedBuildStatus(build: OpenShiftCachedBuild): OpenShiftStatus {
+  return build.status === "fail" && buildStatus(build.object) === "cancelled" ? "cancelled" : build.status;
+}
+
 export function cachedBuildToResource(build: OpenShiftCachedBuild): OpenShiftResource {
   return {
     id: build.id,
     kind: "Build",
     namespace: build.namespace,
     name: build.name,
-    // Its saved object says how it ended; a build cached before cancelled was a status of its own was saved as failed.
-    status: build.status === "fail" && buildStatus(build.object) === "cancelled" ? "cancelled" : build.status,
+    status: cachedBuildStatus(build),
     imageRefs: build.imageRefs,
     commitSha: build.commitSha,
     uid: build.uid,

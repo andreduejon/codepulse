@@ -74,7 +74,8 @@ export const GOLDEN_PLAYS: readonly GoldenPlay[] = [
   },
   {
     name: "openshift-cached",
-    covers: "the next phase: (cached) in the Events tab (a replaced pod, a deleted event), the Cached section of the events",
+    covers:
+      "the next phase: (cached) in the Events tab (a replaced pod, a deleted event), the Cached section of the events, a ReplicaSet's events only",
     args: [
       ...WIDE,
       "--play",
@@ -83,6 +84,8 @@ export const GOLDEN_PLAYS: readonly GoldenPlay[] = [
         'click:OpenShift wait:"64ddc8a" advance type::reload enter',
         'click:64ddc8a enter right wait:"shop-api-41 (cached)" shot:events',
         'click:"shop-api-41 (cached)" enter wait:"Cached (no longer" shot:dialog',
+        // No commit holds a ReplicaSet: its warning opens on its events only.
+        'esc click:"30m ago" enter wait:"exceeded quota" shot:replicaset',
       ].join("\n"),
     ],
   },

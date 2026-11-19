@@ -9,6 +9,8 @@ export const OPENSHIFT_EVENT_KINDS: ReadonlySet<OpenShiftResourceKind> = new Set
   "Build",
   "Deployment",
   "DeploymentConfig",
+  "ReplicaSet",
+  "ReplicationController",
 ]);
 
 export const OPENSHIFT_NO_EVENTS = "No recent events. OpenShift keeps them for 3 hours by default.";
@@ -57,16 +59,19 @@ export function formatOpenShiftEvents(events: readonly OpenShiftEvent[]): OpenSh
 }
 
 export const OPENSHIFT_CACHED_WARNINGS = "Cached (no longer in the cluster)";
+/** The kept warnings when the cluster's events did not load: nothing says whether it still has them. */
+export const OPENSHIFT_SAVED_WARNINGS = "Saved warnings";
 
 /**
  * Below the events: the warnings codepulse kept that the cluster's events no longer have (OpenShift deleted them), in
- * the same columns, newest first. Nothing when there are none.
+ * the same columns, newest first; `live` null when the events failed to load: every kept one, without that claim.
+ * Nothing when there are none.
  */
 export function formatCachedWarnings(
   saved: readonly OpenShiftWarning[],
-  live: readonly OpenShiftEvent[],
+  live: readonly OpenShiftEvent[] | null,
 ): OpenShiftEventLine[] {
-  const listed = new Set(live.flatMap(event => (event.id ? [event.id] : [])));
+  const listed = new Set((live ?? []).flatMap(event => (event.id ? [event.id] : [])));
   const cached = saved
     .filter(warning => !listed.has(warning.id))
     .sort((a, b) => (b.lastSeen ?? "").localeCompare(a.lastSeen ?? ""));
@@ -80,7 +85,7 @@ export function formatCachedWarnings(
   }));
   return [
     { text: "", kind: "normal" },
-    { text: OPENSHIFT_CACHED_WARNINGS, kind: "header" },
+    { text: live ? OPENSHIFT_CACHED_WARNINGS : OPENSHIFT_SAVED_WARNINGS, kind: "header" },
     ...formatOpenShiftEvents(events),
   ];
 }
