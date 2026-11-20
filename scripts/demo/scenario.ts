@@ -249,8 +249,8 @@ export function githubPulls(): FakePull[] {
       base: "metrics",
       author: "lena-fischer",
       draft: true,
-      createdAgoMin: 2880,
-      updatedAgoMin: 26 * 60,
+      createdAgoMin: 3 * 60,
+      updatedAgoMin: 2 * 60,
     },
     {
       number: 127,
@@ -267,8 +267,9 @@ export function githubPulls(): FakePull[] {
 }
 
 /**
- * The shop's pull requests merged or closed most recently, for the Dashboard's log and the Pull requests tab: two
- * merged (one opened within the Dashboard's window, one before it) and one closed without merging.
+ * The shop's pull requests merged or closed most recently, for the Dashboard's log and the Pull requests tab: one
+ * closed without merging and one merged today (on main's tip, so it shows in the graph's first rows), and two merged
+ * days ago (one opened within the Dashboard's window, one before it).
  */
 export function githubClosedPulls(): FakePull[] {
   return [
@@ -281,8 +282,21 @@ export function githubClosedPulls(): FakePull[] {
       base: "readme",
       author: "lena-fischer",
       createdAgoMin: 8 * 24 * 60,
-      updatedAgoMin: 25 * 60,
-      ended: { merged: false, agoMin: 25 * 60 },
+      updatedAgoMin: 4 * 60,
+      ended: { merged: false, agoMin: 4 * 60 },
+    },
+    {
+      // Rebased onto main: its branch's commit is main's tip, so main's Pull requests tab lists it.
+      number: 122,
+      title: "docs: rewrite the README for the new cart flow",
+      head: "readme",
+      headRef: "docs/readme",
+      baseRef: "main",
+      base: "readme",
+      author: "demo-dev",
+      createdAgoMin: 2 * 60,
+      updatedAgoMin: 30,
+      ended: { merged: true, agoMin: 30 },
     },
     {
       number: 23,

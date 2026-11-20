@@ -59,6 +59,7 @@
    █      3447db9  main                  09:01  ✓ Deploy to shop-prod with a long workflow name #77 passed
    █      3447db9  main                  09:00  ✓ main #42 passed
    █      64ddc8a  main                  09:00  ! BackOff · pod shop-api-7d9f8-x2k4q in shop-test · 61 times
+   █      3447db9  docs/readme           09:00  ✓ PR #122 merged · docs: rewrite the README for the new cart flow
    │
    █      64ddc8a  main                  08:59  ! Unhealthy · pod shop-api-7d9f8-x2k4q in shop-test · 42 times
    █      3447db9  main                  08:55  ✓ CI #813 passed
@@ -74,19 +75,18 @@
    █      64ddc8a  main                  08:30  ! FailedCreate · replica set shop-api-7d9f8 in shop-test · 3 times
    █      64ddc8a  main                  08:20  ! ProgressDeadlineExceeded · deployment shop-api in shop-test
    │
+   █      3447db9  docs/readme           07:30  ◀ PR #122 opened · docs: rewrite the README for the new cart flow
+   │
    █      64ddc8a  main                  06:45  ✗ main #41 failed
+   █      69ddc1f  feature/dark-mode     06:30  ◀ PR #119 opened · feat(theme): dark mode
    █      64ddc8a  main                  06:15  ! BuildFailed · build shop-api-41 in shop-dev
    █      64ddc8a  main                  06:12  ! FailedMount · pod shop-api-41-build in shop-dev · 2 times
    │
-   █      6adc455  feature/payments-re…  04:31  ✗ CI #815 failed
-   █      6adc455  feature/payments-re…  04:30  ◀ PR #123 opened · feat(payments): retry failed payments with exponential backoff
-   │
-   █      6adc455  feature/payments-re…  03:54  ✗ feature/payments-retry-with-a-really-long-branch-name #3 failed
 
   │
   │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                                       Git   GitHub   Jenkins   OpenShift   Snyk
   │
-  │   customer-notification-service   shop   shop-web                                                                                             50 events
+  │   customer-notification-service   shop   shop-web                                                                                             52 events
   │
 
                                                                                                             tab Git · enter details · r refresh · ↑/↓ navigate

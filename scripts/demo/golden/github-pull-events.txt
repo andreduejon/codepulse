@@ -12,11 +12,12 @@
    █      3447db9  main                  09:01  ✓ Deploy to shop-prod with a long workflow name #77 passed                                                                            ▾ CRITICAL                                             1
    █      3447db9  main                  09:00  ✓ main #42 passed                                                                                                                     └─ ▸ CVE-2022-23540                                9.1 ●
    █      64ddc8a  main                  09:00  ! BackOff · pod shop-api-7d9f8-x2k4q in shop-test · 61 times                                                                          ▾ HIGH                                                 3
-   │                                                                                                                                                                                  ├─ ▸ CVE-2026-10001                                8.2 ●
-   █      64ddc8a  main                  08:59  ! Unhealthy · pod shop-api-7d9f8-x2k4q in shop-test · 42 times                                                                        ├─ ▸ CVE-2020-8203                                 7.5 ●
-   █      3447db9  main                  08:55  ✓ CI #813 passed                                                                                                                      └─ ▸ CVE-2024-4068                                 7.5 ●
-   █      e6209dd  dev                   08:44  ○ CI #811 cancelled                                                                                                                   · MEDIUM                                               0
-   █      e6209dd  dev                   08:43  ○ dev #6 aborted                                                                                                                      · LOW                                                  0
+   █      3447db9  docs/readme           09:00  ✓ PR #122 merged · docs: rewrite the README for the new cart flow                                                                     ├─ ▸ CVE-2026-10001                                8.2 ●
+   │                                                                                                                                                                                  ├─ ▸ CVE-2020-8203                                 7.5 ●
+   █      64ddc8a  main                  08:59  ! Unhealthy · pod shop-api-7d9f8-x2k4q in shop-test · 42 times                                                                        └─ ▸ CVE-2024-4068                                 7.5 ●
+   █      3447db9  main                  08:55  ✓ CI #813 passed                                                                                                                      · MEDIUM                                               0
+   █      e6209dd  dev                   08:44  ○ CI #811 cancelled                                                                                                                   · LOW                                                  0
+   █      e6209dd  dev                   08:43  ○ dev #6 aborted
    █      64ddc8a  main                  08:42  ! OOMKilling · pod shop-api-7d9f8-oom7k in shop-test
    █      3447db9  main                  08:40  ✓ build shop-api-43 complete in shop-dev
    █      bf08113  dev                   08:40  ◀ PR #124 opened · release: dev into main
@@ -27,9 +28,14 @@
    █      64ddc8a  main                  08:30  ! FailedCreate · replica set shop-api-7d9f8 in shop-test · 3 times
    █      64ddc8a  main                  08:20  ! ProgressDeadlineExceeded · deployment shop-api in shop-test
    │
+   █      3447db9  docs/readme           07:30  ◀ PR #122 opened · docs: rewrite the README for the new cart flow
+   │
    █      64ddc8a  main                  06:45  ✗ main #41 failed
+   █      69ddc1f  feature/dark-mode     06:30  ◀ PR #119 opened · feat(theme): dark mode
    █      64ddc8a  main                  06:15  ! BuildFailed · build shop-api-41 in shop-dev
    █      64ddc8a  main                  06:12  ! FailedMount · pod shop-api-41-build in shop-dev · 2 times
+   │
+   █      1b1b130  experiment/graph-la…  05:30  ○ PR #116 closed · experiment: compare both graph layouts
    │
    █      6adc455  feature/payments-re…  04:31  ✗ CI #815 failed
    █      6adc455  feature/payments-re…  04:30  ◀ PR #123 opened · feat(payments): retry failed payments with exponential backoff
@@ -44,11 +50,7 @@
    │      ────────────────────────────── Yesterday · Sun, Mar 1 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
    █      917f7b3  main                  13:30  perf(cart): cache price lookups
    │
-   █      1b1b130  experiment/graph-la…  08:30  ○ PR #116 closed · experiment: compare both graph layouts
-   │
    │      ────────────────────────────── Sat, Feb 28 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-   █      69ddc1f  feature/dark-mode     09:30  ◀ PR #119 opened · feat(theme): dark mode
-   │
    █      1bb16fb  main                  01:30  Merge pull request #23 from demo/feature/i18n
    █      0166f71  feature/i18n          01:30  ✓ PR #23 merged · feat(i18n): German and French checkout
    │
@@ -89,12 +91,10 @@
 
 
 
-
-
   │
   │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                                                           Git   GitHub   Jenkins   OpenShift   Snyk
   │
-  │   customer-notification-service   shop   shop-web                                                                                                                 50 events
+  │   customer-notification-service   shop   shop-web                                                                                                                 52 events
   │
 
                                                                                                                tab Git · enter show in Snyk · → details · r refresh · ↑/↓ navigate           ● upgrade  ● override  ● no fix  ! mature exploit
@@ -114,6 +114,7 @@
    █      3447db9  main                  09:01  ✓ Deploy to shop-prod with a long workflow name #77 passed
    █      3447db9  main                  09:00  ✓ main #42 passed
    █      64ddc8a  main                  09:00  ! BackOff · pod shop-api-7d9f8-x2k4q in shop-test · 61 times
+   █      3447db9  docs/readme           09:00  ✓ PR #122 merged · docs: rewrite the README for the new cart flow
    │
    █      64ddc8a  main                  08:59  ! Unhealthy · pod shop-api-7d9f8-x2k4q in shop-test · 42 times
    █      3447db9  main                  08:55  ✓ CI #813 passed
@@ -129,9 +130,14 @@
    █      64ddc8a  main                  08:30  ! FailedCreate · replica set shop-api-7d9f8 in shop-test · 3 times
    █      64ddc8a  main                  08:20  ! ProgressDeadlineExceeded · deployment shop-api in shop-test
    │
+   █      3447db9  docs/readme           07:30  ◀ PR #122 opened · docs: rewrite the README for the new cart flow
+   │
    █      64ddc8a  main                  06:45  ✗ main #41 failed
+   █      69ddc1f  feature/dark-mode     06:30  ◀ PR #119 opened · feat(theme): dark mode
    █      64ddc8a  main                  06:15  ! BuildFailed · build shop-api-41 in shop-dev
    █      64ddc8a  main                  06:12  ! FailedMount · pod shop-api-41-build in shop-dev · 2 times
+   │
+   █      1b1b130  experiment/graph-la…  05:30  ○ PR #116 closed · experiment: compare both graph layouts
    │
    █      6adc455  feature/payments-re…  04:31  ✗ CI #815 failed
    █      6adc455  feature/payments-re…  04:30  ◀ PR #123 opened · feat(payments): retry failed payments with exponential backoff
@@ -146,11 +152,7 @@
    │      ────────────────────────────── Yesterday · Sun, Mar 1 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
    █      917f7b3  main                  13:30  perf(cart): cache price lookups
    │
-   █      1b1b130  experiment/graph-la…  08:30  ○ PR #116 closed · experiment: compare both graph layouts
-   │
    │      ────────────────────────────── Sat, Feb 28 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-   █      69ddc1f  feature/dark-mode     09:30  ◀ PR #119 opened · feat(theme): dark mode
-   │
    █      1bb16fb  main                  01:30  Merge pull request #23 from demo/feature/i18n
    █      0166f71  feature/i18n          01:30  ✓ PR #23 merged · feat(i18n): German and French checkout
    │
@@ -191,12 +193,10 @@
 
 
 
-
-
   │
   │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                                                           Git   GitHub   Jenkins   OpenShift   Snyk
   │
-  │   customer-notification-service   shop   shop-web                                                                                                                 50 events
+  │   customer-notification-service   shop   shop-web                                                                                                                 52 events
   │
 
                                                                                                     tab Git · enter show in GitHub · → details · o open · r refresh · ↑/↓ navigate                         ◀ open  ◀ draft  ✓ merged  ○ closed
@@ -209,13 +209,14 @@
    │      ────────────────────────────── Today · Mon, Mar 2 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    Show in GitHub
    █      3447db9  main                  09:30  ▲ scan · 4 vulnerabilities · 1 critical · 3 high · 0 medium · 0 low                                                                   Reload commit
    █      bf08113  dev                   09:30  ▲ scan · 4 vulnerabilities · 1 critical · 3 high · 0 medium · 0 low                                                                   total pull requests                                    1
-   █      bf08113  dev                   09:30  ● Deploy preview #78 running                                                                                                          └─ ▸ PR #119 feat(theme): dark mode          Yesterday ◀
+   █      bf08113  dev                   09:30  ● Deploy preview #78 running                                                                                                          └─ ▸ PR #119 feat(theme): dark mode             2h ago ◀
    █      bf08113  dev                   09:30  ● CI #814 running
    █      bf08113  dev                   09:28  ● dev #7 running
    █      bf08113  dev                   09:27  ✓ build shop-api-44 complete in shop-dev
    █      3447db9  main                  09:01  ✓ Deploy to shop-prod with a long workflow name #77 passed
    █      3447db9  main                  09:00  ✓ main #42 passed
    █      64ddc8a  main                  09:00  ! BackOff · pod shop-api-7d9f8-x2k4q in shop-test · 61 times
+   █      3447db9  docs/readme           09:00  ✓ PR #122 merged · docs: rewrite the README for the new cart flow
    │
    █      64ddc8a  main                  08:59  ! Unhealthy · pod shop-api-7d9f8-x2k4q in shop-test · 42 times
    █      3447db9  main                  08:55  ✓ CI #813 passed
@@ -231,9 +232,14 @@
    █      64ddc8a  main                  08:30  ! FailedCreate · replica set shop-api-7d9f8 in shop-test · 3 times
    █      64ddc8a  main                  08:20  ! ProgressDeadlineExceeded · deployment shop-api in shop-test
    │
+   █      3447db9  docs/readme           07:30  ◀ PR #122 opened · docs: rewrite the README for the new cart flow
+   │
    █      64ddc8a  main                  06:45  ✗ main #41 failed
+   █      69ddc1f  feature/dark-mode     06:30  ◀ PR #119 opened · feat(theme): dark mode
    █      64ddc8a  main                  06:15  ! BuildFailed · build shop-api-41 in shop-dev
    █      64ddc8a  main                  06:12  ! FailedMount · pod shop-api-41-build in shop-dev · 2 times
+   │
+   █      1b1b130  experiment/graph-la…  05:30  ○ PR #116 closed · experiment: compare both graph layouts
    │
    █      6adc455  feature/payments-re…  04:31  ✗ CI #815 failed
    █      6adc455  feature/payments-re…  04:30  ◀ PR #123 opened · feat(payments): retry failed payments with exponential backoff
@@ -248,11 +254,7 @@
    │      ────────────────────────────── Yesterday · Sun, Mar 1 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
    █      917f7b3  main                  13:30  perf(cart): cache price lookups
    │
-   █      1b1b130  experiment/graph-la…  08:30  ○ PR #116 closed · experiment: compare both graph layouts
-   │
    │      ────────────────────────────── Sat, Feb 28 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-   █      69ddc1f  feature/dark-mode     09:30  ◀ PR #119 opened · feat(theme): dark mode
-   │
    █      1bb16fb  main                  01:30  Merge pull request #23 from demo/feature/i18n
    █      0166f71  feature/i18n          01:30  ✓ PR #23 merged · feat(i18n): German and French checkout
    │
@@ -293,12 +295,10 @@
 
 
 
-
-
   │
   │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                                                           Git   GitHub   Jenkins   OpenShift   Snyk
   │
-  │   customer-notification-service   shop   shop-web                                                                                                                 50 events
+  │   customer-notification-service   shop   shop-web                                                                                                                 52 events
   │
 
                                                                                                     tab Git · enter show in GitHub · → details · o open · r refresh · ↑/↓ navigate                         ◀ open  ◀ draft  ✓ merged  ○ closed

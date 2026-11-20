@@ -412,7 +412,7 @@
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
     █◀──────────────╮           bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request…   2             running            Reload commit
     │               │                                                                                                                         total pull requests                                    1
-    █               │           e6209dd  feat(api): add a health endpoint                                    1             45m ago            └─ ▸ PR #119 feat(theme): dark mode          Yesterday ◀
+    █               │           e6209dd  feat(api): add a health endpoint                                    1             45m ago            └─ ▸ PR #119 feat(theme): dark mode             2h ago ◀
     │               │
     █               │           3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…   2             28m ago
     │               │
