@@ -87,7 +87,9 @@ opens the job page.
 ## Pull requests
 
 GitHub's view marks each commit an open pull request's branch points at with a chip
-after its refs, in GitHub's colour: `PR #123`, muted for a draft. Only the branch's
+after its refs, in GitHub's colour: `PR #123`, muted for a draft. One merged or closed
+recently gets a muted chip with its mark (`PR #122 ✓`, `PR #116 ○`), so its row in the
+tab is found too. Only the branch's
 tip gets one; a commit with two open pull requests (one branch into `main` and into
 `release/1.x`) gets two. On a tight row the chips come right after the checked-out
 branch; a chip is never shortened (a cut number would read as another), so one that

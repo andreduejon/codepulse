@@ -114,11 +114,15 @@ export function useDashboardController(opts: {
   let dashboardDialogScrollbox: ScrollBoxRenderable | undefined;
 
   /** A commit to select once its repository's graph is there, in the view of the provider that showed it. */
-  const [pendingGraphJump, setPendingGraphJump] = createSignal<{ sha: string; view: ProviderView } | null>(null);
-  /** The event's commit in its provider's view, with that provider's details open on it. */
+  const [pendingGraphJump, setPendingGraphJump] = createSignal<{
+    sha: string;
+    view: ProviderView;
+    tab?: string;
+  } | null>(null);
+  /** The event's commit in its provider's view, with that provider's details open on it, on the event's own tab. */
   const showInGraph = (event: DashboardEvent) => {
     if (event.app !== opts.repoPath()) opts.switchTo(event.app);
-    setPendingGraphJump({ sha: event.sha, view: event.source });
+    setPendingGraphJump({ sha: event.sha, view: event.source, ...(event.tab ? { tab: event.tab } : {}) });
   };
   createEffect(() => {
     const jump = pendingGraphJump();
@@ -140,6 +144,8 @@ export function useDashboardController(opts: {
     }
     batch(() => {
       setPendingGraphJump(null);
+      // The graph's details open on the event's tab when its commit shows next (use-detail-loader reads it once).
+      opts.graphNavRef.pendingTab = jump.tab;
       actions.setActiveProviderView(state.providers.getEnabledViews().includes(jump.view) ? jump.view : "git");
       actions.setCursorIndex(index);
       actions.setScrollTargetIndex(index);

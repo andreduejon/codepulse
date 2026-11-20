@@ -42,11 +42,17 @@ export const githubModule = providerModule({
         ...githubPullEvents(app, github.heldPullRequests()),
       ],
       detailSource,
-      // The CI columns, and after a commit's refs a chip per open pull request whose branch points at it, a draft's
-      // muted: its number only, the rest is in the Pull requests tab.
+      // The CI columns, and after a commit's refs a chip per pull request whose branch points at it: its number only, the
+      // rest is in the Pull requests tab; a draft's and a merged or closed one's muted.
       graphColumns: {
         ...CI_GRAPH_COLUMNS,
-        refs: sha => github.pullRequestsAt(sha).map(pr => ({ name: `PR #${pr.number}`, muted: pr.draft, whole: true })),
+        refs: sha => [
+          ...github.pullRequestsAt(sha).map(pr => ({ name: `PR #${pr.number}`, muted: pr.draft, whole: true })),
+          // Merged or closed recently: muted, with its mark, so the Pull requests tab's other rows are found too.
+          ...github
+            .closedPullRequestsAt(sha)
+            .map(pr => ({ name: `PR #${pr.number} ${pullMark(pr.state).icon}`, muted: true, whole: true })),
+        ],
       },
     };
   },

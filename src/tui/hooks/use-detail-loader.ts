@@ -90,8 +90,11 @@ export function useDetailLoader({
      * The tab starts over, except on a jump to a child or parent: walking the graph keeps the Details tab. The jump's
      * flag is set around the cursor change, and this effect runs inside it.
      */
+    // A jump from the Dashboard opens the event's own tab, once.
+    const wanted = detailNavRef.pendingTab;
+    detailNavRef.pendingTab = undefined;
     if (commit && !getIsJumpNavigation()) {
-      setGraphDetail.setDetailActiveTab(getDefaultDetailTab(commit, activeProvider, state.providers.set));
+      setGraphDetail.setDetailActiveTab(wanted ?? getDefaultDetailTab(commit, activeProvider, state.providers.set));
       setGraphDetail.setDetailCursorIndex(0);
       detailNavRef.pendingJumpDirection = null;
     }

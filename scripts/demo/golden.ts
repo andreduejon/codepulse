@@ -83,6 +83,8 @@ export const GOLDEN_PLAYS: readonly GoldenPlay[] = [
         'click:Dashboard wait:"PR #23 merged" shot:log',
         'click:"PR #23 merged" wait:"total pull requests" shot:merged',
         'click:"PR #119 opened" wait:"total pull requests" shot:draft',
+        // Show in GitHub: the graph's details on the event's own tab.
+        'click:"PR #124 opened" enter wait:"Last run" shot:show-in-github',
       ].join("\n"),
     ],
   },

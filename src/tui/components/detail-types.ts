@@ -16,6 +16,11 @@ export interface DetailNavRef {
   /** Pending jump direction — persists across interactiveItems recomputations.
    *  Set by handleJumpToCommit, cleared by app.tsx commit-change effect on non-jump navigation. */
   pendingJumpDirection: "child" | "parent" | null;
+  /**
+   * The tab the next commit's details open on instead of their provider's first: the Dashboard's "Show in" jumps to
+   * the event's own (a pull request's: Pull requests; an OpenShift warning's: Events). Read once.
+   */
+  pendingTab?: string;
   /** Move the detail cursor to the file with the given path (if visible in the current tab). */
   scrollToFile: (filePath: string) => void;
   /** Element refs for all interactive items, indexed by item position in the flat list. */
