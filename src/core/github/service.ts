@@ -486,7 +486,14 @@ export function createGitHubService(ports: GitHubServicePorts) {
 
     const fetched = await lifecycle().runRequest(signal => ports.api.fetchRunJobs(repo, token, run.id, signal), signal);
     if (signal?.aborted || !lifecycle().isCurrent(epoch, repoPath)) return { jobs: [], error: null };
-    if (fetched.error) return fallback ?? fetched;
+    if (fetched.error) {
+      // An expired token here freezes automatic requests as the runs' own 401 does, and says so.
+      if (fetched.failure === "auth") {
+        rememberAuthError(fetched.failure);
+        app.setStatus(providerError(GITHUB_BANNER.tokenExpired));
+      }
+      return fallback ?? fetched;
+    }
     // REST lists every attempt, so its jobs know theirs (1 where the host does not say).
     const listed = fetched.jobs.map(job => (job.runAttempt === undefined ? { ...job, runAttempt: 1 } : job));
     const jobs = await withAnnotations(listed, signal);

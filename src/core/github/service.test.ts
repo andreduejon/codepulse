@@ -10,7 +10,7 @@ import type { ProviderStatus } from "../provider-status";
 import { GITHUB_BANNER } from "./banner";
 import type { GitHubCacheEntry } from "./merge";
 import { createGitHubService, type GitHubApiPort, type GitHubCachePort } from "./service";
-import type { GitHubJob, GitHubPullRequest, GitHubRepo, GitHubWorkflowRun } from "./types";
+import type { GitHubJob, GitHubJobFetchResult, GitHubPullRequest, GitHubRepo, GitHubWorkflowRun } from "./types";
 import { DEFAULT_GITHUB_CONFIG } from "./types";
 
 const SHA = "a".repeat(40);
@@ -66,7 +66,7 @@ function harness() {
   };
   const api = {
     fetchCIDataForSHAs: mock(async () => ({ ...answer, jobs: new Map() })),
-    fetchRunJobs: mock(async () => ({ jobs: [job], error: null })),
+    fetchRunJobs: mock(async (): Promise<GitHubJobFetchResult> => ({ jobs: [job], error: null })),
     fetchJobAnnotations: mock(async () => []),
     fetchJobLog: mock(async () => "log"),
     fetchOpenPullRequests: mock(
@@ -161,6 +161,26 @@ test("an expired token stops automatic requests until a Reload", async () => {
   expect(h.api.fetchCIDataForSHAs).toHaveBeenCalledTimes(2);
   expect(h.service.getCommitData(SHA)?.runs).toHaveLength(1);
   expect(h.app.status.kind).toBe("idle");
+});
+
+test("an expired token on a run's jobs freezes automatic requests too, and says so", async () => {
+  const h = harness();
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  h.api.fetchRunJobs.mockImplementation(async () => ({
+    jobs: [],
+    error: GITHUB_BANNER.tokenExpired,
+    failure: "auth" as const,
+  }));
+  const running = run({ id: 8, status: "in_progress", conclusion: null });
+  await h.service.fetchJobsForRun(running);
+  expect(h.app.status).toEqual({ kind: "error", message: GITHUB_BANNER.tokenExpired });
+  // Another run's jobs and the automatic refresh ask GitHub no more.
+  expect((await h.service.fetchJobsForRun(run({ id: 9, status: "in_progress", conclusion: null }))).error).toBe(
+    GITHUB_BANNER.tokenExpired,
+  );
+  await h.lifecycle.fetchRefresh(undefined, true, false);
+  expect(h.api.fetchRunJobs).toHaveBeenCalledTimes(1);
+  expect(h.api.fetchCIDataForSHAs).toHaveBeenCalledTimes(1);
 });
 
 test("a finished run's jobs are read from GitHub once, then kept", async () => {
