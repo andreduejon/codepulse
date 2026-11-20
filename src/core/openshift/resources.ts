@@ -538,7 +538,9 @@ export function buildOpenShiftCommitMap(
         : [],
     ),
   );
-  for (const r of resources.filter(r => r.commitSha)) {
+  // A terminating Pod is gone in a moment: on no commit, whether it names its own or is matched.
+  const shown = resources.filter(r => !(r.kind === "Pod" && r.terminating));
+  for (const r of shown.filter(r => r.commitSha)) {
     const sha = r.commitSha;
     if (!sha) continue;
     add(map, sha, r);
@@ -546,8 +548,7 @@ export function buildOpenShiftCommitMap(
     for (const token of r.imageRefs.flatMap(imageDigests)) set.add(token);
     tokensBySha.set(sha, set);
   }
-  for (const r of resources.filter(r => !r.commitSha)) {
-    if (r.kind === "Pod" && r.terminating) continue;
+  for (const r of shown.filter(r => !r.commitSha)) {
     // The commits its image is from: during a rollout an old pod still matches the Deployment's selector, but runs
     // the previous commit's image, so a known image wins over the selector.
     const digests = r.imageRefs.flatMap(imageDigests);

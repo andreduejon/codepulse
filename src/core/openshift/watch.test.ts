@@ -125,5 +125,7 @@ describe("a Pod's own commit", () => {
         .get(sha)
         ?.namespaces[0]?.pods.map(p => p.name),
     ).toEqual(["solo"]);
+    // Terminating: on no commit, as a matched one.
+    expect(buildOpenShiftCommitMap(watched ? [{ ...watched, terminating: true }] : []).get(sha)).toBeUndefined();
   });
 });
