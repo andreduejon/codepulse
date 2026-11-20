@@ -135,7 +135,8 @@ lanes don't move; only when every column is taken does the graph get one more. W
 else its branch on a remote or the local one); it goes when the tab closes.
 
 The open pull requests are one request (`pulls?state=open`, up to 500), and the ones merged
-or closed most recently another (`pulls?state=closed`, the 100 last updated), side by side
+or closed most recently another (`pulls?state=closed`, sorted by update, read back as far
+as the Dashboard's longest window, 30 days, up to 500), side by side
 on the first fetch, on each refresh and on a Reload. A list that fails keeps its last one
 and is only recorded in the Debug dialog. Neither is saved: after a restart they come back
 with the first fetch.

@@ -10,6 +10,7 @@ import {
   isGitHubJobsFieldSchemaError,
   MAX_CHECK_SUITE_PAGES,
   MAX_JOB_PAGES,
+  mapApiPullRequest,
   nextGithubLink,
 } from "../src/adapters/github/api";
 import { getTokenSource } from "../src/adapters/system/token-env";
@@ -1250,6 +1251,61 @@ describe("fetchOpenPullRequests", () => {
         closedAt: null,
       },
       expect.objectContaining({ number: 7, draft: true, author: "" }),
+    ]);
+  });
+
+  it("a pull request is open, merged (it has a merge time) or closed without merging, with its times", () => {
+    const at = "2026-03-02T09:00:00Z";
+    expect(mapApiPullRequest(apiPull({ created_at: at }))).toMatchObject({
+      state: "open",
+      createdAt: at,
+      closedAt: null,
+    });
+    expect(mapApiPullRequest(apiPull({ state: "closed", merged_at: at, closed_at: at }))).toMatchObject({
+      state: "merged",
+      closedAt: at,
+    });
+    expect(mapApiPullRequest(apiPull({ state: "closed", merged_at: null, closed_at: at }))).toMatchObject({
+      state: "closed",
+      closedAt: at,
+    });
+    // Without a head commit it can't be placed: left out.
+    expect(mapApiPullRequest(apiPull({ head: { ref: "x" } }))).toBeNull();
+  });
+
+  it("closed ones are read page by page back to the Dashboard's longest window, and no further", async () => {
+    const day = 24 * 60 * 60 * 1000;
+    const closed = (number: number, daysAgo: number) =>
+      apiPull({
+        number,
+        state: "closed",
+        merged_at: new Date(Date.now() - daysAgo * day).toISOString(),
+        closed_at: new Date(Date.now() - daysAgo * day).toISOString(),
+        updated_at: new Date(Date.now() - daysAgo * day).toISOString(),
+      });
+    const pages = [[closed(10, 1), closed(9, 12)], [closed(8, 20), closed(7, 40)], [closed(6, 50)]];
+    const urls: string[] = [];
+    mockFetch(
+      mock(async (input: RequestInfo | URL) => {
+        const page = urls.push(String(input));
+        return new Response(JSON.stringify(pages[page - 1] ?? []), {
+          status: 200,
+          headers: {
+            link: `<https://api.github.com/repos/owner/repo/pulls?state=closed&page=${page + 1}>; rel="next"`,
+          },
+        });
+      }),
+    );
+    const { data, error } = await fetchClosedPullRequests(TEST_REPO, TEST_TOKEN);
+    expect(error).toBeNull();
+    expect(urls[0]).toContain("state=closed&sort=updated&direction=desc&per_page=100");
+    // The second page reaches back past 30 days: the third is not asked for.
+    expect(urls).toHaveLength(2);
+    expect(data.map(pr => [pr.number, pr.state])).toEqual([
+      [10, "merged"],
+      [9, "merged"],
+      [8, "merged"],
+      [7, "merged"],
     ]);
   });
 

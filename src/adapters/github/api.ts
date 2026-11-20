@@ -1,4 +1,5 @@
 import { bannerOrFallback, debugError, isBanner } from "../../core/banner";
+import { DASHBOARD_WINDOW_DAYS } from "../../core/dashboard-settings";
 import { GITHUB_BANNER } from "../../core/github/banner";
 import type {
   GitHubAnnotation,
@@ -694,6 +695,8 @@ async function fetchPullRequestPages(
   query: string,
   maxPages: number,
   signal?: AbortSignal,
+  /** Sorted by update, newest first: stop after the page that reaches back past this time. */
+  until?: string,
 ): Promise<GitHubResult<GitHubPullRequest[]>> {
   const origin = apiBase(repo);
   let url: string | null = `${origin}/pulls?${query}&per_page=100`;
@@ -717,10 +720,12 @@ async function fetchPullRequestPages(
         debugError("GitHub", `${what}: not a list`);
         return { data: pulls, error: GITHUB_BANNER.fetchFailed };
       }
-      pulls.push(...json.flatMap(raw => mapApiPullRequest(raw) ?? []));
-      url = nextGithubLink(res.headers.get("link"), origin);
+      const page = json.flatMap(raw => mapApiPullRequest(raw) ?? []);
+      pulls.push(...page);
+      const oldest = page.at(-1)?.updatedAt ?? "";
+      url = until && oldest && oldest < until ? null : nextGithubLink(res.headers.get("link"), origin);
     }
-    if (url && maxPages > 1) debugError("GitHub", `${what} truncated after ${maxPages} pages`);
+    if (url) debugError("GitHub", `${what} truncated after ${maxPages} pages`);
     return { data: pulls, error: null };
   } catch (err) {
     if (signal?.aborted) throw err;
@@ -734,6 +739,20 @@ async function fetchPullRequestPages(
 export const fetchOpenPullRequests = (repo: GitHubRepo, token: string, signal?: AbortSignal) =>
   fetchPullRequestPages(repo, token, "Open pull requests", "state=open", MAX_PULL_PAGES, signal);
 
-/** The 100 pull requests merged or closed most recently (by their last update): what the Dashboard's window shows. */
+/** The Dashboard's longest time window: closed pull requests are read back that far. */
+const CLOSED_PULLS_DAYS = Math.max(...DASHBOARD_WINDOW_DAYS);
+
+/**
+ * The pull requests merged or closed most recently (by their last update), back as far as the Dashboard's longest
+ * window shows: page after page of 100, up to 5.
+ */
 export const fetchClosedPullRequests = (repo: GitHubRepo, token: string, signal?: AbortSignal) =>
-  fetchPullRequestPages(repo, token, "Closed pull requests", "state=closed&sort=updated&direction=desc", 1, signal);
+  fetchPullRequestPages(
+    repo,
+    token,
+    "Closed pull requests",
+    "state=closed&sort=updated&direction=desc",
+    MAX_PULL_PAGES,
+    signal,
+    new Date(Date.now() - CLOSED_PULLS_DAYS * 24 * 60 * 60 * 1000).toISOString(),
+  );
