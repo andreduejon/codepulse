@@ -89,6 +89,18 @@ export const GOLDEN_PLAYS: readonly GoldenPlay[] = [
     ],
   },
   {
+    name: "github-dashboard-diff",
+    covers: "a pull request's file diff from the Dashboard's compact details (the cursor starts on its row), and back",
+    args: [
+      ...COMPACT,
+      "--play",
+      [
+        'click:Dashboard wait:"PR #124 opened" click:"PR #124 opened" enter wait:"total pull requests" shot:details',
+        'enter wait:"metrics.ts" click:"metrics.ts" wait:"esc close" shot:diff esc wait:"Details" shot:back',
+      ].join("\n"),
+    ],
+  },
+  {
     name: "github-show-in",
     covers:
       "Show in GitHub back on the commit and view the graph was left on: the event's tab, not the one left open " +

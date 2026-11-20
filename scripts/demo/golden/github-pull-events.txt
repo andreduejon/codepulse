@@ -308,11 +308,11 @@
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
   Graph                         Commit   Description                                                                                                Status         Last run                Actions           Pull requests          Info
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-    █                           bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request metrics                                    2             running            Reload commit
-    │                                                                                                                                                                                 total pull requests                                    2
-    █                           e6209dd  feat(api): add a health endpoint                                                                            1             45m ago            ├─ ▸ PR #124 release: dev into main             5m ago ◀
-    │                                                                                                                                                                                 └─ ▸ PR #125 release: dev into release/1.x      5m ago ◀
-    █                           3447db9   v0.42.0   main   origin/main   origin/HEAD   stash (1)   PR #122  docs: rewrite the README for the new …   2             28m ago
+    █─╮                         bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request metrics                                    2             running            Reload commit
+    │ │                                                                                                                                                                               total pull requests                                    2
+    █ │                         e6209dd  feat(api): add a health endpoint                                                                            1             45m ago            ├─ ▸ PR #124 release: dev into main             5m ago ◀
+    │ │                                                                                                                                                                               └─ ▸ PR #125 release: dev into release/1.x      5m ago ◀
+    █◀╯                         3447db9   v0.42.0   main   origin/main   origin/HEAD   stash (1)   PR #122  docs: rewrite the README for the new …   2             28m ago
     │
     │ █                         6adc455   feature/payments-retry-with-a…   origin/feature/payments-retry…   PR #123  wip(payments): retry policy …   1             4h ago
     │ │
@@ -403,6 +403,6 @@
   │   customer-notification-service   shop   shop-web                                                                                                         main   86 commits
   │
 
-                                                                                                             tab Jenkins · enter reload · esc back · ←/→ switch tab · ↑/↓ navigate                         ◀ open  ◀ draft  ✓ merged  ○ closed
+                                                                                                     tab Jenkins · enter files · o open · esc back · ←/→ switch tab · ↑/↓ navigate                         ◀ open  ◀ draft  ✓ merged  ○ closed
 
 

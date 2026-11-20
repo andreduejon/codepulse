@@ -43,7 +43,7 @@ export function useDashboardController(opts: {
   providers: ProviderHost;
   /** Each provider's terminal module: its colors and its events' legend. */
   modules: readonly AnyProviderModule[];
-  dialogs: Pick<DialogHost, "dialog" | "setDialog">;
+  dialogs: Pick<DialogHost, "dialog" | "setDialog" | "openDiff">;
   layoutMode: Accessor<LayoutMode>;
   /** The graph's details: "Show in provider" opens them on the event's commit. */
   graphNavRef: DetailNavRef;
@@ -118,6 +118,7 @@ export function useDashboardController(opts: {
     sha: string;
     view: ProviderView;
     tab?: string;
+    entry?: string;
   } | null>(null);
   /**
    * The event's commit in its provider's view, with that provider's details open on it, on the event's own tab: the one
@@ -126,7 +127,12 @@ export function useDashboardController(opts: {
   const showInGraph = (event: DashboardEvent) => {
     if (event.app !== opts.repoPath()) opts.switchTo(event.app);
     const tab = event.tab ?? state.providers.set.detailTab(event.source)?.id;
-    setPendingGraphJump({ sha: event.sha, view: event.source, ...(tab ? { tab } : {}) });
+    setPendingGraphJump({
+      sha: event.sha,
+      view: event.source,
+      ...(tab ? { tab } : {}),
+      ...(event.entry ? { entry: event.entry } : {}),
+    });
   };
   createEffect(() => {
     const jump = pendingGraphJump();
@@ -150,6 +156,8 @@ export function useDashboardController(opts: {
       setPendingGraphJump(null);
       // The graph's details open on the event's tab when its commit shows next (use-detail-loader reads it once).
       opts.graphNavRef.pendingTab = jump.tab;
+      // And the cursor on the event's own row in it (a run, a build, a warning, a pull request).
+      actions.setGraphDetailTarget(jump.entry ? { sha: jump.sha, entry: jump.entry } : null);
       actions.setActiveProviderView(state.providers.getEnabledViews().includes(jump.view) ? jump.view : "git");
       actions.setCursorIndex(index);
       actions.setScrollTargetIndex(index);
@@ -260,6 +268,8 @@ export function useDashboardController(opts: {
           // The event's own run, build or resource: open, marked in the dashboard's color like its row.
           target={event.entry}
           targetColor={providerColors(opts.theme(), "dashboard", opts.modules).bg}
+          // A file's diff (a pull request's), over the Dashboard; closing it comes back here.
+          onOpenDiff={opts.dialogs.openDiff}
         />
       ),
   });

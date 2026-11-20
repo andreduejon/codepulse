@@ -1,0 +1,141 @@
+=== shot 1: details (160x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   Graph  Commit   Branch                Time   Event
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   │      ────────────────────────────── Today · Mon, Mar 2 ──────────────────────────────────────────────────────────────────────────────────────────────────
+   █      3447db9  main                  09:
+   █      bf08113  dev                   09:     Details                                              esc close
+   █      bf08113  dev                   09:
+   █      bf08113  dev                   09:     ──────────────────────────────────────────────────────────────
+   █      bf08113  dev                   09:           Actions             Pull requests            Info
+   █      bf08113  dev                   09:     ──────────────────────────────────────────────────────────────
+   █      3447db9  main                  09:     Show in GitHub
+   █      3447db9  main                  09:     Reload commit
+   █      64ddc8a  main                  09:     total pull requests                                          2
+   █      3447db9  docs/readme           09:     ├─ ▸ PR #124 release: dev into main                   5m ago ◀
+   │                                             └─ ▸ PR #125 release: dev into release/1.x            5m ago ◀
+   █      64ddc8a  main                  08:
+   █      3447db9  main                  08:
+   █      e6209dd  dev                   08:
+   █      e6209dd  dev                   08:
+   █      64ddc8a  main                  08:
+   █      3447db9  main                  08:
+   █      bf08113  dev                   08:
+   █      bf08113  dev                   08:
+   █      64ddc8a  main                  08:
+   █      64ddc8a  main                  08:
+   █      3447db9  main                  08:                                                                        scounts are rounded
+   █      64ddc8a  main                  08:
+   █      64ddc8a  main                  08:
+   │
+   █      3447db9  docs/readme           07:
+   │
+   █      64ddc8a  main                  06:
+   █      69ddc1f  feature/dark-mode     06:
+   █      64ddc8a  main                  06:
+   █      64ddc8a  main                  06:
+   │
+
+  │                                                                         ◀ open  ◀ draft  ✓ merged  ○ closed
+  │   Dashboard   Git   GitHub   Jenkins   O                                                                        t   GitHub   Jenkins   OpenShift   Snyk
+  │                                                                    s show in GitHub · o open · ↑/↓ navigate
+  │   customer-notification-service   shop                                                                                                        52 events
+  │
+
+                                                                                     tab Git · enter files · o open · esc back · ←/→ switch tab · ↑/↓ navigate
+
+
+=== shot 2: diff (160x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   Graph  Commit   Branch                Time   Event
+  ──────                                                                                                                                                ──────
+   │         Diff · [2/3] · 3447db9..bf08113 · src/api/metrics.ts · unified                                                               esc close     ──────
+   █
+   █         A · +19
+   █
+   █         ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   █         Lines (none) → 1–19
+   █            1  + /** Prometheus metrics: request counts and durations by route. */
+   █            2  + const EXPORTER_VERSION = "^15.1.0";
+   █            3  +
+   █            4  + const requests = new Map<string, { count: number; seconds: number }>();
+   █            5  +
+   │            6  + export function record(route: string, seconds: number): void {
+   █            7  +   const entry = requests.get(route) ?? { count: 0, seconds: 0 };
+   █            8  +   entry.count += 1;
+   █            9  +   entry.seconds += seconds;
+   █           10  +   requests.set(route, entry);
+   █           11  + }
+   █           12  +
+   █           13  + export function metrics(): Response {
+   █           14  +   const lines = ["# TYPE http_requests_total counter"];
+   █           15  +   for (const [route, { count }] of requests) lines.push(`http_requests_total{route="${route}"} ${count}`);
+   █           16  +   lines.push("# TYPE http_request_seconds_sum counter");
+   █           17  +   for (const [route, { seconds }] of requests) lines.push(`http_request_seconds_sum{route="${route}"} ${seconds}`);
+   █           18  +   return new Response(`${lines.join("\n")}\n`, { headers: { "x-exporter": EXPORTER_VERSION } });
+   █           19  + }
+   │         ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   █
+   │
+   █
+   █
+   █
+   █
+   │
+
+  │
+  │   Da                                                                       ← previous file · → next file · b blame · v file · c view · w nowrap     nyk
+  │
+  │   customer-notification-service   shop   shop-web                                                                                             52 events
+  │
+
+                                                                                          tab Git · enter view diff · esc back · ←/→ switch tab · ↑/↓ navigate
+
+
+=== shot 3: back (160x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   Graph  Commit   Branch                Time   Event
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   │      ────────────────────────────── Today · Mon, Mar 2 ──────────────────────────────────────────────────────────────────────────────────────────────────
+   █      3447db9  main                  09:
+   █      bf08113  dev                   09:     Details                                              esc close
+   █      bf08113  dev                   09:
+   █      bf08113  dev                   09:     ──────────────────────────────────────────────────────────────
+   █      bf08113  dev                   09:           Actions             Pull requests            Info
+   █      bf08113  dev                   09:     ──────────────────────────────────────────────────────────────
+   █      3447db9  main                  09:     Show in GitHub
+   █      3447db9  main                  09:     Reload commit
+   █      64ddc8a  main                  09:     total pull requests                                          2
+   █      3447db9  docs/readme           09:     ├─ ▾ PR #124 release: dev into main                   5m ago ◀
+   │                                             │  ├─ dev → main
+   █      64ddc8a  main                  08:     │  ├─ @ana-lima
+   █      3447db9  main                  08:     │  └─ ▾ src/
+   █      e6209dd  dev                   08:     │     ├─ ▾ api/
+   █      e6209dd  dev                   08:     │     │  ├─ health.ts                                 A +14 -0
+   █      64ddc8a  main                  08:     │     │  └─ metrics.ts                                A +19 -0
+   █      3447db9  main                  08:     │     └─ index.ts                                     M  +5 -0
+   █      bf08113  dev                   08:     └─ ▸ PR #125 release: dev into release/1.x            5m ago ◀
+   █      bf08113  dev                   08:
+   █      64ddc8a  main                  08:
+   █      64ddc8a  main                  08:
+   █      3447db9  main                  08:                                                                        scounts are rounded
+   █      64ddc8a  main                  08:
+   █      64ddc8a  main                  08:
+   │
+   █      3447db9  docs/readme           07:
+   │
+   █      64ddc8a  main                  06:
+   █      69ddc1f  feature/dark-mode     06:
+   █      64ddc8a  main                  06:
+   █      64ddc8a  main                  06:
+   │
+
+  │                                                                         ◀ open  ◀ draft  ✓ merged  ○ closed
+  │   Dashboard   Git   GitHub   Jenkins   O                                                                        t   GitHub   Jenkins   OpenShift   Snyk
+  │                                                                    s show in GitHub · o open · ↑/↓ navigate
+  │   customer-notification-service   shop                                                                                                        52 events
+  │
+
+                                                                                  tab Git · enter collapse · o open · esc back · ←/→ switch tab · ↑/↓ navigate
+
+

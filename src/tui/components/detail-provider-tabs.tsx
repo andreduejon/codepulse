@@ -106,6 +106,8 @@ export function ProviderDetailTabs(
             memory={props.memory}
             onOpenDiff={props.view.onOpenDiff}
             onMergePreview={actions.setMergePreview}
+            // The Dashboard event "Show in" jumped from: the cursor starts on its row.
+            target={state.graphDetailTarget()?.sha === props.sha ? state.graphDetailTarget()?.entry : undefined}
           />
         </Show>
       )}

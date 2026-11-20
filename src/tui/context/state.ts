@@ -74,6 +74,8 @@ export interface AppState extends Omit<CoreAppState, "detailFor"> {
   menuTab: Accessor<MenuTab>;
   /** The merge the graph previews (a pull request's, while its tab is open), and where its line runs; null for none. */
   mergePreviewSpan: Accessor<MergePreviewSpan | null>;
+  /** The entry the graph's details put the cursor on for a commit: the Dashboard event "Show in" jumped from. */
+  graphDetailTarget: Accessor<{ sha: string; entry: string } | null>;
 }
 
 export interface AppActions extends Omit<CoreAppActions, "detailFor"> {
@@ -81,6 +83,7 @@ export interface AppActions extends Omit<CoreAppActions, "detailFor"> {
   setDetailCursorShortcut: (shortcut: CursorShortcut) => void;
   setMenuTab: (tab: MenuTab) => void;
   setMergePreview: (preview: MergePreview | null) => void;
+  setGraphDetailTarget: (target: { sha: string; entry: string } | null) => void;
 }
 
 const AppStateContext = createContext<{ state: AppState; actions: AppActions }>();
@@ -112,6 +115,7 @@ export function createAppState(
   const [searchQuery, setSearchQuery] = createSignal("");
   const [viewingBranch, setViewingBranch] = createSignal<string | null>(null);
   const [menuTab, setMenuTab] = createSignal<MenuTab>("repository");
+  const [graphDetailTarget, setGraphDetailTarget] = createSignal<{ sha: string; entry: string } | null>(null);
   const [mergePreview, setMergePreview] = createSignal<MergePreview | null>(null, {
     equals: (a, b) => a?.head === b?.head && a?.base === b?.base && a?.baseRef === b?.baseRef,
   });
@@ -305,6 +309,7 @@ export function createAppState(
     viewingBranch,
     menuTab,
     mergePreviewSpan,
+    graphDetailTarget,
     pathFilter,
     pathMatchSet,
     ancestrySet,
@@ -359,6 +364,7 @@ export function createAppState(
     setViewingBranch,
     setMenuTab,
     setMergePreview,
+    setGraphDetailTarget,
     setPathFilter,
     setPathMatchSet,
     setActiveProviderView,

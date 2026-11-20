@@ -112,7 +112,7 @@ target did since. Git reads them, so both branches' commits must be fetched: the
 as GitHub names it, else `origin/<target>`. When they aren't, the row says so and `f`
 fetches them; the next Reload commit or refresh reads them again. Enter on a file opens the diff dialog on that change
 (`3447db9..bf08113` in its title), and `←`/`→` move between the pull request's files.
-Files open from the graph's details; the Dashboard's details list them only.
+Files open from the graph's details and from the Dashboard's; closing the diff comes back to them.
 
 While the tab is open, the graph previews the merge of the pull request the mouse is over,
 else the one the details' cursor is on (it or its files); none on Reload commit or while
@@ -143,7 +143,8 @@ On the **Dashboard** each pull request is an event when it was opened (`◀ PR #
 muted for a draft), and one when it was merged (`✓ PR #118 merged`) or closed without
 merging (`○ PR #116 closed`), on its branch's commit; each leaves the log when it is older
 than the time window. An event's details open on its row in **Pull requests**, marked in
-the Dashboard's colour. They show for the open app only: the pull requests are held, not
+the Dashboard's colour; Show in GitHub opens the graph's details on the same tab with the
+cursor on that row. They show for the open app only: the pull requests are held, not
 saved for the other apps of a group.
 
 ## Errors and limits

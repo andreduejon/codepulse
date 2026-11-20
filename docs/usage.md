@@ -90,7 +90,7 @@ build's Git ref), else the branch the commit was made on.
 | `↑` / `↓` or `j` / `k` | Navigate events |
 | `shift ↑` / `shift ↓`, `PgUp` / `PgDn` | Jump 10 events |
 | `g` / `G`, `home` / `end` | First / last event |
-| `enter` | Show the event's commit in its provider's view with its details (wide layout) / open its details (compact layout) |
+| `enter` | Show the event's commit in its provider's view with its details on the event's own tab and row (wide layout) / open its details (compact layout) |
 | `→` / `l` | Give the event's provider tab the keyboard (wide layout); `←` on its first tab gives it back |
 | `o` | Open the run's or build's page in the browser |
 | `r` | Fetch every provider again and read the events |

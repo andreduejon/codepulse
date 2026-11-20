@@ -195,7 +195,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     settings,
     providers,
     modules: providerModules,
-    dialogs: { dialog, setDialog },
+    dialogs: { dialog, setDialog, openDiff: dialogs.openDiff },
     layoutMode,
     graphNavRef: detailNavRef,
     detailMemory,
