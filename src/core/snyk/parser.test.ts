@@ -359,11 +359,19 @@ describe("fix-oriented vulnerability entries", () => {
   };
 
   test("fixedIn prefers the lowest fix above the installed version, else lists all", () => {
-    const parse = (fixedIn: string[], version = "11.0.24") =>
+    const parse = (fixedIn: string[], version = "11.0.24", packageManager = "npm") =>
       parseSnykOutput(
         {
           vulnerabilities: [
-            { id: "x", severity: "high", packageName: "core", version, fixedIn, from: ["app@1", `core@${version}`] },
+            {
+              id: "x",
+              severity: "high",
+              packageName: "core",
+              packageManager,
+              version,
+              fixedIn,
+              from: ["app@1", `core@${version}`],
+            },
           ],
         },
         { sha: SHA, scannedAt: "now" },
@@ -377,6 +385,11 @@ describe("fix-oriented vulnerability entries", () => {
     expect(compareVersions("1.0.0", "1.0.0-beta.1")).toBeGreaterThan(0);
     expect(compareVersions("2.5.0-RC1", "2.5.0")).toBeLessThan(0);
     expect(compareVersions("1.0.0-beta.2", "1.0.0-beta.1")).toBeGreaterThan(0);
+    // SemVer's numeric prerelease too; in Maven it's a later build.
+    expect(parse(["1.2.3", "2.0.0"], "1.2.3-1")).toBe("1.2.3");
+    expect(parse(["1.2.4", "2.0.0"], "1.2.3-1", "maven")).toBe("1.2.4");
+    expect(compareVersions("1.2.3-1", "1.2.3", true)).toBeLessThan(0);
+    expect(compareVersions("1.2.3-1", "1.2.3")).toBeGreaterThan(0);
     // Maven's dotted qualifier is unchanged.
     expect(compareVersions("9.1.4.Final", "9.1.4")).toBeGreaterThan(0);
   });

@@ -65,15 +65,16 @@ function cveIdentifiers(vulnerability: Record<string, unknown>): string[] {
 
 /**
  * Numeric-aware version order; non-numeric segments (e.g. `Final`) compare as text. A prerelease (`-beta.1`, `-RC1`)
- * comes before its release.
+ * comes before its release. With `semver` (npm and the like) a numeric one does too (`1.2.3-1`); Maven reads that as
+ * a later build of 1.2.3, so without it, it doesn't.
  */
-export function compareVersions(left: string, right: string): number {
+export function compareVersions(left: string, right: string, semver = false): number {
   const segments = (version: string) => [...version.matchAll(/([.\-+]?)([^.\-+]+)/g)];
   const a = segments(left);
   const b = segments(right);
+  const prerelease = (segment: RegExpMatchArray | undefined) =>
+    segment?.[1] === "-" && (semver || !/^\d+$/.test(segment[2]));
   for (let index = 0; index < Math.max(a.length, b.length); index++) {
-    const prerelease = (segment: RegExpExecArray | RegExpMatchArray | undefined) =>
-      segment?.[1] === "-" && !/^\d+$/.test(segment[2]);
     if (!a[index] && prerelease(b[index])) return 1;
     if (!b[index] && prerelease(a[index])) return -1;
     const x = a[index]?.[2] ?? "0";
@@ -84,13 +85,18 @@ export function compareVersions(left: string, right: string): number {
   return 0;
 }
 
+/** Ecosystems whose versions aren't SemVer: a numeric suffix after `-` is a later build there. */
+const NOT_SEMVER = new Set(["maven", "gradle", "sbt"]);
+
 function fixedVersion(vulnerability: Record<string, unknown>, dependency: string, installed: string): string | null {
   if (Array.isArray(vulnerability.fixedIn)) {
     // Snyk lists one fix per release line; prefer the lowest one above the installed version.
     const fixed = vulnerability.fixedIn.filter(
       (value): value is string => typeof value === "string" && value.length > 0,
     );
-    const above = fixed.filter(value => compareVersions(value, installed) > 0).sort(compareVersions);
+    const semver = !NOT_SEMVER.has(String(vulnerability.packageManager ?? ""));
+    const order = (left: string, right: string) => compareVersions(left, right, semver);
+    const above = fixed.filter(value => order(value, installed) > 0).sort(order);
     if (above.length > 0) return above[0];
     if (fixed.length > 0) return fixed.join(", ");
   }
