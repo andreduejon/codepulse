@@ -189,6 +189,8 @@ export interface FakePull {
   head: string;
   headRef: string;
   baseRef: string;
+  /** The commit key its base branch points at. */
+  base: string;
   author: string;
   draft?: boolean;
   updatedAgoMin: number;
@@ -206,6 +208,7 @@ export function githubPulls(): FakePull[] {
       head: "retry",
       headRef: FEATURE_BRANCH,
       baseRef: "main",
+      base: "readme",
       author: "mei-chen",
       updatedAgoMin: 40,
     },
@@ -215,6 +218,7 @@ export function githubPulls(): FakePull[] {
       head: "metrics",
       headRef: "dev",
       baseRef: "main",
+      base: "readme",
       author: "ana-lima",
       updatedAgoMin: 5,
     },
@@ -224,6 +228,7 @@ export function githubPulls(): FakePull[] {
       head: "metrics",
       headRef: "dev",
       baseRef: "release/1.x",
+      base: "rel142",
       author: "ana-lima",
       updatedAgoMin: 5,
     },
@@ -233,6 +238,7 @@ export function githubPulls(): FakePull[] {
       head: "dark3",
       headRef: "feature/dark-mode",
       baseRef: "dev",
+      base: "metrics",
       author: "lena-fischer",
       draft: true,
       updatedAgoMin: 26 * 60,

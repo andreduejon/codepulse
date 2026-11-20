@@ -31,6 +31,27 @@ export async function getStashFiles(repoPath: string, stashHash: string, signal?
   return parseDiffTreeOutput(stdout);
 }
 
+/** What `head` changed since it left `base`: the files between their merge base and `head`, and that base. */
+export async function getRangeFiles(
+  repoPath: string,
+  base: string,
+  head: string,
+  signal?: AbortSignal,
+): Promise<{ mergeBase: string; files: FileChange[] } | null> {
+  // Names from GitHub: one that starts with `-` would be read as an option.
+  if (base.startsWith("-") || head.startsWith("-")) return null;
+  const found = await runGit(repoPath, ["merge-base", base, head], signal);
+  const mergeBase = found.stdout.trim();
+  if (found.exitCode !== 0 || !/^[0-9a-f]{40,64}$/.test(mergeBase)) return null;
+  const { stdout, exitCode } = await runGit(
+    repoPath,
+    ["diff-tree", "--no-commit-id", "-r", "--raw", "--numstat", mergeBase, head, "--"],
+    signal,
+  );
+  if (exitCode !== 0) return null;
+  return { mergeBase, files: stdout.trim() ? parseDiffTreeOutput(stdout) : [] };
+}
+
 /**
  * Fetch staged file changes (index vs HEAD).
  * Uses `git diff --cached --raw --numstat` to get files staged for commit.

@@ -57,11 +57,17 @@ export const GOLDEN_PLAYS: readonly GoldenPlay[] = [
   },
   {
     name: "github-pulls",
-    covers: "GitHub's PR chips on the commits open pull requests' branches point at, and a commit's Pull requests tab",
+    covers:
+      "GitHub's PR chips on the commits open pull requests' branches point at, a commit's Pull requests tab, a pull " +
+      "request's files and a file's diff in it, and back",
     args: [
       ...WIDE,
       "--play",
-      'click:GitHub wait:"PR #124" shot:chips click:bf08113 click:"Pull requests" wait:"total pull requests" shot:pulls',
+      [
+        'click:GitHub wait:"PR #124" shot:chips click:bf08113 click:"Pull requests" wait:"total pull requests" shot:pulls',
+        'click:"PR #124 release" wait:"metrics.ts" shot:files',
+        'click:"metrics.ts" wait:"esc close" shot:diff right shot:next-file esc shot:back',
+      ].join("\n"),
     ],
   },
   {

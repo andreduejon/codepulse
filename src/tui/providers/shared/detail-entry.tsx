@@ -5,6 +5,7 @@
  */
 
 import type { Component, JSX } from "solid-js";
+import type { DiffTarget } from "../../../core/git/types";
 import type { ProviderDetailView } from "../../../core/provider-model";
 import type { DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
@@ -46,6 +47,8 @@ export interface DetailEntryContext {
   readonly target?: string;
   /** The marked entry's color (the dashboard's). */
   readonly targetColor?: string;
+  /** Opens the diff dialog on a file (GitHub's pull request's); without it a tab's files don't open. */
+  readonly onOpenDiff?: (target: DiffTarget) => void;
 }
 
 /** A provider's detail tab: what it renders from its provider's source, and the legend below it. */

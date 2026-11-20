@@ -307,7 +307,7 @@ function github(url: URL, method: string, body: string): Response {
             draft: pull.draft === true,
             user: { login: pull.author },
             head: { sha: state.shas[pull.head], ref: pull.headRef },
-            base: { ref: pull.baseRef },
+            base: { ref: pull.baseRef, sha: state.shas[pull.base] },
             updated_at: new Date(started - pull.updatedAgoMin * 60_000).toISOString(),
           })),
     );

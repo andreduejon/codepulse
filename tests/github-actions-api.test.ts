@@ -1208,7 +1208,7 @@ describe("fetchOpenPullRequests", () => {
     draft: false,
     user: { login: "mei" },
     head: { sha: "A".repeat(40), ref: "feature/retry" },
-    base: { ref: "main" },
+    base: { ref: "main", sha: "B".repeat(40) },
     updated_at: "2026-03-02T09:00:00Z",
     ...overrides,
   });
@@ -1242,6 +1242,7 @@ describe("fetchOpenPullRequests", () => {
         headSha: "a".repeat(40),
         headRef: "feature/retry",
         baseRef: "main",
+        baseSha: "b".repeat(40),
         updatedAt: "2026-03-02T09:00:00Z",
       },
       expect.objectContaining({ number: 7, draft: true, author: "" }),

@@ -6,6 +6,8 @@ import type {
   GitHubWorkflowRun,
 } from "../../../core/github/types";
 import { scopedMemory } from "../../components/detail-memory";
+import { useGit } from "../../context/git";
+import { useAppState } from "../../context/state";
 import { detailEntry, type ProviderDetailSource } from "../shared/detail-entry";
 import { ActionsDetailTab } from "./detail-tab";
 import { GITHUB_LEGEND } from "./legend";
@@ -46,18 +48,34 @@ export const githubDetail = detailEntry<GitHubDetailSource>({
 
 /** The Pull requests tab: only on a commit a pull request's branch points at, counting them. */
 export const githubPullsDetail = detailEntry<GitHubDetailSource>({
-  Tab: props => (
-    <PullRequestsTab
-      mouseEnabled={props.context.mouseEnabled}
-      onMouseFocus={props.context.onMouseFocus}
-      sha={props.context.sha}
-      pullRequestsAt={sha => props.source.pullRequestsAt?.(sha) ?? []}
-      fetchCommitData={props.source.fetchCommitData}
-      unavailableReason={props.context.unavailable("github-actions", props.source.status)}
-      loading={props.source.status?.kind === "loading"}
-      {...props.context.cursor}
-    />
-  ),
+  Tab: props => {
+    // Rendered inside the details, below the app's providers: Git and the open repository are there.
+    const git = useGit();
+    const { state } = useAppState();
+    /** Its files as Git has them: from where its branch left the target's (the target as GitHub said, else fetched). */
+    const loadFiles = async (pr: GitHubPullRequest) => {
+      for (const base of [pr.baseSha, `origin/${pr.baseRef}`, pr.baseRef].filter(Boolean)) {
+        const found = await git.getRangeFiles(state.repoPath(), base, pr.headSha);
+        if (found) return found;
+      }
+      return null;
+    };
+    return (
+      <PullRequestsTab
+        mouseEnabled={props.context.mouseEnabled}
+        onMouseFocus={props.context.onMouseFocus}
+        sha={props.context.sha}
+        pullRequestsAt={sha => props.source.pullRequestsAt?.(sha) ?? []}
+        loadFiles={loadFiles}
+        onOpenDiff={props.context.onOpenDiff}
+        fetchCommitData={props.source.fetchCommitData}
+        unavailableReason={props.context.unavailable("github-actions", props.source.status)}
+        loading={props.source.status?.kind === "loading"}
+        memory={scopedMemory(props.context.memory, "github-pulls")}
+        {...props.context.cursor}
+      />
+    );
+  },
   label: (source, sha) => {
     const count = source.pullRequestsAt?.(sha).length ?? 0;
     return count > 0 ? `Pull requests (${count})` : null;

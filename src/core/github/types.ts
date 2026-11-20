@@ -130,8 +130,9 @@ export interface GitHubPullRequest {
   /** The commit its branch points at now: the one the graph marks. */
   headSha: string;
   headRef: string;
-  /** The branch it would merge into. */
+  /** The branch it would merge into, and the commit that branch points at ("" when GitHub didn't say). */
   baseRef: string;
+  baseSha: string;
   updatedAt: string;
 }
 

@@ -1,4 +1,5 @@
 import { For, Show } from "solid-js";
+import type { DiffTarget } from "../../core/git/types";
 import type { ProviderDetailView } from "../../core/provider-model";
 import { type DetailTab, type ProviderStatus, useAppState } from "../context/state";
 import { NO_PROVIDER_DETAILS, type ProviderDetails } from "../providers/detail-entries";
@@ -24,6 +25,8 @@ export function ProviderTab(
     /** The entry to open and mark (the dashboard's event), and its color. */
     target?: string;
     targetColor?: string;
+    /** Opens the diff dialog on a file the tab lists (a pull request's). */
+    onOpenDiff?: (target: DiffTarget) => void;
   }>,
 ) {
   const { state, actions } = useAppState();
@@ -64,6 +67,9 @@ export function ProviderTab(
     get targetColor() {
       return props.targetColor;
     },
+    get onOpenDiff() {
+      return props.onOpenDiff;
+    },
   };
   return <>{props.providers.render(props.tab, context)}</>;
 }
@@ -92,6 +98,7 @@ export function ProviderDetailTabs(
             onMouseFocus={props.view.onMouseFocus}
             contentWidth={props.view.contentWidth}
             memory={props.memory}
+            onOpenDiff={props.view.onOpenDiff}
           />
         </Show>
       )}

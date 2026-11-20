@@ -97,6 +97,15 @@ pull request with its title, its branch and the one it would merge into, its aut
 `draft` for a draft, and when it was last updated. `o` opens it on GitHub; Reload
 commit reads the runs and the pull requests again.
 
+Enter opens a pull request on the files it changed, as a tree like **Files**, each with
+its status and `+`/`-` lines: what its branch changed since it left the target branch
+(Git's merge base of the two), as GitHub's **Files changed** shows it, not what the
+target did since. Git reads them, so both branches' commits must be fetched: the target
+as GitHub names it, else `origin/<target>`. When they aren't, the row says so and `f`
+fetches them. Enter on a file opens the diff dialog on that change
+(`3447db9..bf08113` in its title), and `←`/`→` move between the pull request's files.
+Files open from the graph's details; the Dashboard's details list them only.
+
 The open pull requests are one request (`pulls?state=open`, up to 500) on the first
 fetch, on each refresh and on a Reload. One that fails keeps the last list and is
 only recorded in the Debug dialog.

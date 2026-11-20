@@ -24,6 +24,7 @@ export function gitCli(): GitPort {
     getCommitDetail: (...args) => repo.getCommitDetail(...args),
     getUncommittedDetail: (...args) => repoStatus.getUncommittedDetail(...args),
     getStashFiles: (...args) => repoStatus.getStashFiles(...args),
+    getRangeFiles: (...args) => repoStatus.getRangeFiles(...args),
     getPathMatchingHashes: (...args) => repo.getPathMatchingHashes(...args),
     getFileDiff: (...args) => repoDiff.getFileDiff(...args),
     getFileContent: (...args) => repoDiff.getFileContent(...args),

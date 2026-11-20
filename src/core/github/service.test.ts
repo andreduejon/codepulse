@@ -173,6 +173,7 @@ const pull = (overrides: Partial<GitHubPullRequest> = {}): GitHubPullRequest => 
   headSha: SHA,
   headRef: "feature/payments-retry",
   baseRef: "main",
+  baseSha: "c".repeat(40),
   updatedAt: "2026-03-02T09:00:00Z",
   ...overrides,
 });

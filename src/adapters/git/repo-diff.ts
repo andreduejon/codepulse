@@ -27,6 +27,7 @@ async function readWorktreeFile(repoPath: string, filePath: string): Promise<Fil
  * - staged: `git diff --cached -p -- <path>`
  * - unstaged: `git diff -p -- <path>`
  * - untracked: reads the file directly and presents as all-added
+ * - range: `git diff -p <base> <hash> -- <path>` (a pull request's change)
  */
 export async function getFileDiff(
   repoPath: string,
@@ -34,6 +35,7 @@ export async function getFileDiff(
   filePath: string,
   source: DiffSource,
   signal?: AbortSignal,
+  base?: string,
 ): Promise<FileDiff> {
   // Untracked files have no git diff — read the file and synthesize an all-added diff
   if (source === "untracked") {
@@ -54,6 +56,9 @@ export async function getFileDiff(
       break;
     case "unstaged":
       args = ["diff", "-p", "--", filePath];
+      break;
+    case "range":
+      args = ["diff", "-p", base ?? `${commitHash}^1`, commitHash, "--", filePath];
       break;
   }
 
@@ -120,6 +125,7 @@ export async function getFileContent(
   filePath: string,
   source: DiffSource,
   signal?: AbortSignal,
+  base?: string,
 ): Promise<FileContent> {
   if (source === "unstaged" || source === "untracked")
     return (await readWorktreeFile(repoPath, filePath)) ?? { filePath, lines: [], isBinary: false };
@@ -132,6 +138,8 @@ export async function getFileContent(
         return [`${commitHash}:${filePath}`, `${commitHash}^1:${filePath}`];
       case "staged":
         return [`:${filePath}`];
+      case "range":
+        return [`${commitHash}:${filePath}`, `${base ?? `${commitHash}^`}:${filePath}`];
     }
   })();
 
@@ -159,9 +167,10 @@ export async function getFileBlame(
   filePath: string,
   source: DiffSource,
   signal?: AbortSignal,
+  _base?: string,
 ): Promise<BlameLine[]> {
-  // For non-commit sources, blame against HEAD
-  const ref = source === "commit" ? commitHash : "HEAD";
+  // A commit and a range (its head) blame their commit; the rest blame HEAD.
+  const ref = source === "commit" || source === "range" ? commitHash : "HEAD";
 
   const { stdout, exitCode, truncated } = await runGit(
     repoPath,

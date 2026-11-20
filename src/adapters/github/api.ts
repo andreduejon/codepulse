@@ -663,6 +663,7 @@ export function mapApiPullRequest(raw: unknown): GitHubPullRequest | null {
   const baseRef = text(base?.ref);
   if (typeof number !== "number" || title === null || url === null || headRef === null || baseRef === null) return null;
   if (!headSha || !/^[0-9a-f]{40}$/i.test(headSha)) return null;
+  const baseSha = text(base?.sha) ?? "";
   return {
     number,
     title,
@@ -672,6 +673,7 @@ export function mapApiPullRequest(raw: unknown): GitHubPullRequest | null {
     headSha: headSha.toLowerCase(),
     headRef,
     baseRef,
+    baseSha: /^[0-9a-f]{40}$/i.test(baseSha) ? baseSha.toLowerCase() : "",
     updatedAt: text(item?.updated_at) ?? "",
   };
 }

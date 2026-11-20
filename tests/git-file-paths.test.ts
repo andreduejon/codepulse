@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getCommitDetail, runGit } from "../src/adapters/git/repo";
 import { getFileDiff } from "../src/adapters/git/repo-diff";
-import { getStagedFiles, getUntrackedFiles } from "../src/adapters/git/repo-status";
+import { getRangeFiles, getStagedFiles, getUntrackedFiles } from "../src/adapters/git/repo-status";
 
 const paths = (files: { path: string; status: string }[]) => files.map(f => `${f.status} ${f.path}`).sort();
 
@@ -68,6 +68,46 @@ test("merge commits list and diff their files against the first parent", async (
 
     const diff = await getFileDiff(root, merge, "side.txt", "commit");
     expect(diff.hunks[0]?.lines.map(line => `${line.type} ${line.content}`)).toEqual(["add side"]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a pull request's files and diff are its branch's since it left the target, not what the target did since", async () => {
+  const root = await mkdtemp(join(tmpdir(), "codepulse-git-range-"));
+  const git = async (...args: string[]) => {
+    const result = await runGit(root, ["-c", "user.name=Test", "-c", "user.email=test@example.test", ...args]);
+    if (result.exitCode !== 0) throw new Error(result.stderr);
+    return result.stdout.trim();
+  };
+  try {
+    await git("init", "-b", "main");
+    await writeFile(join(root, "shared.txt"), "one\n");
+    await git("add", ".");
+    await git("commit", "-m", "initial");
+    const left = await git("rev-parse", "HEAD");
+    await git("checkout", "-b", "feature");
+    await writeFile(join(root, "shared.txt"), "one\ntwo\n");
+    await writeFile(join(root, "feature.txt"), "new\n");
+    await git("add", ".");
+    await git("commit", "-m", "feature");
+    const head = await git("rev-parse", "HEAD");
+    await git("checkout", "main");
+    await writeFile(join(root, "main-only.txt"), "later\n");
+    await git("add", ".");
+    await git("commit", "-m", "main moves on");
+
+    const range = await getRangeFiles(root, "main", head);
+    expect(range?.mergeBase).toBe(left);
+    expect(paths(range?.files ?? [])).toEqual(["A feature.txt", "M shared.txt"]);
+    const diff = await getFileDiff(root, head, "shared.txt", "range", undefined, range?.mergeBase);
+    expect(diff.hunks.flatMap(hunk => hunk.lines.map(line => `${line.type} ${line.content}`))).toEqual([
+      "context one",
+      "add two",
+    ]);
+    // A commit Git hasn't, or a name that would be an option: nothing.
+    expect(await getRangeFiles(root, "main", "f".repeat(40))).toBeNull();
+    expect(await getRangeFiles(root, "--all", head)).toBeNull();
   } finally {
     await rm(root, { recursive: true, force: true });
   }
