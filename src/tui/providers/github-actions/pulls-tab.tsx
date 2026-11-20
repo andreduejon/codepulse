@@ -40,8 +40,11 @@ export interface PullRequestsTabProps {
   /** The Dashboard's pull request (its number): its row marked in `targetColor`, an open one's with the cursor. */
   target?: string;
   targetColor?: string;
-  /** Its files from Git; null when Git hasn't both its commits (its branch or the target's isn't fetched). */
-  loadFiles?: (pr: GitHubPullRequest) => Promise<PullFiles | null>;
+  /**
+   * Its files from Git; null when Git hasn't both its commits even after fetching them. `onFetch` says it fetches
+   * them first.
+   */
+  loadFiles?: (pr: GitHubPullRequest, onFetch: () => void) => Promise<PullFiles | null>;
   /** Opens a file's diff; without it the files don't open (the Dashboard's details). */
   onOpenDiff?: (target: DiffTarget) => void;
   /** Previews the selected pull request's merge in the graph beside the tab; null clears it. */
@@ -71,7 +74,7 @@ const versionKey = (pr: GitHubPullRequest) => `${pr.number}:${pr.headSha}:${pr.b
 
 /** A pull request's files read: their stat columns' widths too, measured once (not per row). */
 type ReadyFiles = PullFiles & { state: "ready"; widths: { add: number; del: number } };
-type Loaded = { state: "loading" } | { state: "missing" } | ReadyFiles;
+type Loaded = { state: "loading" } | { state: "fetching" } | { state: "missing" } | ReadyFiles;
 
 /** The stat columns' widths: as wide as the widest count of the pull request's files. */
 const statWidths = (files: readonly FileChange[]) => ({
@@ -124,9 +127,9 @@ export function PullRequestsTab(props: Readonly<PullRequestsTabProps>) {
   const reading = new Set<string>();
   /** Versions whose provider data changed while they were read: a late "not there" is read once more. */
   const changedWhileRead = new Set<string>();
-  const read = (load: (pr: GitHubPullRequest) => Promise<PullFiles | null>, pr: GitHubPullRequest, version: string) => {
+  const read = (load: NonNullable<PullRequestsTabProps["loadFiles"]>, pr: GitHubPullRequest, version: string) => {
     reading.add(version);
-    void load(pr)
+    void load(pr, () => setLoaded(map => new Map(map).set(version, { state: "fetching" })))
       .catch(() => null)
       .then(files => {
         reading.delete(version);
@@ -180,8 +183,9 @@ export function PullRequestsTab(props: Readonly<PullRequestsTabProps>) {
       const info = (more: boolean) =>
         facts.map((text, index) => note(`info:${index}`, text, !more && index === facts.length - 1));
       if (!files || files.state === "loading") return [head, ...info(true), note("note", BUSY.readingFiles, true)];
+      if (files.state === "fetching") return [head, ...info(true), note("note", BUSY.fetchingCommits, true)];
       if (files.state === "missing")
-        return [head, ...info(true), note("note", "Its commits aren't fetched here: f fetches them.", true)];
+        return [head, ...info(true), note("note", "Its commits couldn't be fetched. Reload commit tries again.", true)];
       const dirs = new Set(
         [...collapsed()].flatMap(key => (key.startsWith(`${pr.number}:`) ? [key.slice(`${pr.number}:`.length)] : [])),
       );

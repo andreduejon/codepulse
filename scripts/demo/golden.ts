@@ -133,7 +133,7 @@ export const GOLDEN_PLAYS: readonly GoldenPlay[] = [
     covers:
       "the graph's preview of the merge of the pull request under the mouse or the cursor, each case: none selected, " +
       "the target one row above, the target below, a long line crossing lanes, a draft right of the lanes, a target " +
-      "the clone hasn't (no line)",
+      "the clone hasn't: its commits fetched on opening, its files shown (no line: the graph has no staging yet)",
     args: [
       "--size",
       "200x100",
@@ -145,7 +145,7 @@ export const GOLDEN_PLAYS: readonly GoldenPlay[] = [
         // The cursor, not the mouse: Enter (a click) on it.
         'click:"PR #125 release" wait:"dev → release/1.x" shot:crossing-lanes',
         'click:69ddc1f click:"Pull requests" wait:"PR #119" hover:"PR #119 feat" shot:draft',
-        'click:e37842a click:"Pull requests" wait:"PR #127 feat" click:"PR #127 feat" wait:"fetched here" shot:not-fetched',
+        'click:e37842a click:"Pull requests" wait:"PR #127 feat" click:"PR #127 feat" wait:"SalesDashboard.tsx" shot:fetched-on-open',
       ].join("\n"),
     ],
   },

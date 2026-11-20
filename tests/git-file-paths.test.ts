@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { getCommitDetail, runGit } from "../src/adapters/git/repo";
+import { fetchPullRequest, getCommitDetail, runGit } from "../src/adapters/git/repo";
 import { getFileContent, getFileDiff } from "../src/adapters/git/repo-diff";
 import { getRangeFiles, getStagedFiles, getStashFiles, getUntrackedFiles } from "../src/adapters/git/repo-status";
 
@@ -194,6 +194,51 @@ test("a stash's untracked files (git stash -u) are listed as added, and their di
     expect(paths(await getStashFiles(root, stash))).toEqual(["A untracked.txt"]);
     expect((await getFileDiff(root, stash, "untracked.txt", "stash")).hunks).toHaveLength(1);
     expect((await getFileContent(root, stash, "untracked.txt", "stash")).lines).toHaveLength(1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a pull request's commits are fetched alone: its head from refs/pull/N/head and its target branch", async () => {
+  const root = await mkdtemp(join(tmpdir(), "codepulse-git-fetch-pull-"));
+  const remote = join(root, "remote.git");
+  const work = join(root, "work");
+  const clone = join(root, "clone");
+  const git = async (cwd: string, ...args: string[]) => {
+    const result = await runGit(cwd, ["-c", "user.name=Test", "-c", "user.email=test@example.test", ...args]);
+    if (result.exitCode !== 0) throw new Error(result.stderr);
+    return result.stdout.trim();
+  };
+  try {
+    await mkdir(work);
+    await git(root, "init", "-q", "--bare", "-b", "main", remote);
+    await git(work, "init", "-q", "-b", "main");
+    await writeFile(join(work, "a.txt"), "a\n");
+    await git(work, "add", ".");
+    await git(work, "commit", "-q", "-m", "a");
+    await git(work, "push", "-q", pathToFileURL(remote).href, "main");
+    await git(root, "clone", "-q", pathToFileURL(remote).href, "clone");
+    // After the clone: a fork's pull request (only under refs/pull) and a new target branch.
+    await git(work, "checkout", "-q", "-b", "staging");
+    await writeFile(join(work, "s.txt"), "s\n");
+    await git(work, "add", ".");
+    await git(work, "commit", "-q", "-m", "staging");
+    await git(work, "push", "-q", pathToFileURL(remote).href, "staging");
+    await git(work, "checkout", "-q", "-b", "fork", "main");
+    await writeFile(join(work, "f.txt"), "f\n");
+    await git(work, "add", ".");
+    await git(work, "commit", "-q", "-m", "fork");
+    const head = await git(work, "rev-parse", "HEAD");
+    await git(work, "push", "-q", pathToFileURL(remote).href, "HEAD:refs/pull/7/head");
+
+    expect(await getRangeFiles(clone, "origin/staging", head)).toBeNull();
+    expect(await fetchPullRequest(clone, 7, "staging")).toBe(true);
+    expect(paths((await getRangeFiles(clone, "origin/staging", head))?.files ?? [])).toEqual(["A f.txt"]);
+    // No local branch moved or appeared.
+    expect(await git(clone, "branch", "--format=%(refname:short)")).toBe("main");
+    // A name that isn't a branch name never reaches the refspec; the head still arrives.
+    expect(await fetchPullRequest(clone, 7, "bad..name")).toBe(true);
+    expect(await fetchPullRequest(clone, 8, "gone")).toBe(false);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

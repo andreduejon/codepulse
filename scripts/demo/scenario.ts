@@ -258,7 +258,8 @@ export function githubPulls(): FakePull[] {
       head: "dash3",
       headRef: "feature/metrics-dashboard",
       baseRef: "staging",
-      base: UNFETCHED,
+      // On origin only (world.ts): opening it fetches its commits.
+      base: "staging",
       author: "demo-dev",
       createdAgoMin: 14400,
       updatedAgoMin: 3 * 24 * 60,
@@ -324,9 +325,6 @@ export function githubClosedPulls(): FakePull[] {
     },
   ];
 }
-
-/** A commit no clone of the demo has: a pull request's target branch that was never fetched. */
-export const UNFETCHED = "0123456789abcdef0123456789abcdef01234567";
 
 export function githubRuns(state: DemoState, phase: Phase): FakeRun[] {
   const s = state.shas;

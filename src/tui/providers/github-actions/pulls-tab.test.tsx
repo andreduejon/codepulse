@@ -95,7 +95,13 @@ test("Enter opens a pull request: its branch, target and author, then its files 
     ],
   };
   const pulls = [pull(), pull({ number: 125, baseRef: "release/1.x" })];
-  const loadFiles = mock(async (pr: GitHubPullRequest) => (pr.number === 124 ? files : null));
+  let fetchDone = () => {};
+  const loadFiles = mock(async (pr: GitHubPullRequest, onFetch: () => void) => {
+    if (pr.number === 124) return files;
+    // Git hasn't its commits: they are fetched first, and still not there.
+    onFetch();
+    return new Promise<null>(resolve => (fetchDone = () => resolve(null)));
+  });
   const navRef: DetailNavRef = {
     itemCount: 0,
     itemRefs: [],
@@ -163,12 +169,18 @@ test("Enter opens a pull request: its branch, target and author, then its files 
       fileIndex: 1,
       base: "b".repeat(40),
     });
-    // Git hasn't the other one's commits.
+    // Git hasn't the other one's commits: fetching them, then what if they still aren't there.
     await enterOn(5);
+    expect(lines().slice(-1)).toEqual(["└─ fetching its commits..."]);
+    fetchDone();
+    for (let i = 0; i < 4; i++) {
+      await Bun.sleep(0);
+      await setup.renderOnce();
+    }
     expect(lines().slice(-3)).toEqual([
       "├─ dev → release/1.x",
       "├─ @ana-lima",
-      "└─ Its commits aren't fetched here: f fetches them.",
+      "└─ Its commits couldn't be fetched. Reload commit tries again.",
     ]);
   } finally {
     setup.renderer.destroy();
@@ -354,8 +366,8 @@ test("files Git hadn't (not fetched) are read again when the provider's data cha
   try {
     navRef.activateCurrentItem();
     await settle();
-    expect(setup.captureCharFrame()).toContain("aren't fetched here");
-    // `f` fetched them; the next Reload commit or refresh brings new data.
+    expect(setup.captureCharFrame()).toContain("couldn't be fetched");
+    // Fetched since (online again); the next Reload commit or refresh brings new data.
     fetched = true;
     setPulls([pull()]);
     await settle();

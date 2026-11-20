@@ -361,6 +361,35 @@ export async function fetchRemote(repoPath: string): Promise<{ ok: boolean; erro
 }
 
 /**
+ * Fetches one GitHub pull request's commits from the remote GitHub is read from (origin, else the first remote): its
+ * head (`refs/pull/N/head`, which GitHub keeps for a fork's too) and its target branch, into that remote's branch. No
+ * local branch moves. True when either arrived.
+ */
+export async function fetchPullRequest(
+  repoPath: string,
+  number: number,
+  baseRef: string,
+  signal?: AbortSignal,
+): Promise<boolean> {
+  if (!Number.isSafeInteger(number) || number <= 0) return false;
+  const remotes = await getRemoteNames(repoPath, signal);
+  const remote = remotes.has("origin") ? "origin" : [...remotes][0];
+  if (!remote) return false;
+  const specs = [`refs/pull/${number}/head`];
+  // The target's name is GitHub's: only a valid branch name goes into a refspec.
+  if (baseRef && (await runGit(repoPath, ["check-ref-format", `refs/heads/${baseRef}`], signal)).exitCode === 0)
+    specs.push(`+refs/heads/${baseRef}:refs/remotes/${remote}/${baseRef}`);
+  let fetched = false;
+  // One at a time: one that is gone (a deleted target) doesn't keep the other out.
+  for (const spec of specs) {
+    const { exitCode, stderr } = await runGit(repoPath, ["fetch", "--no-tags", remote, spec], signal);
+    if (exitCode === 0) fetched = true;
+    else if (stderr.trim()) debugError("Git", stderr.trim());
+  }
+  return fetched;
+}
+
+/**
  * Moves each local branch that is only behind its remote branch up to it, like `git pull --ff-only`, after a fetch.
  * The checked-out branch moves with its files (`git merge --ff-only`), and only while no tracked file has changes.
  * Other branches move with `git update-ref`, unless another worktree has them checked out. Nothing is merged or

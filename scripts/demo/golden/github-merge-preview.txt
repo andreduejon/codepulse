@@ -508,7 +508,7 @@
                                                                      tab Jenkins · enter reload · esc back · ←/→ switch tab · ↑/↓ navigate                         ◀ open  ◀ draft  ✓ merged  ○ closed
 
 
-=== shot 6: not-fetched (200x100) ===
+=== shot 6: fetched-on-open (200x100) ===
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
   Graph                         Commit   Description                                                        Status         Last run                Actions           Pull requests          Info
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
@@ -517,10 +517,10 @@
     █                           e6209dd  feat(api): add a health endpoint                                    1             45m ago            └─ ▾ PR #127 feat(metrics): sales dashboard     3d ago ◀
     │                                                                                                                                            ├─ feature/metrics-dashboard → staging
     █                           3447db9   v0.42.0   main   origin/ma…   PR #122   +2  docs: rewrite the R…   2             28m ago               ├─ @demo-dev
-    │                                                                                                                                            └─ Its commits aren't fetched here: f fetches them.
-    │ █                         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry…   1             4h ago
-    │ │
-    █─╯                         64ddc8a  feat(payments): retry failed payments with exponential backoff, …   1             51m ago
+    │                                                                                                                                            ├─ ▾ public/vendor/
+    │ █                         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry…   1             4h ago                │  └─ chart.min.js                           A  +1 -0
+    │ │                                                                                                                                          └─ ▾ src/metrics/
+    █─╯                         64ddc8a  feat(payments): retry failed payments with exponential backoff, …   1             51m ago                  └─ SalesDashboard.tsx                     A +23 -0
     │
     █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······
     │

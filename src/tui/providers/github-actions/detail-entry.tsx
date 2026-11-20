@@ -52,6 +52,9 @@ export const githubDetail = detailEntry<GitHubDetailSource>({
 const hasPulls = (source: GitHubDetailSource, sha: string) =>
   (source.pullRequestsAt?.(sha).length ?? 0) + (source.closedPullRequestsAt?.(sha).length ?? 0) > 0;
 
+/** The pull request versions fetched already: one whose commits are still missing after it isn't fetched again. */
+const fetchedPulls = new Set<string>();
+
 /** The Pull requests tab: only on a commit a pull request's branch points (or pointed, merged or closed) at. */
 export const githubPullsDetail = detailEntry<GitHubDetailSource>({
   Tab: props => {
@@ -62,7 +65,7 @@ export const githubPullsDetail = detailEntry<GitHubDetailSource>({
      * Its files as Git has them: from where its branch left the target's. The target as GitHub names it, else the commit
      * its branch points at in the graph (on any remote, as the merge preview finds it), else the local branch.
      */
-    const loadFiles = async (pr: GitHubPullRequest) => {
+    const readFiles = async (pr: GitHubPullRequest) => {
       const rows = state.graphRows();
       const target = rows[targetRowIndex(rows, { base: pr.baseSha, baseRef: pr.baseRef })]?.commit.hash;
       for (const base of [...new Set([pr.baseSha, target ?? "", pr.baseRef])].filter(Boolean)) {
@@ -70,6 +73,16 @@ export const githubPullsDetail = detailEntry<GitHubDetailSource>({
         if (found) return found;
       }
       return null;
+    };
+    /** When Git hasn't its commits: they are fetched (this pull request's alone), once per version, then read again. */
+    const loadFiles = async (pr: GitHubPullRequest, onFetch: () => void) => {
+      const found = await readFiles(pr);
+      const version = `${state.repoPath()}\0${pr.number}\0${pr.headSha}\0${pr.baseSha}\0${pr.baseRef}`;
+      if (found || fetchedPulls.has(version)) return found;
+      onFetch();
+      // A failed fetch (offline) tries again with the next read: a Reload commit or a refresh.
+      if (await git.fetchPullRequest(state.repoPath(), pr.number, pr.baseRef)) fetchedPulls.add(version);
+      return readFiles(pr);
     };
     return (
       <PullRequestsTab

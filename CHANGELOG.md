@@ -13,7 +13,9 @@ All notable changes to this project will be documented in this file.
   mark (`◀` open, `✓` merged, `○` closed) and a legend. Enter opens an open one on
   its branch, target, author and the files it changed since its branch left the
   target, read by Git as GitHub's Files changed shows them; Enter on a file opens
-  its diff, `←`/`→` move between the files. `o` opens it on GitHub.
+  its diff, `←`/`→` move between the files. `o` opens it on GitHub. A pull
+  request whose commits this clone hasn't (pushed since the last fetch, a
+  target never fetched, a fork) fetches them when opened, its own alone.
 - While the Pull requests tab is open, the graph previews the merge of the pull
   request under the mouse or the cursor: a muted line from its branch's commit to
   its target's, with `◀` at the target, drawn in a free column so the lanes don't

@@ -110,8 +110,11 @@ its status and `+`/`-` lines: what its branch changed since it left the target b
 (Git's merge base of the two), as GitHub's **Files changed** shows it, not what the
 target did since. Git reads them, so both branches' commits must be fetched: the target
 as GitHub names it, else its branch on a remote (`origin/<target>` first, any other
-remote's name works too), else the local branch. When they aren't, the row says so and `f`
-fetches them; the next Reload commit or refresh reads them again. Enter on a file opens the diff dialog on that change
+remote's name works too), else the local branch. When Git hasn't them, opening the pull
+request fetches them, this one's alone (`fetching its commits...`): its head from
+`refs/pull/<number>/head`, which GitHub keeps for every pull request, a fork's too, and its
+target branch into the remote's (`origin/staging`). No local branch moves. When that fails
+(offline), the row says so, and Reload commit or the next refresh tries again. Enter on a file opens the diff dialog on that change
 (`3447db9..bf08113` in its title), and `←`/`→` move between the pull request's files.
 Files open from the graph's details and from the Dashboard's; closing the diff comes back to them.
 

@@ -30,6 +30,7 @@ export function gitCli(): GitPort {
     getFileContent: (...args) => repoDiff.getFileContent(...args),
     getFileBlame: (...args) => repoDiff.getFileBlame(...args),
     fetchRemote: repoPath => repo.fetchRemote(repoPath),
+    fetchPullRequest: (...args) => repo.fetchPullRequest(...args),
     fastForwardBranches: repoPath => repo.fastForwardBranches(repoPath),
     getMainBranch: (...args) => repoDashboard.getMainBranch(...args),
     getMainBranchCommits: (...args) => repoDashboard.getMainBranchCommits(...args),

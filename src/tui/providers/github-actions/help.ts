@@ -63,7 +63,7 @@ export const GITHUB_HELP: readonly HelpRow[] = [
   {
     kind: "binding",
     key: "Pull requests",
-    desc: "Tab on such a commit: ◀ open, ◀ muted draft, ✓ merged, ○ closed. Enter opens an open one on its files (read by Git, since its branch left the target), Enter on a file its diff, o opens it on GitHub.",
+    desc: "Tab on such a commit: ◀ open, ◀ muted draft, ✓ merged, ○ closed. Enter opens an open one on its files (read by Git since its branch left the target, its commits fetched when missing), Enter on a file its diff, o opens it on GitHub.",
     indent: 1,
   },
   {
