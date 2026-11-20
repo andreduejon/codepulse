@@ -15,8 +15,8 @@ import { useScrollWindow } from "../../hooks/use-scroll-window";
 import { useT } from "../../hooks/use-t";
 import { useModalKeys } from "../../keyboard/dispatcher";
 import { statusColor } from "../../providers/shared/status";
-import { scrollElementIntoView } from "../../utils/scroll";
 import { statusIcon } from "../../utils/status-icon";
+import { cellWidth } from "../../utils/terminal-text";
 import { fitHints, KeyHint, KeyHintSeparator, type RankedHint } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitle, DialogTitleBar, getStandardDialogFrame } from "./dialog-chrome";
 import {
@@ -90,16 +90,23 @@ export function LogViewer(props: Readonly<LogViewerProps>) {
   let scrollboxRef: ScrollBoxRenderable | undefined;
 
   const texts = () => props.lines().map(line => line.text);
-  /** The mounted lines' elements by index, for wrapped lines (their height comes from their layout). */
+  /** The mounted lines' elements by index, for the last one on the screen while wrapped. */
   const lineRefs: (Renderable | undefined)[] = [];
+  // Before the window: its heights need the text's width, which needs the numbers' (rule 1 in agents.md).
+  const [textWidth, setTextWidth] = createSignal(1);
   /**
-   * Unwrapped, every line is one row: only the lines near the screen are mounted, the others are empty space. Wrapped
-   * lines take the height their words need, so all of them are mounted.
+   * Only the lines near the screen are mounted, the others are empty space. Unwrapped every line is one row; wrapped
+   * (by character) one takes as many rows as its width needs, so its height is known before it mounts.
    */
   const lineWindow = useScrollWindow({
-    heights: () => props.lines().map(() => 1),
+    heights: () => {
+      if (!wrapEnabled()) return props.lines().map(() => 1);
+      const width = Math.max(1, textWidth());
+      return props
+        .lines()
+        .map(line => Math.max(1, Math.ceil(cellWidth(line.kind === "group" ? `▸ ${line.text}` : line.text) / width)));
+    },
     screenHeight: () => dimensions().height,
-    windowed: () => !wrapEnabled(),
   });
   const shownLines = createMemo(() => {
     const { start, end } = lineWindow.range();
@@ -107,29 +114,24 @@ export function LogViewer(props: Readonly<LogViewerProps>) {
   });
   const numberWidth = useVisibleNumberWidth({
     scrollbox: () => scrollboxRef,
-    lastVisible: (scrollbox, count) =>
-      wrapEnabled()
-        ? lastVisibleRow(scrollbox, count, index => lineRefs[index])
-        : Math.max(0, Math.min(count - 1, scrollbox.scrollTop + scrollbox.viewport.height - 1)),
+    lastVisible: (scrollbox, count) => {
+      if (!wrapEnabled()) return Math.max(0, Math.min(count - 1, scrollbox.scrollTop + scrollbox.viewport.height - 1));
+      // Among the mounted lines: the screen is inside them.
+      const { start, end } = untrack(lineWindow.range);
+      const last = lastVisibleRow(scrollbox, Math.min(end, count) - start, index => lineRefs[start + index]);
+      return last === null ? null : start + last;
+    },
     lines: props.lines,
     numberAt: index => props.lines()[index]?.lineNo ?? 0,
     layoutKey: wrapEnabled,
   });
   const search = useLogSearch({
     texts,
-    scrollToLine: index => {
-      if (!wrapEnabled()) return lineWindow.scrollIntoView(index);
-      const line = lineRefs[index];
-      return !!scrollboxRef && !!line && scrollElementIntoView(scrollboxRef, line, 1);
-    },
+    scrollToLine: index => lineWindow.scrollIntoView(index),
   });
   // Inner width: the dialog's frame (1) and padding (4) on both sides, then the line numbers and their gap.
-  const reveal = useSidewaysReveal({
-    search,
-    texts,
-    wrap: wrapEnabled,
-    width: () => frame().width - 10 - (numberWidth() + 2),
-  });
+  createEffect(() => setTextWidth(frame().width - 10 - (numberWidth() + 2)));
+  const reveal = useSidewaysReveal({ search, texts, wrap: wrapEnabled, width: textWidth });
   // After mount, so the app hears that the search owns Esc (the first hit shows once the lines have loaded).
   onMount(() => {
     if (props.initialSearch) search.setQuery(props.initialSearch);
@@ -224,7 +226,7 @@ export function LogViewer(props: Readonly<LogViewerProps>) {
   const renderLine = (line: LogViewerLine, index: () => number) => {
     const th = t();
     const lineNo = () => (line.lineNo > 0 ? String(line.lineNo) : "").padStart(numberWidth());
-    const wrapMode = () => (wrapEnabled() ? "word" : "none");
+    const wrapMode = () => (wrapEnabled() ? "char" : "none");
     const text = (value: string) => highlightHits(reveal(value), search.term(), { fg: th.background, bg: th.accent });
     const isCurrentHit = () => search.current() === index();
     let mounted: Renderable | undefined;
