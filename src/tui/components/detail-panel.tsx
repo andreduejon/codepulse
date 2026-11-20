@@ -129,7 +129,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
             },
           ]),
       // The tabs its provider adds after its own (Snyk's Dependencies), when the commit has something for them, with
-      // their label for it (`Pull requests (2)`).
+      // their label for it.
       ...state.providers.set
         .tabsOf(providerView)
         .slice(1)

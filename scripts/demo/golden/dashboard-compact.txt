@@ -7,7 +7,7 @@
    █      bf08113  dev                   09:     Details                                              esc close
    █      bf08113  dev                   09:
    █      bf08113  dev                   09:     ──────────────────────────────────────────────────────────────
-   █      bf08113  dev                   09:          Actions           Pull requests (2)            Info
+   █      bf08113  dev                   09:           Actions             Pull requests            Info
    █      bf08113  dev                   09:     ──────────────────────────────────────────────────────────────
    █      3447db9  main                  09:     Show in GitHub
    █      3447db9  main                  09:     Reload commit
@@ -101,7 +101,7 @@
     █                           e6209dd  fea     Details                                              esc close                  1             45m ago
     │
     █                           3447db9   v0     ──────────────────────────────────────────────────────────────     README fo…   2             28m ago
-    │                                                 Actions           Pull requests (2)            Info
+    │                                                  Actions             Pull requests            Info
     │ █                         6adc455   fe     ──────────────────────────────────────────────────────────────     s): retry…   1             4h ago
     │ │                                          Reload commit
     █─╯                         64ddc8a  fea     total workflow runs                                          2     ct long e…   1             51m ago

@@ -47,7 +47,7 @@
 
 === shot 2: pulls (200x45) ===
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-  Graph                         Commit   Description                                                        Status         Last run               Actions         Pull requests (2)          Info
+  Graph                         Commit   Description                                                        Status         Last run                Actions           Pull requests          Info
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
     █                           bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request    2             running            Reload commit
     │                                                                                                                                         total pull requests                                    2
@@ -94,7 +94,7 @@
 
 === shot 3: files (200x45) ===
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-  Graph                         Commit   Description                                                        Status         Last run               Actions         Pull requests (2)          Info
+  Graph                         Commit   Description                                                        Status         Last run                Actions           Pull requests          Info
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
     █─╮                         bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request    2             running            Reload commit
     │ │                                                                                                                                       total pull requests                                    2
@@ -141,7 +141,7 @@
 
 === shot 4: diff (200x45) ===
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-  Graph                         Commit   Description                                                        Status         Last run               Actions         Pull requests (2)          Info
+  Graph                         Commit   Description                                                        Status         Last run                Actions           Pull requests          Info
   ──────────────────                                                                                                                                                                ──────────────────
     █─╮                  Diff · [2/3] · 3447db9..bf08113 · src/api/metrics.ts · unified                                                                               esc close
     │ │                                                                                                                                                                                              2
@@ -188,7 +188,7 @@
 
 === shot 5: next-file (200x45) ===
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-  Graph                         Commit   Description                                                        Status         Last run               Actions         Pull requests (2)          Info
+  Graph                         Commit   Description                                                        Status         Last run                Actions           Pull requests          Info
   ──────────────────                                                                                                                                                                ──────────────────
     █─╮                  Diff · [3/3] · 3447db9..bf08113 · src/index.ts · unified                                                                                     esc close
     │ │                                                                                                                                                                                              2
@@ -235,7 +235,7 @@
 
 === shot 6: back (200x45) ===
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-  Graph                         Commit   Description                                                        Status         Last run               Actions         Pull requests (2)          Info
+  Graph                         Commit   Description                                                        Status         Last run                Actions           Pull requests          Info
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
     █─╮                         bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request    2             running            Reload commit
     │ │                                                                                                                                       total pull requests                                    2

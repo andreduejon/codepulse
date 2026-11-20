@@ -68,7 +68,7 @@ describe("getAvailableTabs", () => {
 
   test("a provider tab only some commits have shows on a commit that has it, after the provider's own", () => {
     const tabLabel = (tab: string, sha: string) =>
-      tab === "github-pulls" ? (sha === selected.hash ? "Pull requests (2)" : null) : undefined;
+      tab === "github-pulls" ? (sha === selected.hash ? "Pull requests" : null) : undefined;
     expect(getAvailableTabs({ ...input, activeProviderView: "github-actions", tabLabel })).toEqual([
       "github-actions",
       "github-pulls",

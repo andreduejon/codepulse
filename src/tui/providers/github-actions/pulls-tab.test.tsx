@@ -70,13 +70,13 @@ test("the tab lists the commit's open pull requests, one short row each: number,
   }
 });
 
-test("only a commit a pull request's branch points at has the tab, labelled with how many", () => {
+test("only a commit a pull request's branch points at has the tab", () => {
   const source = {
     getCommitData: () => null,
     fetchJobsForRun: async () => ({ jobs: [], error: null }),
     pullRequestsAt: (sha: string) => (sha === SHA ? [pull(), pull({ number: 125 })] : []),
   } as GitHubDetailSource;
-  expect(githubPullsDetail.label(source, SHA)).toBe("Pull requests (2)");
+  expect(githubPullsDetail.label(source, SHA)).toBe("Pull requests");
   expect(githubPullsDetail.label(source, "b".repeat(40))).toBeNull();
 });
 

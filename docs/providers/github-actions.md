@@ -91,8 +91,8 @@ after its refs, in GitHub's colour: `PR #123`, muted for a draft. Only the branc
 tip gets one; a commit with two open pull requests (one branch into `main` and into
 `release/1.x`) gets two.
 
-Such a commit has a **Pull requests** tab after **Actions**, labelled with how many
-(`Pull requests (2)`), as Stashes is; other commits don't show it. It lists each
+Such a commit has a **Pull requests** tab after **Actions**, as Stashes is; other commits
+don't show it. It lists each
 pull request on one short row: its number, title and when it was last updated, a draft
 muted. `o` opens it on GitHub; Reload commit reads the runs and the pull requests again.
 

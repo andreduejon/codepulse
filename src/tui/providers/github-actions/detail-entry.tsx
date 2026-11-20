@@ -46,7 +46,7 @@ export const githubDetail = detailEntry<GitHubDetailSource>({
   legend: (source, sha) => ((source.getCommitData(sha)?.runs.length ?? 0) > 0 ? GITHUB_LEGEND : null),
 });
 
-/** The Pull requests tab: only on a commit a pull request's branch points at, counting them. */
+/** The Pull requests tab: only on a commit a pull request's branch points at. */
 export const githubPullsDetail = detailEntry<GitHubDetailSource>({
   Tab: props => {
     // Rendered inside the details, below the app's providers: Git and the open repository are there.
@@ -77,8 +77,6 @@ export const githubPullsDetail = detailEntry<GitHubDetailSource>({
       />
     );
   },
-  label: (source, sha) => {
-    const count = source.pullRequestsAt?.(sha).length ?? 0;
-    return count > 0 ? `Pull requests (${count})` : null;
-  },
+  // Like the other provider tabs, no count: its first row has the total, the graph a chip for each.
+  label: (source, sha) => ((source.pullRequestsAt?.(sha).length ?? 0) > 0 ? "Pull requests" : null),
 });

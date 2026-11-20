@@ -1,6 +1,6 @@
 === shot 1: none (200x100) ===
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-  Graph                         Commit   Description                                                        Status         Last run               Actions         Pull requests (1)          Info
+  Graph                         Commit   Description                                                        Status         Last run                Actions           Pull requests          Info
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
     █                           bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request…   2             running            Reload commit
     │                                                                                                                                         total pull requests                                    1
@@ -102,7 +102,7 @@
 
 === shot 2: target-above (200x100) ===
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-  Graph                         Commit   Description                                                        Status         Last run               Actions         Pull requests (1)          Info
+  Graph                         Commit   Description                                                        Status         Last run                Actions           Pull requests          Info
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
     █                           bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request…   2             running            Reload commit
     │                                                                                                                                         total pull requests                                    1
@@ -204,7 +204,7 @@
 
 === shot 3: target-below (200x100) ===
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-  Graph                         Commit   Description                                                        Status         Last run               Actions         Pull requests (2)          Info
+  Graph                         Commit   Description                                                        Status         Last run                Actions           Pull requests          Info
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
     █─╮                         bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request    2             running            Reload commit
     │ │                                                                                                                                       total pull requests                                    2
@@ -306,7 +306,7 @@
 
 === shot 4: crossing-lanes (200x100) ===
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-  Graph                         Commit   Description                                                        Status         Last run               Actions         Pull requests (2)          Info
+  Graph                         Commit   Description                                                        Status         Last run                Actions           Pull requests          Info
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
     █─────────────────╮         bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request    2             running            Reload commit
     │                 │                                                                                                                       total pull requests                                    2
@@ -408,7 +408,7 @@
 
 === shot 5: draft (200x100) ===
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-  Graph                         Commit   Description                                                        Status         Last run               Actions         Pull requests (1)          Info
+  Graph                         Commit   Description                                                        Status         Last run                Actions           Pull requests          Info
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
     █◀──────────────╮           bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request…   2             running            Reload commit
     │               │                                                                                                                         total pull requests                                    1
@@ -510,7 +510,7 @@
 
 === shot 6: not-fetched (200x100) ===
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-  Graph                         Commit   Description                                                        Status         Last run               Actions         Pull requests (1)          Info
+  Graph                         Commit   Description                                                        Status         Last run                Actions           Pull requests          Info
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
     █                           bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request…   2             running            Reload commit
     │                                                                                                                                         total pull requests                                    1

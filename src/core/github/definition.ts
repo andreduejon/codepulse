@@ -37,7 +37,7 @@ export const githubProvider: ProviderDefinition<GitHubAdapters, GitHubSettings> 
   displayName: "GitHub",
   detailLabel: "Actions",
   category: "ci",
-  // Only on a commit a pull request's branch points at, like Stashes: its label then counts them.
+  // Only on a commit a pull request's branch points at, like Stashes.
   moreTabs: [{ id: GITHUB_PULLS_TAB, label: "Pull requests" }],
   messages: GITHUB_BANNER,
   storedEvents: async (adapters, app) =>
