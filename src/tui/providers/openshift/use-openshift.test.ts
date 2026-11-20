@@ -113,9 +113,10 @@ function mountOpenShift(
     signal: AbortSignal;
     onEvent: Parameters<typeof api.watchOpenShiftStream>[5];
     resolve: (result: OpenShiftWatchResult) => void;
+    reject: (error: Error) => void;
   }> = [];
   const watch = spyOn(api, "watchOpenShiftStream").mockImplementation(
-    (...args) => new Promise(resolve => watches.push({ signal: args[4], onEvent: args[5], resolve })),
+    (...args) => new Promise((resolve, reject) => watches.push({ signal: args[4], onEvent: args[5], resolve, reject })),
   );
   for (const mock of [
     cacheList,
@@ -666,6 +667,25 @@ describe("OpenShift auth recovery across inventory and live list", () => {
     for (const watch of mounted.watches.slice(1)) watch.resolve("end");
     await Bun.sleep(1100);
     expect(mounted.live.mock.calls.length).toBe(lists + 1);
+    expect(mounted.watches).toHaveLength(6);
+  });
+
+  test("one of three watches failing (a reset connection) stops the others too, and their late events change nothing", async () => {
+    const mounted = mountOpenShift(false, true, { watchKinds: ["Pod", "Deployment", "DeploymentConfig"] });
+    await Bun.sleep(30);
+    expect(mounted.watches).toHaveLength(3);
+    mounted.watches[0].reject(new Error("socket hang up"));
+    await Bun.sleep(10);
+    expect(mounted.watches.slice(1).every(watch => watch.signal.aborted)).toBe(true);
+    // A late event from a stopped watch: the Pod stays.
+    mounted.watches[1].onEvent({
+      type: "DELETED",
+      object: { kind: "Pod", metadata: { name: "app", namespace: "ns" } },
+    });
+    expect(mounted.openShift.getCommitData(SHA)?.namespaces[0].pods).toHaveLength(1);
+    for (const watch of mounted.watches.slice(1)) watch.resolve("end");
+    await Bun.sleep(1100);
+    // One new session: three watches more, not six.
     expect(mounted.watches).toHaveLength(6);
   });
 

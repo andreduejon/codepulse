@@ -679,7 +679,9 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
           const onAbort = () => child.abort();
           signal.addEventListener("abort", onAbort, { once: true });
           const onEvent = (event: Parameters<typeof applyOpenShiftWatchEvent>[1]) => {
-            if (signal.aborted || !lifecycle().isCurrent(epoch, repoPath) || !live.listed) return;
+            // A watch of a session that ended (one of its watches failed) changes nothing any more.
+            if (child.signal.aborted || signal.aborted || !lifecycle().isCurrent(epoch, repoPath) || !live.listed)
+              return;
             const result = applyOpenShiftWatchEvent(live.listed, event, ports.config().commitShaAnnotation);
             if (result === "gone") {
               child.abort();
@@ -722,9 +724,15 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
             return;
           }
           ports.onLiveState(running.length > 0 ? "live" : "idle");
-          const results = running.length > 0 ? await Promise.all(running) : [];
+          let results: Awaited<(typeof running)[number]>[] = [];
+          try {
+            results = running.length > 0 ? await Promise.all(running) : [];
+          } finally {
+            // Also when one failed (a reset connection): the others stop before the list is read again.
+            child.abort();
+            signal.removeEventListener("abort", onAbort);
+          }
           if (!signal.aborted && lifecycle().isCurrent(epoch, repoPath)) ports.onLiveState("loading");
-          signal.removeEventListener("abort", onAbort);
           if (signal.aborted || !lifecycle().isCurrent(epoch, repoPath)) return;
           if (results.includes("auth")) {
             authFrozen = true;
