@@ -110,7 +110,7 @@ its status and `+`/`-` lines: what its branch changed since it left the target b
 (Git's merge base of the two), as GitHub's **Files changed** shows it, not what the
 target did since. Git reads them, so both branches' commits must be fetched: the target
 as GitHub names it, else `origin/<target>`. When they aren't, the row says so and `f`
-fetches them. Enter on a file opens the diff dialog on that change
+fetches them; the next Reload commit or refresh reads them again. Enter on a file opens the diff dialog on that change
 (`3447db9..bf08113` in its title), and `←`/`→` move between the pull request's files.
 Files open from the graph's details; the Dashboard's details list them only.
 

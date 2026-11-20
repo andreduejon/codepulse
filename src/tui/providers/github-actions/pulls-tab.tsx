@@ -69,13 +69,21 @@ const pullKey = (pr: GitHubPullRequest) => `pull:${pr.number}`;
 /** One version of a pull request: another head or target is another set of files. */
 const versionKey = (pr: GitHubPullRequest) => `${pr.number}:${pr.headSha}:${pr.baseSha}:${pr.baseRef}`;
 
-type Loaded = { state: "loading" } | { state: "missing" } | ({ state: "ready" } & PullFiles);
+/** A pull request's files read: their stat columns' widths too, measured once (not per row). */
+type ReadyFiles = PullFiles & { state: "ready"; widths: { add: number; del: number } };
+type Loaded = { state: "loading" } | { state: "missing" } | ReadyFiles;
+
+/** The stat columns' widths: as wide as the widest count of the pull request's files. */
+const statWidths = (files: readonly FileChange[]) => ({
+  add: Math.max(2, ...files.map(file => `+${file.additions}`.length)),
+  del: Math.max(2, ...files.map(file => `-${file.deletions}`.length)),
+});
 
 type Row =
   | { kind: "pull"; key: string; pr: GitHubPullRequest; last: boolean; open: boolean }
   | { kind: "ended"; key: string; pr: GitHubPullRequest; last: boolean }
   | { kind: "note"; key: string; lead: string; text: string; last: boolean }
-  | { kind: "file"; key: string; pr: GitHubPullRequest; row: FileTreeRow; loaded: PullFiles; collapsed: boolean };
+  | { kind: "file"; key: string; pr: GitHubPullRequest; row: FileTreeRow; loaded: ReadyFiles; collapsed: boolean };
 
 /** The pull requests opened and the folders closed, in one commit. */
 interface PullsMemory {
@@ -112,18 +120,28 @@ export function PullRequestsTab(props: Readonly<PullRequestsTabProps>) {
   const pulls = () => props.pullRequestsAt(props.sha);
   const ended = () => props.closedPullRequestsAt?.(props.sha) ?? [];
   const [loaded, setLoaded] = createSignal<ReadonlyMap<string, Loaded>>(new Map());
-  // An opened pull request reads its files once per version (a push or a new target reads them again).
+  /** The versions being read now (a mutable ref: an effect run during a read must not start another). */
+  const reading = new Set<string>();
+  // An opened pull request reads its files once per version (a push or a new target reads them again). One Git hadn't
+  // (not fetched) is read again, quietly, with each change of the provider's data: a Reload commit, a refresh.
   createEffect(() => {
     for (const pr of pulls()) {
       const version = versionKey(pr);
-      if (!open().has(pr.number) || untrack(loaded).has(version) || !props.loadFiles) continue;
-      setLoaded(map => new Map(map).set(version, { state: "loading" }));
+      const known = untrack(loaded).get(version);
+      if (!open().has(pr.number) || !props.loadFiles || reading.has(version) || (known && known.state !== "missing"))
+        continue;
+      reading.add(version);
+      if (!known) setLoaded(map => new Map(map).set(version, { state: "loading" }));
       void props
         .loadFiles(pr)
         .catch(() => null)
-        .then(files =>
-          setLoaded(map => new Map(map).set(version, files ? { state: "ready", ...files } : { state: "missing" })),
-        );
+        .then(files => {
+          reading.delete(version);
+          const next: Loaded = files
+            ? { state: "ready", ...files, widths: statWidths(files.files) }
+            : { state: "missing" };
+          setLoaded(map => new Map(map).set(version, next));
+        });
     }
   });
 
@@ -264,12 +282,6 @@ export function PullRequestsTab(props: Readonly<PullRequestsTabProps>) {
   });
   onCleanup(() => props.onMergePreview?.(null));
 
-  /** The stat columns' widths: as wide as the widest count of the pull request's files. */
-  const statWidths = (files: readonly FileChange[]) => ({
-    add: Math.max(2, ...files.map(file => `+${file.additions}`.length)),
-    del: Math.max(2, ...files.map(file => `-${file.deletions}`.length)),
-  });
-
   /** Its age (an open one's last update, an ended one's end) and its mark after it, as a run shows when and how. */
   const when = (pr: GitHubPullRequest) => {
     const at = pr.state === "open" ? pr.updatedAt : (pr.closedAt ?? "");
@@ -374,7 +386,6 @@ export function PullRequestsTab(props: Readonly<PullRequestsTabProps>) {
             </Match>
             <Match when={row.kind === "file" && row}>
               {file => {
-                const widths = () => statWidths(file().loaded.files);
                 return (
                   <FileTreeEntry
                     row={file().row}
@@ -382,8 +393,8 @@ export function PullRequestsTab(props: Readonly<PullRequestsTabProps>) {
                     collapsed={file().collapsed}
                     highlightBg={cursored(file().key) ? t().backgroundElementActive : undefined}
                     scrolledName={null}
-                    addColWidth={widths().add}
-                    delColWidth={widths().del}
+                    addColWidth={file().loaded.widths.add}
+                    delColWidth={file().loaded.widths.del}
                     mouseEnabled={props.mouseEnabled}
                     itemIndex={indexOf(file().key)}
                     onActivate={index => {

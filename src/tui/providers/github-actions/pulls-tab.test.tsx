@@ -308,3 +308,60 @@ test("merged and closed ones follow the open ones, muted, not selectable, with t
     "closed",
   ]);
 });
+
+test("files Git hadn't (not fetched) are read again when the provider's data changes, quietly, until they are there", async () => {
+  const [cursor, setCursor] = createSignal(1);
+  const [pulls, setPulls] = createSignal([pull()]);
+  let fetched = false;
+  const loadFiles = mock(async () =>
+    fetched
+      ? { mergeBase: "b".repeat(40), files: [{ path: "README.md", status: "M" as const, additions: 2, deletions: 1 }] }
+      : null,
+  );
+  const navRef: DetailNavRef = {
+    itemCount: 0,
+    itemRefs: [],
+    activateCurrentItem: () => false,
+    lastJumpFrom: null,
+    pendingJumpDirection: null,
+    scrollToFile: () => {},
+  };
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={createThemeState()}>
+        <box width={90} flexDirection="column">
+          <PullRequestsTab
+            sha={SHA}
+            pullRequestsAt={pulls}
+            loadFiles={loadFiles}
+            navRef={navRef}
+            detailCursorIndex={cursor}
+            detailFocused={() => true}
+            setDetailCursorAction={mock(() => {})}
+            setDetailCursorIndex={setCursor}
+          />
+        </box>
+      </ThemeContext.Provider>
+    ),
+    { width: 94, height: 12 },
+  );
+  const settle = async () => {
+    for (let i = 0; i < 4; i++) {
+      await Bun.sleep(0);
+      await setup.renderOnce();
+    }
+  };
+  try {
+    navRef.activateCurrentItem();
+    await settle();
+    expect(setup.captureCharFrame()).toContain("aren't fetched here");
+    // `f` fetched them; the next Reload commit or refresh brings new data.
+    fetched = true;
+    setPulls([pull()]);
+    await settle();
+    expect(loadFiles).toHaveBeenCalledTimes(2);
+    expect(setup.captureCharFrame()).toContain("README.md");
+  } finally {
+    setup.renderer.destroy();
+  }
+});

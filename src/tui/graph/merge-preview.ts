@@ -5,7 +5,7 @@
  * else it runs in the first column right of both that no line uses between them; it is drawn over the rows as they
  * are: the graph's own lanes do not move. Only when every column is taken does it get one more, right of the lanes.
  */
-import type { GraphRow } from "../../core/git/types";
+import type { Connector, GraphRow } from "../../core/git/types";
 import type { GraphChar } from "./render";
 
 /** What to join: the pull request's head and its target, by the commit GitHub names, else by the branch. */
@@ -30,11 +30,14 @@ export interface MergePreviewSpan {
   direct: "top" | "bottom" | null;
 }
 
+/** Whether a connector draws in the column: the graph also keeps `empty` ones, which draw nothing. */
+const drawsAt = (connector: Connector, column: number) => connector.column === column && connector.type !== "empty";
+
 /** Whether no line of the row (its own, its connector, its fan-out lines) uses the column. */
 const isFree = (row: GraphRow, column: number) =>
   !row.columns[column]?.active &&
-  !row.connectors.some(connector => connector.column === column) &&
-  !(row.fanOutRows ?? []).some(line => line.some(connector => connector.column === column));
+  !row.connectors.some(connector => drawsAt(connector, column)) &&
+  !(row.fanOutRows ?? []).some(line => line.some(connector => drawsAt(connector, column)));
 
 /** The target's row: the commit GitHub names, else the one its branch (remote first) points at. */
 function baseIndex(rows: readonly GraphRow[], preview: MergePreview): number {
@@ -75,7 +78,7 @@ export function mergePreviewSpan(
   if (headRow && targetRow && headNode > targetRow.nodeColumn) {
     const headSideFree =
       headEnd === "bottom"
-        ? !(headRow.fanOutRows ?? []).some(line => line.some(connector => connector.column === headNode))
+        ? !(headRow.fanOutRows ?? []).some(line => line.some(connector => drawsAt(connector, headNode)))
         : !headRow.columns[headNode]?.active;
     if (headSideFree && isFree(targetRow, headNode) && rows.slice(top + 1, bottom).every(row => isFree(row, headNode)))
       return { ...ends, column: headNode, extra: false, direct: headEnd };

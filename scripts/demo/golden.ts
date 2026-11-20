@@ -89,6 +89,18 @@ export const GOLDEN_PLAYS: readonly GoldenPlay[] = [
     ],
   },
   {
+    name: "github-show-in",
+    covers: "Show in GitHub back on the commit and view the graph was left on: the event's tab, not the one left open",
+    args: [
+      ...WIDE,
+      "--play",
+      [
+        'click:GitHub wait:"PR #124" click:bf08113 click:Actions wait:"total workflow runs" shot:left-on-actions',
+        'click:Dashboard wait:"PR #124 opened" click:"PR #124 opened" enter wait:"total pull requests" shot:back',
+      ].join("\n"),
+    ],
+  },
+  {
     name: "github-merge-preview",
     covers:
       "the graph's preview of the merge of the pull request under the mouse or the cursor, each case: none selected, " +

@@ -84,15 +84,21 @@ export function useDetailLoader({
     // The Dashboard has details of its own: the graph's wait for it to go.
     if (activeProvider === "dashboard") return;
     const hash = commit?.hash ?? null;
-    if (path === shownFor.path && hash === shownFor.hash && activeProvider === shownFor.view) return;
+    // A jump from the Dashboard opens the event's own tab, once: also back on the commit and view it was left on.
+    const wanted = detailNavRef.pendingTab;
+    detailNavRef.pendingTab = undefined;
+    if (path === shownFor.path && hash === shownFor.hash && activeProvider === shownFor.view) {
+      if (wanted) {
+        setGraphDetail.setDetailActiveTab(wanted);
+        setGraphDetail.setDetailCursorIndex(0);
+      }
+      return;
+    }
     Object.assign(shownFor, { path, hash, view: activeProvider });
     /*
      * The tab starts over, except on a jump to a child or parent: walking the graph keeps the Details tab. The jump's
      * flag is set around the cursor change, and this effect runs inside it.
      */
-    // A jump from the Dashboard opens the event's own tab, once.
-    const wanted = detailNavRef.pendingTab;
-    detailNavRef.pendingTab = undefined;
     if (commit && !getIsJumpNavigation()) {
       setGraphDetail.setDetailActiveTab(wanted ?? getDefaultDetailTab(commit, activeProvider, state.providers.set));
       setGraphDetail.setDetailCursorIndex(0);

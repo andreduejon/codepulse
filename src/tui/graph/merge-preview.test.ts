@@ -31,6 +31,22 @@ describe("merge preview", () => {
     expect(mergePreviewSpan(ROWS, { head: "head", base: "gone", baseRef: "main" }, 4, 12)?.top).toBe(0);
   });
 
+  test("a row's empty connectors (the graph keeps them for spacing) leave a column free", () => {
+    const withEmpty = (r: GraphRow) =>
+      ({
+        ...r,
+        connectors: [
+          { type: "empty", column: 1, color: 0 },
+          { type: "empty", column: 2, color: 0 },
+        ],
+      }) as GraphRow;
+    const rows = [withEmpty(row("main", 0)), withEmpty(row("other", 0)), row("head", 1)];
+    expect(mergePreviewSpan(rows, { head: "head", base: "main", baseRef: "main" }, 4, 12)).toMatchObject({
+      column: 1,
+      direct: "bottom",
+    });
+  });
+
   test("a line in the head's column between them: the first column right of both that none uses; else one more", () => {
     const preview = { head: "head", base: "main", baseRef: "main" };
     const busy = (...active: number[]) => [row("main", 0), row("other", 0, [], active), row("head", 1)];

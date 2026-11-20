@@ -128,6 +128,11 @@ export function createGitHubService(ports: GitHubServicePorts) {
   let closedPullRequests: GitHubPullRequest[] = [];
   /** Whether a list was read for this repository: the first fetch reads one, refreshes and Reloads read it again. */
   let pullsRead = false;
+  /**
+   * The pull request lists on their way: a newer read stops them (an older answer never overwrites a newer one), and
+   * so does a reset. They run beside the fetch of the runs, outside the lifecycle's own requests.
+   */
+  let pullsRequest: AbortController | null = null;
   /** Skip unsupported WorkflowRun.jobs after the first retry. */
   let jobsUnsupported = false;
 
@@ -215,12 +220,19 @@ export function createGitHubService(ports: GitHubServicePorts) {
     const repo = ports.repo();
     const token = ports.token(ports.config().tokenEnvVar);
     if (!repo || !token) return;
-    // Aborted with the fetch they run beside: nothing to say.
+    pullsRequest?.abort();
+    const request = new AbortController();
+    pullsRequest = request;
+    const stop = () => request.abort();
+    signal?.addEventListener("abort", stop, { once: true });
+    // Aborted (with the fetch they run beside, by a newer read, by a reset): nothing to say.
     const [open, closed] = await Promise.all([
-      ports.api.fetchOpenPullRequests(repo, token, signal).catch(() => null),
-      ports.api.fetchClosedPullRequests(repo, token, signal).catch(() => null),
+      ports.api.fetchOpenPullRequests(repo, token, request.signal).catch(() => null),
+      ports.api.fetchClosedPullRequests(repo, token, request.signal).catch(() => null),
     ]);
-    if (signal?.aborted || !lifecycle().isCurrent(epoch, repoPath)) return;
+    signal?.removeEventListener("abort", stop);
+    if (pullsRequest === request) pullsRequest = null;
+    if (request.signal.aborted || !lifecycle().isCurrent(epoch, repoPath)) return;
     if (open && !open.error) {
       pullRequests = open.data;
       pullsRead = true;
@@ -377,6 +389,8 @@ export function createGitHubService(ports: GitHubServicePorts) {
     jobsCache.clear();
     jobsRunVersion.clear();
     queriedSHAs.clear();
+    pullsRequest?.abort();
+    pullsRequest = null;
     pullRequests = [];
     closedPullRequests = [];
     pullsRead = false;

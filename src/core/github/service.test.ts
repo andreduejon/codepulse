@@ -70,7 +70,11 @@ function harness() {
     fetchJobAnnotations: mock(async () => []),
     fetchJobLog: mock(async () => "log"),
     fetchOpenPullRequests: mock(
-      async (): Promise<{ data: GitHubPullRequest[]; error: string | null; failure?: ProviderFailure }> => ({
+      async (
+        _repo?: GitHubRepo,
+        _token?: string,
+        _signal?: AbortSignal,
+      ): Promise<{ data: GitHubPullRequest[]; error: string | null; failure?: ProviderFailure }> => ({
         data: [],
         error: null,
       }),
@@ -235,4 +239,37 @@ test("each fetch also reads the pull requests merged or closed most recently: a 
   await Bun.sleep(0);
   expect(h.service.pullRequestsAt(SHA)).toEqual([]);
   expect(h.service.closedPullRequestsAt(SHA).map(pr => pr.number)).toEqual([117, 118]);
+});
+
+test("an older pull request list that answers after a newer one changes nothing", async () => {
+  const h = harness();
+  let answerFirst!: (value: { data: GitHubPullRequest[]; error: string | null }) => void;
+  h.api.fetchOpenPullRequests.mockImplementationOnce(() => new Promise(resolve => (answerFirst = resolve)));
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  // The refresh's list answers first: no open pull request any more.
+  h.api.fetchOpenPullRequests.mockImplementation(async () => ({ data: [], error: null }));
+  await h.lifecycle.fetchRefresh(undefined, true, true);
+  await Bun.sleep(0);
+  answerFirst({ data: [pull()], error: null });
+  await Bun.sleep(0);
+  expect(h.service.pullRequestsAt(SHA)).toEqual([]);
+});
+
+test("a reset drops the pull request lists still on their way", async () => {
+  const h = harness();
+  let answer!: (value: { data: GitHubPullRequest[]; error: string | null }) => void;
+  let aborted = false;
+  h.api.fetchOpenPullRequests.mockImplementationOnce(
+    (_repo, _token, signal) =>
+      new Promise(resolve => {
+        answer = resolve;
+        signal?.addEventListener("abort", () => (aborted = true));
+      }),
+  );
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  h.lifecycle.resetCaches();
+  answer({ data: [pull()], error: null });
+  await Bun.sleep(0);
+  expect(aborted).toBe(true);
+  expect(h.service.pullRequestsAt(SHA)).toEqual([]);
 });
