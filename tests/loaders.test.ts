@@ -17,7 +17,10 @@ const disposers: (() => void)[] = [];
 
 afterEach(async () => {
   for (const dispose of disposers.splice(0)) dispose();
-  await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })));
+  // Windows keeps a folder busy while a Git process of a load that just ended is still closing: retry a moment.
+  await Promise.all(
+    roots.splice(0).map(root => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })),
+  );
 });
 
 /** Temp repo on `main`; `commits` are subjects committed in order, each touching file.txt. */
@@ -116,7 +119,7 @@ test("a configured branch scopes the first page, the next pages and a refresh al
   expect(subjects(state.commits())).toEqual(["s2", "s1"]);
   await loader.loadMoreData();
   expect(subjects(state.commits())).toEqual(["s2", "s1", "c1"]);
-  loader.loadData(undefined, undefined, true);
+  await loader.loadData(undefined, undefined, true);
   await until(() => !state.loading() && state.commits().length === 3, "refresh");
   expect(subjects(state.commits())).toEqual(["s2", "s1", "c1"]);
 });
@@ -409,9 +412,9 @@ test("a working tree Git can't read shows the history and says so, instead of lo
   // Readable again: a quiet refresh with the same history clears it, and a broken one says so again.
   await rm(join(root, ".git", "index"));
   await runGit(root, ["reset", "-q"]);
-  loader.loadData(undefined, undefined, true);
+  await loader.loadData(undefined, undefined, true);
   await until(() => state.error() === null, "the error cleared");
   await writeFile(join(root, ".git", "index"), "not an index");
-  loader.loadData(undefined, undefined, true);
+  await loader.loadData(undefined, undefined, true);
   await until(() => state.error() === BANNER.git.statusFailed, "the error again");
 });
