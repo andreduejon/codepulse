@@ -19,6 +19,9 @@ async function readWorktreeFile(repoPath: string, filePath: string): Promise<Fil
   return textToFileContent(filePath, new TextDecoder().decode(view), cut);
 }
 
+/** Git's word for a path a commit hasn't, as `show` and `blame` say it. */
+const MISSING_PATH = /exists on disk, but not in|does not exist|no such path/i;
+
 /**
  * Fetch the unified diff for a specific file.
  * The git command varies based on the diff source:
@@ -162,7 +165,8 @@ export async function getFileContent(
       if (stdout.includes("\0")) return { filePath, lines: [], isBinary: true };
       return textToFileContent(filePath, stdout, truncated);
     }
-    if (stderr.includes("exists on disk, but not in")) continue;
+    // A side without the file (added or deleted) is no error: the next one is tried. Anything else is.
+    if (!MISSING_PATH.test(stderr) && !signal?.aborted) throw new Error(stderr.trim() || "git could not read the file");
   }
 
   return { filePath, lines: [], isBinary: false };
@@ -184,13 +188,16 @@ export async function getFileBlame(
   // A commit and a range (its head) blame their commit; the rest blame HEAD.
   const ref = source === "commit" || source === "range" ? commitHash : "HEAD";
 
-  const { stdout, exitCode, truncated } = await runGit(
+  const { stdout, exitCode, stderr, truncated } = await runGit(
     repoPath,
     ["blame", "--porcelain", ref, "--", filePath],
     signal,
     MAX_FILE_BYTES,
   );
 
+  // A file the commit hasn't (a new one, blamed against HEAD) has no blame; any other failure is an error.
+  if (exitCode !== 0 && !truncated && !signal?.aborted && !MISSING_PATH.test(stderr))
+    throw new Error(stderr.trim() || "git could not read the blame");
   if ((exitCode !== 0 && !truncated) || !stdout.trim()) return [];
   const lines = parseBlameOutput(stdout);
   // A byte cut can end inside the last entry.

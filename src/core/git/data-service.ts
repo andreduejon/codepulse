@@ -118,13 +118,18 @@ export function createGitDataService(ports: GitDataPorts) {
       const silentMaxCount = computeSilentMaxCount(pageSize, state.commits(), silent, preserveLoaded);
 
       const logOptions = { branch: effectiveBranch, all: effectiveAll };
+      let statusError: unknown = null;
       let [commits, branches, remoteUrl, tagDetails, stashes, wtStatus] = await Promise.all([
         git.getCommits(path, { ...logOptions, maxCount: silentMaxCount }, ctrl.signal),
         git.getBranches(path, ctrl.signal),
         git.getRemoteUrl(path, ctrl.signal),
         git.getTagDetails(path, ctrl.signal),
         git.getStashList(path, ctrl.signal),
-        git.getWorkingTreeStatus(path, ctrl.signal),
+        // A failed status still shows the history, and says so instead of looking clean.
+        git.getWorkingTreeStatus(path, ctrl.signal).catch(err => {
+          statusError = err;
+          return null;
+        }),
       ]);
 
       // If we were superseded by a newer loadData call, discard results
@@ -192,7 +197,7 @@ export function createGitDataService(ports: GitDataPorts) {
         actions.setRemoteUrl(remoteUrl);
         actions.setTagDetails(tagDetails);
         actions.setStashByParent(stashByParent);
-        actions.setError(null);
+        actions.setError(statusError ? bannerOrFallback(statusError, BANNER.git.statusFailed, "Git") : null);
         actions.setCursorIndex(targetIndex);
         actions.setScrollTargetIndex(targetIndex);
       });

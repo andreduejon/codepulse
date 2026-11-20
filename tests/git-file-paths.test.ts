@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { fetchPullRequest, getCommitDetail, runGit } from "../src/adapters/git/repo";
-import { getFileContent, getFileDiff } from "../src/adapters/git/repo-diff";
+import { getFileBlame, getFileContent, getFileDiff } from "../src/adapters/git/repo-diff";
 import { getRangeFiles, getStagedFiles, getStashFiles, getUntrackedFiles } from "../src/adapters/git/repo-status";
 
 const paths = (files: { path: string; status: string }[]) => files.map(f => `${f.status} ${f.path}`).sort();
@@ -170,6 +170,10 @@ test.skipIf(process.platform === "win32")(
       const missing = "0123456789abcdef0123456789abcdef01234567";
       await expect(getFileDiff(root, missing, names[0], "range", undefined, head)).rejects.toThrow();
       await expect(getCommitDetail(root, missing, detail ?? undefined)).rejects.toThrow();
+      await expect(getFileContent(root, missing, names[0], "commit")).rejects.toThrow();
+      // A file HEAD hasn't (a new one) has no blame, and that is no error.
+      await writeFile(join(root, "new.txt"), "new\n");
+      expect(await getFileBlame(root, head, "new.txt", "unstaged")).toEqual([]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

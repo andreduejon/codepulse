@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { createEffect, createRoot, createSignal, untrack } from "solid-js";
 import { gitCli } from "../src/adapters/git/git-cli";
 import { runGit } from "../src/adapters/git/repo";
+import { BANNER } from "../src/core/banner";
 import { isUncommittedHash } from "../src/core/git/types";
 import type { DetailNavRef } from "../src/tui/components/detail-types";
 import { createAppState } from "../src/tui/context/state";
@@ -394,4 +395,15 @@ test("a refresh shows the selected uncommitted row's new files, also while the w
   await loader.loadData(undefined, undefined, true, true);
   await until(() => (state.uncommittedDetail()?.untracked.length ?? 0) > 0, "the new file");
   expect(state.uncommittedDetail()?.untracked.map(file => file.path)).toEqual(["new.txt"]);
+});
+
+test("a working tree Git can't read shows the history and says so, instead of looking clean", async () => {
+  const { root } = await makeRepo(["c1"]);
+  await writeFile(join(root, "file.txt"), "changed\n");
+  // A broken index: git log still works, git status doesn't.
+  await writeFile(join(root, ".git", "index"), "not an index");
+  const { state } = mount(root, 10);
+  await until(() => !state.loading() && state.commits().length > 0, "history");
+  expect(subjects(state.commits())).toContain("c1");
+  expect(state.error()).toBe(BANNER.git.statusFailed);
 });
