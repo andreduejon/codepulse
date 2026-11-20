@@ -61,7 +61,9 @@ function harness() {
     fetchJenkinsGraphDataForSHAs: mock(async () => listed()),
     fetchJenkinsDataForSHAs: mock(async () => listed()),
     fetchJenkinsRunsForBuilds: mock(async () => ({ data: [], error: null })),
-    fetchJenkinsRunJobs: mock(async () => ({ jobs: [], error: null })),
+    fetchJenkinsRunJobs: mock(
+      async (): Promise<{ jobs: never[]; error: string | null; failure?: "auth" }> => ({ jobs: [], error: null }),
+    ),
     fetchJenkinsConsoleLog: mock(async () => "log"),
   };
   let lifecycle!: FetchLifecycle;
@@ -134,6 +136,25 @@ test("an authentication failure stops automatic requests until a Reload", async 
   await h.service.refreshWindow();
   expect(h.api.fetchJenkinsGraphDataForSHAs).toHaveBeenCalledTimes(2);
   expect(h.service.getCommitData(SHA)?.runs).toHaveLength(1);
+});
+
+test("an authentication failure on a build's stages freezes automatic requests too, and says so", async () => {
+  const h = harness();
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  h.api.fetchJenkinsRunJobs.mockImplementation(async () => ({
+    jobs: [],
+    error: JENKINS_BANNER.authFailed,
+    failure: "auth" as const,
+  }));
+  const running = { ...build, id: `${JOB}#4`, runNumber: 4, status: "in_progress", conclusion: null };
+  await h.service.fetchJobsForRun(running);
+  expect(h.app.status).toEqual({ kind: "error", message: JENKINS_BANNER.authFailed });
+  expect((await h.service.fetchJobsForRun({ ...running, id: `${JOB}#5`, runNumber: 5 })).error).toBe(
+    JENKINS_BANNER.authFailed,
+  );
+  await h.lifecycle.fetchRefresh(undefined, true, false);
+  expect(h.api.fetchJenkinsRunJobs).toHaveBeenCalledTimes(1);
+  expect(h.api.fetchJenkinsGraphDataForSHAs).toHaveBeenCalledTimes(1);
 });
 
 test("a finished build's log is kept in the cache, not in memory: once the cache lost it, Jenkins is asked again", async () => {
