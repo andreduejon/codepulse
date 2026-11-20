@@ -37,12 +37,18 @@ async function makeRepo(commits: string[]) {
   return { root, git };
 }
 
-function mount(repoPath: string, maxCount: number, withDetail = false, getCommitData?: (sha: string) => unknown) {
+function mount(
+  repoPath: string,
+  maxCount: number,
+  withDetail = false,
+  getCommitData?: (sha: string) => unknown,
+  initialBranch?: string,
+) {
   return createRoot(dispose => {
     disposers.push(dispose);
     const { state, actions } = createAppState(maxCount, 0, 0);
     const [path, setPath] = createSignal(repoPath);
-    const loader = useDataLoader({ repoPath: path, git: gitCli(), state, actions });
+    const loader = useDataLoader({ repoPath: path, git: gitCli(), state, actions, initialBranch });
     if (withDetail) {
       useDetailLoader({
         repoPath: path,
@@ -93,6 +99,25 @@ test("pages through history to the end and keeps the cursor on the selected comm
   expect(state.commits()).toHaveLength(5);
   expect(state.fetching()).toBe(false);
   expect(state.fetchingHistory()).toBe(false);
+});
+
+test("a configured branch scopes the first page, the next pages and a refresh alike", async () => {
+  const { root, git } = await makeRepo(["c1", "c2", "c3"]);
+  await git("checkout", "-b", "side", "HEAD~2");
+  for (const subject of ["s1", "s2"]) {
+    await writeFile(join(root, "side.txt"), `${subject}\n`);
+    await git("add", ".");
+    await git("commit", "-m", subject);
+  }
+  await git("checkout", "main");
+  const { state, loader } = mount(root, 2, false, undefined, "side");
+  await until(() => !state.loading() && state.commits().length > 0, "first page");
+  expect(subjects(state.commits())).toEqual(["s2", "s1"]);
+  await loader.loadMoreData();
+  expect(subjects(state.commits())).toEqual(["s2", "s1", "c1"]);
+  loader.loadData(undefined, undefined, true);
+  await until(() => !state.loading() && state.commits().length === 3, "refresh");
+  expect(subjects(state.commits())).toEqual(["s2", "s1", "c1"]);
 });
 
 test("switching repositories discards the previous repository's load", async () => {
