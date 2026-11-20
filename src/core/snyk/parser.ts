@@ -88,13 +88,17 @@ export function compareVersions(left: string, right: string, semver = false): nu
 /** Ecosystems whose versions aren't SemVer: a numeric suffix after `-` is a later build there. */
 const NOT_SEMVER = new Set(["maven", "gradle", "sbt"]);
 
-function fixedVersion(vulnerability: Record<string, unknown>, dependency: string, installed: string): string | null {
+function fixedVersion(
+  vulnerability: Record<string, unknown>,
+  dependency: string,
+  installed: string,
+  semver: boolean,
+): string | null {
   if (Array.isArray(vulnerability.fixedIn)) {
     // Snyk lists one fix per release line; prefer the lowest one above the installed version.
     const fixed = vulnerability.fixedIn.filter(
       (value): value is string => typeof value === "string" && value.length > 0,
     );
-    const semver = !NOT_SEMVER.has(String(vulnerability.packageManager ?? ""));
     const order = (left: string, right: string) => compareVersions(left, right, semver);
     const above = fixed.filter(value => order(value, installed) > 0).sort(order);
     if (above.length > 0) return above[0];
@@ -110,7 +114,13 @@ function fixedVersion(vulnerability: Record<string, unknown>, dependency: string
   return null;
 }
 
-function normalizeFinding(value: unknown, project: string | null, targetFile: string | null): SnykFinding | null {
+function normalizeFinding(
+  value: unknown,
+  project: string | null,
+  targetFile: string | null,
+  /** The project's package manager: a vulnerability without its own has the project's. */
+  projectManager: unknown,
+): SnykFinding | null {
   if (!isObject(value)) return null;
   const severity = typeof value.severity === "string" ? value.severity.toLowerCase() : "";
   if (!SEVERITIES.has(severity as SnykSeverity)) return null;
@@ -122,6 +132,7 @@ function normalizeFinding(value: unknown, project: string | null, targetFile: st
   const installedVersion = stringValue(value.version) ?? fromPath?.version ?? "(unknown)";
   const path = dependencyPath(value.from);
   const upgrade = upgradeTarget(value.upgradePath, value.from);
+  const notSemver = NOT_SEMVER.has(String(value.packageManager ?? projectManager ?? ""));
 
   return {
     id: stringValue(value.id) ?? "unknown",
@@ -129,7 +140,7 @@ function normalizeFinding(value: unknown, project: string | null, targetFile: st
     severity: severity as SnykSeverity,
     dependency,
     installedVersion,
-    fixedVersion: fixedVersion(value, dependency, installedVersion),
+    fixedVersion: fixedVersion(value, dependency, installedVersion, !notSemver),
     fixedIn: Array.isArray(value.fixedIn)
       ? value.fixedIn.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
       : [],
@@ -142,6 +153,7 @@ function normalizeFinding(value: unknown, project: string | null, targetFile: st
     cves: cveIdentifiers(value),
     project,
     targetFile,
+    ...(notSemver ? { notSemver } : {}),
   };
 }
 
@@ -300,7 +312,8 @@ export function groupSnykFixes(entries: readonly SnykVulnerabilityEntry[]): Snyk
       else group.packages.push({ ...target, entries: [entry] });
     } else {
       existing.entries.push(entry);
-      if (target.version && (!existing.version || compareVersions(target.version, existing.version) > 0))
+      const semver = !entry.finding.notSemver;
+      if (target.version && (!existing.version || compareVersions(target.version, existing.version, semver) > 0))
         existing.version = target.version;
     }
   }
@@ -353,7 +366,7 @@ export function parseSnykOutput(raw: string | unknown, options: SnykParseOptions
     const targetFile = normalizeSnykTargetFile(value.displayTargetFile) ?? normalizeSnykTargetFile(value.targetFile);
     const vulnerabilities = Array.isArray(value.vulnerabilities) ? value.vulnerabilities : [];
     for (const vulnerability of vulnerabilities) {
-      const finding = normalizeFinding(vulnerability, project, targetFile);
+      const finding = normalizeFinding(vulnerability, project, targetFile, value.packageManager);
       if (finding) findings.push(finding);
     }
   }

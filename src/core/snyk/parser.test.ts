@@ -10,6 +10,7 @@ import {
   snykUpgrade,
 } from "./parser";
 import { shouldReplaceSnykResult } from "./results";
+import type { SnykFinding } from "./types";
 
 const SHA = "a".repeat(40);
 
@@ -551,4 +552,48 @@ test("dependency groups: one per direct dependency, sizes sum to the total, high
     ["ws", "1.0.0", "1.0.7", ["C"]],
   ]);
   expect(packages(2)).toEqual([["json", "1.0.0", null, ["D"]]]);
+});
+
+test("the highest needed version knows its ecosystem: an npm prerelease is below its release, a Maven build above", () => {
+  const needing = (version: string, id: string, notSemver?: boolean): SnykFinding => ({
+    title: "t",
+    severity: "high",
+    installedVersion: "1.0.0",
+    project: "app",
+    targetFile: "package.json",
+    fixedIn: [],
+    exploit: null,
+    cvssScore: null,
+    dependencyType: "transitive",
+    id,
+    dependency: "core",
+    fixedVersion: version,
+    dependencyPath: ["starter@4.1.1", "core@1.0.0"],
+    ...(notSemver ? { notSemver } : {}),
+  });
+  const highest = (findings: SnykFinding[]) =>
+    groupSnykFixes(groupSnykVulnerabilities(findings))[0]?.packages[0]?.version;
+  expect(highest([needing("1.2.3", "A"), needing("1.2.3-2", "B")])).toBe("1.2.3");
+  expect(highest([needing("1.2.3", "A", true), needing("1.2.3-2", "B", true)])).toBe("1.2.3-2");
+});
+
+test("a project's package manager reaches its vulnerabilities: Maven's 1.2.3-1 is a later build than 1.2.3", () => {
+  const result = parseSnykOutput(
+    {
+      packageManager: "maven",
+      vulnerabilities: [
+        {
+          id: "x",
+          severity: "high",
+          packageName: "core",
+          version: "1.2.3-1",
+          fixedIn: ["1.2.3", "1.2.4"],
+          from: ["app@1", "core@1.2.3-1"],
+        },
+      ],
+    },
+    { sha: SHA, scannedAt: "now" },
+  );
+  expect(result.findings[0].fixedVersion).toBe("1.2.4");
+  expect(result.findings[0].notSemver).toBe(true);
 });
