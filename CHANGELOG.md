@@ -99,8 +99,13 @@ All notable changes to this project will be documented in this file.
   again, and a terminating Pod is on no commit, also one labelled with its own.
 - A Jenkins authentication failure on a build's stages stops automatic
   requests until Reload, as one on the builds does.
-- Wrapped log lines with wide characters (CJK) take their real height, so `G`
-  and search land on the right line.
+- Wrapped log lines with wide characters (CJK), tabs or joined emoji take
+  their real height, so `G` and search land on the right line. While wrapped,
+  the line numbers are as wide as the last line's from the start.
+- A quiet refresh says when `git status` fails and clears that once it reads
+  again. A stash whose files can't be read says so instead of opening empty.
+- Snyk reads a project's package manager for all its vulnerabilities, and a
+  dependency group's highest needed version follows the same version order.
 - "Show in" from the Dashboard lands on the event's row every time, also for
   an event shown before, and on the run itself rather than its first job.
 
