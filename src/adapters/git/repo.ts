@@ -232,9 +232,16 @@ export async function getCommitDetail(
   const revisions = commit.parents.length > 1 ? [`${hash}^1`, hash] : [hash];
   const [msgResult, diffResult] = await Promise.all([
     msgProc,
-    runGit(repoPath, ["diff-tree", "--root", "--no-commit-id", "-r", "--raw", "--numstat", ...revisions, "--"], signal),
+    runGit(
+      repoPath,
+      ["diff-tree", "--root", "--no-commit-id", "-r", "--raw", "--numstat", "-z", ...revisions, "--"],
+      signal,
+    ),
   ]);
   if (signal?.aborted) return null;
+  // A failed read is an error, not a commit without a message or files.
+  const failed = [msgResult, diffResult].find(result => result.exitCode !== 0);
+  if (failed) throw new Error(failed.stderr.trim() || "git could not read the commit");
 
   const fullMessage = msgResult.stdout;
   const files = parseDiffTreeOutput(diffResult.stdout);

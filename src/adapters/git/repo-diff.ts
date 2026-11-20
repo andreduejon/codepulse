@@ -74,9 +74,21 @@ export async function getFileDiff(
     );
   }
 
-  if ((result.exitCode !== 0 && !result.truncated) || !result.stdout.trim()) {
-    return { filePath, hunks: [], isBinary: false };
+  // A stash's untracked file (`git stash -u`) is in its third parent.
+  if (source === "stash" && result.exitCode === 0 && !result.stdout.trim()) {
+    const untracked = await runGit(
+      repoPath,
+      ["diff", "-p", `${commitHash}^1`, `${commitHash}^3`, "--", filePath],
+      signal,
+      MAX_FILE_BYTES,
+    );
+    if (untracked.exitCode === 0 || untracked.truncated) result = untracked;
   }
+
+  // A failed read is an error, not a file without changes.
+  if (result.exitCode !== 0 && !result.truncated && !signal?.aborted)
+    throw new Error(result.stderr.trim() || "git could not read the diff");
+  if (!result.stdout.trim()) return { filePath, hunks: [], isBinary: false };
 
   return parseUnifiedDiff(result.stdout, filePath, result.truncated);
 }
@@ -135,7 +147,7 @@ export async function getFileContent(
       case "commit":
         return [`${commitHash}:${filePath}`, `${commitHash}^:${filePath}`];
       case "stash":
-        return [`${commitHash}:${filePath}`, `${commitHash}^1:${filePath}`];
+        return [`${commitHash}:${filePath}`, `${commitHash}^1:${filePath}`, `${commitHash}^3:${filePath}`];
       case "staged":
         return [`:${filePath}`];
       case "range":

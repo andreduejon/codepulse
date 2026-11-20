@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { getCommitDetail, runGit } from "../src/adapters/git/repo";
-import { getFileDiff } from "../src/adapters/git/repo-diff";
-import { getRangeFiles, getStagedFiles, getUntrackedFiles } from "../src/adapters/git/repo-status";
+import { getFileContent, getFileDiff } from "../src/adapters/git/repo-diff";
+import { getRangeFiles, getStagedFiles, getStashFiles, getUntrackedFiles } from "../src/adapters/git/repo-status";
 
 const paths = (files: { path: string; status: string }[]) => files.map(f => `${f.status} ${f.path}`).sort();
 
@@ -141,6 +141,59 @@ test("a pull request's renamed file is its old path gone and its new one added; 
     await git(root, "clone", "-q", "--depth", "1", "--branch", "feature", pathToFileURL(repo).href, "shallow");
     await git(shallow, "fetch", "-q", "--depth", "1", "origin", "main:refs/remotes/origin/main");
     expect(await getRangeFiles(shallow, "origin/main", head)).toBeNull();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// Windows can't name a file with a tab, a newline or a quote.
+test.skipIf(process.platform === "win32")(
+  "a name with a tab, a newline or a quote is listed exactly and its diff opens; a failed read is an error",
+  async () => {
+    const root = await mkdtemp(join(tmpdir(), "codepulse-git-odd-names-"));
+    const git = async (...args: string[]) => {
+      const result = await runGit(root, ["-c", "user.name=Test", "-c", "user.email=test@example.test", ...args]);
+      if (result.exitCode !== 0) throw new Error(result.stderr);
+      return result.stdout.trim();
+    };
+    try {
+      await git("init");
+      const names = ["tab\there.txt", "new\nline.txt", 'say "hi".txt'];
+      for (const name of names) await writeFile(join(root, name), "one\n");
+      await git("add", ".");
+      await git("commit", "-m", "odd names");
+      const head = await git("rev-parse", "HEAD");
+      const detail = await getCommitDetail(root, head);
+      expect(paths(detail?.files ?? [])).toEqual(names.map(name => `A ${name}`).sort());
+      for (const name of names) expect((await getFileDiff(root, head, name, "commit")).hunks).toHaveLength(1);
+
+      const missing = "0123456789abcdef0123456789abcdef01234567";
+      await expect(getFileDiff(root, missing, names[0], "range", undefined, head)).rejects.toThrow();
+      await expect(getCommitDetail(root, missing, detail ?? undefined)).rejects.toThrow();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+);
+
+test("a stash's untracked files (git stash -u) are listed as added, and their diff and content open", async () => {
+  const root = await mkdtemp(join(tmpdir(), "codepulse-git-stash-untracked-"));
+  const git = async (...args: string[]) => {
+    const result = await runGit(root, ["-c", "user.name=Test", "-c", "user.email=test@example.test", ...args]);
+    if (result.exitCode !== 0) throw new Error(result.stderr);
+    return result.stdout.trim();
+  };
+  try {
+    await git("init");
+    await writeFile(join(root, "tracked.txt"), "one\n");
+    await git("add", ".");
+    await git("commit", "-m", "initial");
+    await writeFile(join(root, "untracked.txt"), "new\n");
+    await git("stash", "push", "-u");
+    const stash = await git("rev-parse", "stash@{0}");
+    expect(paths(await getStashFiles(root, stash))).toEqual(["A untracked.txt"]);
+    expect((await getFileDiff(root, stash, "untracked.txt", "stash")).hunks).toHaveLength(1);
+    expect((await getFileContent(root, stash, "untracked.txt", "stash")).lines).toHaveLength(1);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -21,14 +21,20 @@ export async function getStashFiles(repoPath: string, stashHash: string, signal?
   // Stash commits are merges (2-3 parents). diff-tree on a merge commit
   // with just one revision produces no output. We must explicitly diff
   // against the first parent (the HEAD at time of stash).
-  const { stdout, exitCode } = await runGit(
-    repoPath,
-    ["diff-tree", "--no-commit-id", "-r", "--raw", "--numstat", `${stashHash}^1`, stashHash, "--"],
-    signal,
-  );
-
-  if (exitCode !== 0 || !stdout.trim()) return [];
-  return parseDiffTreeOutput(stdout);
+  // `git stash -u` keeps the untracked files in a third parent of their own: each one is added.
+  const [tracked, untracked] = await Promise.all([
+    runGit(
+      repoPath,
+      ["diff-tree", "--no-commit-id", "-r", "--raw", "--numstat", "-z", `${stashHash}^1`, stashHash, "--"],
+      signal,
+    ),
+    runGit(
+      repoPath,
+      ["diff-tree", "--root", "--no-commit-id", "-r", "--raw", "--numstat", "-z", `${stashHash}^3`, "--"],
+      signal,
+    ),
+  ]);
+  return [tracked, untracked].flatMap(({ stdout, exitCode }) => (exitCode === 0 ? parseDiffTreeOutput(stdout) : []));
 }
 
 /** What `head` changed since it left `base`: the files between their merge base and `head`, and that base. */
@@ -45,7 +51,7 @@ export async function getRangeFiles(
   if (found.exitCode !== 0 || !/^[0-9a-f]{40,64}$/.test(mergeBase)) return null;
   const { stdout, exitCode } = await runGit(
     repoPath,
-    ["diff-tree", "--no-commit-id", "-r", "--raw", "--numstat", mergeBase, head, "--"],
+    ["diff-tree", "--no-commit-id", "-r", "--raw", "--numstat", "-z", mergeBase, head, "--"],
     signal,
   );
   if (exitCode !== 0) return null;
@@ -60,7 +66,7 @@ export async function getStagedFiles(repoPath: string, signal?: AbortSignal): Pr
   // --no-renames: numstat would print "dir/{old => new}", which is not a real path.
   const { stdout, exitCode } = await runGit(
     repoPath,
-    ["diff", "--cached", "--no-renames", "--raw", "--numstat", "--"],
+    ["diff", "--cached", "--no-renames", "--raw", "--numstat", "-z", "--"],
     signal,
   );
   if (exitCode !== 0 || !stdout.trim()) return [];
@@ -72,7 +78,11 @@ export async function getStagedFiles(repoPath: string, signal?: AbortSignal): Pr
  * Uses `git diff --raw --numstat` (no HEAD, no --cached) to get modified tracked files.
  */
 export async function getUnstagedFiles(repoPath: string, signal?: AbortSignal): Promise<FileChange[]> {
-  const { stdout, exitCode } = await runGit(repoPath, ["diff", "--no-renames", "--raw", "--numstat", "--"], signal);
+  const { stdout, exitCode } = await runGit(
+    repoPath,
+    ["diff", "--no-renames", "--raw", "--numstat", "-z", "--"],
+    signal,
+  );
   if (exitCode !== 0 || !stdout.trim()) return [];
   return parseDiffTreeOutput(stdout);
 }
