@@ -372,6 +372,13 @@ describe("fix-oriented vulnerability entries", () => {
     expect(parse(["9.1.4.Final"], "9.1.3.Final")).toBe("9.1.4.Final");
     expect(parse(["1.0.0", "2.0.0"], "3.0.0")).toBe("1.0.0, 2.0.0");
     expect(compareVersions("1.10.0", "1.9.9")).toBeGreaterThan(0);
+    // A prerelease comes before its release: the smaller fix wins over the next major.
+    expect(parse(["1.0.0", "2.0.0"], "1.0.0-beta.1")).toBe("1.0.0");
+    expect(compareVersions("1.0.0", "1.0.0-beta.1")).toBeGreaterThan(0);
+    expect(compareVersions("2.5.0-RC1", "2.5.0")).toBeLessThan(0);
+    expect(compareVersions("1.0.0-beta.2", "1.0.0-beta.1")).toBeGreaterThan(0);
+    // Maven's dotted qualifier is unchanged.
+    expect(compareVersions("9.1.4.Final", "9.1.4")).toBeGreaterThan(0);
   });
 
   test("fix kind: upgrade path or direct fix → upgrade, transitive fix → override, none → no fix", () => {

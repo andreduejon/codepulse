@@ -63,13 +63,21 @@ function cveIdentifiers(vulnerability: Record<string, unknown>): string[] {
   ];
 }
 
-/** Numeric-aware version order; non-numeric segments (e.g. `Final`) compare as text. */
+/**
+ * Numeric-aware version order; non-numeric segments (e.g. `Final`) compare as text. A prerelease (`-beta.1`, `-RC1`)
+ * comes before its release.
+ */
 export function compareVersions(left: string, right: string): number {
-  const a = left.split(/[.\-+]/);
-  const b = right.split(/[.\-+]/);
+  const segments = (version: string) => [...version.matchAll(/([.\-+]?)([^.\-+]+)/g)];
+  const a = segments(left);
+  const b = segments(right);
   for (let index = 0; index < Math.max(a.length, b.length); index++) {
-    const x = a[index] ?? "0";
-    const y = b[index] ?? "0";
+    const prerelease = (segment: RegExpExecArray | RegExpMatchArray | undefined) =>
+      segment?.[1] === "-" && !/^\d+$/.test(segment[2]);
+    if (!a[index] && prerelease(b[index])) return 1;
+    if (!b[index] && prerelease(a[index])) return -1;
+    const x = a[index]?.[2] ?? "0";
+    const y = b[index]?.[2] ?? "0";
     const order = /^\d+$/.test(x) && /^\d+$/.test(y) ? Number(x) - Number(y) : x.localeCompare(y);
     if (order !== 0) return order;
   }
