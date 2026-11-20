@@ -55,6 +55,15 @@ All notable changes to this project will be documented in this file.
 - A failed OpenShift Build without a reason now shows why it failed in Events.
 - A namespace whose event list fails is named under the Events tab, as one the
   token may not list is.
+- Typing in a filter in the Dashboard's details no longer runs app keys: `m`,
+  `q`, `f` and `s` type instead of opening the Menu, quitting, fetching or
+  showing the event.
+- One OpenShift watch that drops no longer leaves its kind stale while the
+  others stay open: all watches start again from a fresh list. One refused
+  watch is reported at once, and the others keep watching.
+- Wrapping a long log (`w`) no longer mounts every line: a 20,000-line log
+  stays near 110 MB instead of over 1 GB. Wrapped lines break at the width,
+  not between words.
 
 ## [0.19.0] - 2026-11-18
 
