@@ -25,7 +25,13 @@ Configure the provider per repository from `:providers`:
 Credentials remain in environment variables and are not written to config.
 Jenkins sends the username and token using Basic authentication. Missing
 credentials, login redirects, and HTML login responses are reported as setup or
-authentication errors instead of build failures.
+authentication errors instead of build failures, for the console log too: a login
+page is never shown as a build's log.
+
+Stages come from the [Pipeline REST API](https://plugins.jenkins.io/pipeline-rest-api/)
+plugin (`wfapi/describe`), which Pipeline installs usually come with. Without it, or
+for a freestyle build, a build has no stages: it still has its **Console** row and
+its test report. A failed stage request (other than missing) says so under the build.
 
 ## Multibranch pipelines
 

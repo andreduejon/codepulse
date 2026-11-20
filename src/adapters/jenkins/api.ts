@@ -189,7 +189,7 @@ async function fetchJson<T>(
   if (res.status === 401) throw new ProviderAuthError(JENKINS_BANNER.tokenExpired);
   if (!res.ok) {
     debugError("Jenkins", `${res.status} ${res.statusText} ${url}`);
-    throw new Error(JENKINS_BANNER.fetchFailed);
+    throw Object.assign(new Error(JENKINS_BANNER.fetchFailed), { status: res.status });
   }
   if (/text\/html/i.test(contentType)) throw jenkinsAuthError(`html response ${url}`);
   return (await res.json()) as T;
@@ -766,12 +766,17 @@ export async function fetchJenkinsRunJobs(
   signal?: AbortSignal,
 ): Promise<{ jobs: JenkinsJob[]; error: string | null; failure?: ProviderFailure }> {
   try {
+    // Stages come from the Pipeline REST API plugin. Without it (or for a freestyle build) the build has none, and
+    // still its console and test report.
     const wfapi = await fetchJson<JenkinsWfapiDescribe>(
       jenkinsApiUrl(onOrigin(run.url, run.jobUrl), "wfapi/describe"),
       username,
       token,
       signal,
-    );
+    ).catch((err: unknown): JenkinsWfapiDescribe => {
+      if ((err as { status?: number }).status === 404) return {};
+      throw err;
+    });
     const stages: JenkinsStage[] = (wfapi.stages ?? []).map(stage => {
       const mapped = mapWfapiStatus(stage.status);
       const startedAt = stage.startTimeMillis ? new Date(stage.startTimeMillis).toISOString() : null;
@@ -821,14 +826,16 @@ export async function fetchJenkinsConsoleLog(
   const url = `${normalizeJenkinsJobUrl(onOrigin(run.url, run.jobUrl))}/consoleText`;
   // A failed request throws its banner so the log dialog can say why; "" is a build without output.
   if (!isSafeJenkinsRequestUrl(url)) throw new Error(JENKINS_BANNER.invalidJobUrl);
-  const res = await fetchWithRetry(url, {
-    headers: authHeaders(username, token),
-    signal,
-  });
+  // As the JSON requests: a login page (by redirect, or answered as HTML) is an expired token, not the log.
+  const res = await fetchWithRetry(url, { headers: authHeaders(username, token), signal, redirect: "manual" });
+  if (res.status >= 300 && res.status < 400 && isJenkinsLoginRedirect(res.headers.get("location"))) {
+    throw jenkinsAuthError(`login redirect ${url}`);
+  }
   if (res.status === 401) throw new ProviderAuthError(JENKINS_BANNER.tokenExpired);
   if (!res.ok) {
     debugError("Jenkins", `${res.status} ${res.statusText} ${url}`);
     throw new Error(JENKINS_BANNER.logFailed);
   }
+  if (/text\/html/i.test(res.headers.get("content-type") ?? "")) throw jenkinsAuthError(`html response ${url}`);
   return res.text();
 }
