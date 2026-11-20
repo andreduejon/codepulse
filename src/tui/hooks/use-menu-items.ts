@@ -140,8 +140,8 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
     savedSettings.write(cfg, state.repoPath());
     if (overrides && (Object.hasOwn(overrides, "group") || Object.hasOwn(overrides, "appName"))) {
       const nextRepoDisplayConfig = {
-        group: Object.hasOwn(overrides, "group") ? overrides.group : repoDisplayConfig().group,
-        appName: Object.hasOwn(overrides, "appName") ? overrides.appName : repoDisplayConfig().appName,
+        group: Object.hasOwn(overrides, "group") ? overrides.group || undefined : repoDisplayConfig().group,
+        appName: Object.hasOwn(overrides, "appName") ? overrides.appName || undefined : repoDisplayConfig().appName,
       };
       setRepoDisplayConfig(nextRepoDisplayConfig);
       opts.onRepoDisplayConfigChange?.(nextRepoDisplayConfig);
@@ -182,7 +182,8 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         label: "Group",
         placeholder: "Enter group...",
         get: () => repoDisplayConfig().group ?? "",
-        set: v => persistFullConfig({ group: optionalRepoMetadataValue(v) }),
+        // Empty clears it: saved as removed, not left as it was.
+        set: v => persistFullConfig({ group: optionalRepoMetadataValue(v) ?? "" }),
         isDraftValid: isOptionalRepoMetadataValid,
         showValidity: false,
         staySelectedOnSave: true,
@@ -192,7 +193,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         label: "App name",
         placeholder: "Enter name...",
         get: () => repoDisplayConfig().appName ?? "",
-        set: v => persistFullConfig({ appName: optionalRepoMetadataValue(v) }),
+        set: v => persistFullConfig({ appName: optionalRepoMetadataValue(v) ?? "" }),
         isDraftValid: isOptionalRepoMetadataValid,
         showValidity: false,
         staySelectedOnSave: true,
