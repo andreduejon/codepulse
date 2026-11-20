@@ -4,6 +4,58 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- GitHub pull requests. In the GitHub view a `PR #123` chip marks the commit an
+  open pull request's branch points at (muted for a draft, and for one merged or
+  closed recently); a chip is never shortened, a tight row folds it into `+N`.
+  Such a commit has a **Pull requests** tab: each pull request with its age and
+  mark (`◀` open, `✓` merged, `○` closed) and a legend. Enter opens an open one on
+  its branch, target, author and the files it changed since its branch left the
+  target, read by Git as GitHub's Files changed shows them; Enter on a file opens
+  its diff, `←`/`→` move between the files. `o` opens it on GitHub.
+- While the Pull requests tab is open, the graph previews the merge of the pull
+  request under the mouse or the cursor: a muted line from its branch's commit to
+  its target's, with `◀` at the target, drawn in a free column so the lanes don't
+  move.
+- The Dashboard shows pull requests opened, merged and closed, each at its time;
+  their details open on the Pull requests tab at their row, and a file's diff
+  opens from there too. Pull requests are read with each fetch (the open ones and
+  those closed within the Dashboard's longest window) and are not saved. The
+  token needs Pull requests: read.
+- OpenShift keeps the Kubernetes warnings about a commit's resources with the
+  commit, so they outlast the cluster's own copy (3 hours by default). The new
+  **Events** tab shows them as a tree by namespace and reason: first in red what
+  a failing resource's status says is wrong, then the warnings in the warning
+  colour, then the Normal events the cluster lists now. One only the cache has
+  says `(cached)`, and a reason whose events are all cached is muted.
+- The graph's OpenShift columns are now **Resources** and **Events**: what the
+  cluster runs of a commit and its events, each count in its colour, with what
+  only the cache has muted at the end. In Resources a resource OpenShift still
+  warns about shows `!`.
+- OpenShift's saved warnings are Dashboard events at the time they were first
+  seen, with a yellow `!`; their details open on the Events tab at their row.
+
+### Changed
+
+- "Show in" from the Dashboard opens the graph's details on the event's own tab
+  (a pull request's Pull requests, a warning's Events, else its provider's first)
+  with the cursor on the event's row.
+- Labels use sentence case throughout: Last run, Last scan, Commit date, Checked
+  out, Color theme, Repository selector.
+- Debug names which list failed when a GitHub pull request list can't be read,
+  and says a 404 means the token can't see the repository.
+
+### Fixed
+
+- A finished pod's `Ready False` (`PodCompleted`) is no longer shown as a
+  failure.
+- OpenShift no longer loses a commit's saved builds or warnings when the cache
+  limit drops it while a save is on its way.
+- A failed OpenShift Build without a reason now shows why it failed in Events.
+- A namespace whose event list fails is named under the Events tab, as one the
+  token may not list is.
+
 ## [0.19.0] - 2026-11-18
 
 ### Changed
