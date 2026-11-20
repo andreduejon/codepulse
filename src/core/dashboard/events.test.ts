@@ -367,6 +367,18 @@ describe("dashboardRows", () => {
     sha: SHA,
   });
 
+  test("when daylight saving ends and the clock repeats an hour, the newer knot still comes first", () => {
+    // 01:45 summer time, then half an hour later 01:15 winter time: the newer one has the earlier local clock.
+    const older = { ...event("shop", 0), id: "older", time: at("2026-10-25T00:45:00Z") };
+    const newer = { ...event("shop", 0), id: "newer", time: at("2026-10-25T01:15:00Z") };
+    const summerUntil = at("2026-10-25T01:00:00Z");
+    const ordered = dashboardRows([older, newer], {
+      knotMs: 30 * 60_000,
+      utcOffset: time => (time < summerUntil ? 2 : 1) * HOUR,
+    }).flatMap(row => (row.kind === "event" ? [row.event.id] : []));
+    expect(ordered).toEqual(["newer", "older"]);
+  });
+
   test("a knot holds one app's events within one knot, newest first, with a rope row between knots", () => {
     const rows = dashboardRows(
       [event("shop", 52), event("web", 48), event("shop", 41), event("shop", -40), event("web", 12)],

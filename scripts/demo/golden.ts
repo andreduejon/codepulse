@@ -240,7 +240,11 @@ export const GOLDEN_PLAYS: readonly GoldenPlay[] = [
     args: [
       ...COMPACT,
       "--play",
-      'click:Dashboard wait:"scan" click:"scan" enter wait:"Enter vulnerability filter..." click:"Enter vulnerability filter..." type:mqfs wait:"mqfs" shot',
+      [
+        'click:Dashboard wait:"scan" click:"scan" enter wait:"Enter vulnerability filter..." click:"Enter vulnerability filter..." type:mqfs wait:"mqfs" shot:compact',
+        // Wide: the side panel's filter, the same keys.
+        'esc esc esc size:230x50 click:"scan" wait:"Enter vulnerability filter..." click:"Enter vulnerability filter..." type:mqfs wait:"mqfs" shot:wide',
+      ].join("\n"),
     ],
   },
   {

@@ -142,9 +142,8 @@ export function dashboardRows(events: readonly DashboardEvent[], options: Dashbo
     }
     knot.events.push(event);
   }
-  const ordered = [...knots.values()].sort(
-    (a, b) => b.bucket - a.bucket || (b.events[0]?.time ?? 0) - (a.events[0]?.time ?? 0),
-  );
+  // By the newest event's time, not the bucket: the local clock repeats an hour when daylight saving ends.
+  const ordered = [...knots.values()].sort((a, b) => (b.events[0]?.time ?? 0) - (a.events[0]?.time ?? 0));
   const rows: DashboardRow[] = [];
   let day: number | null = null;
   for (const knot of ordered) {

@@ -1,4 +1,4 @@
-=== shot 1 (160x45) ===
+=== shot 1: compact (160x45) ===
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
    Graph  Commit   Branch                Time   Event
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -43,5 +43,57 @@
   │
 
                                                                                                tab Git · enter done · esc back · ←/→ switch tab · ↑/↓ navigate
+
+
+=== shot 2: wide (230x50) ===
+  ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+   Graph  Commit   Branch                Time   Event                                                                                                                           Vulnerabilities        Dependencies         Info
+  ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+   │      ────────────────────────────── Today · Mon, Mar 2 ────────────────────────────────────────────────────────────────────────────────────────────────────────────    Show in Snyk
+   █      3447db9  main                  09:30  ▲ scan · 4 vulnerabilities · 1 critical · 3 high · 0 medium · 0 low                                                         Rescan commit
+   █      bf08113  dev                   09:30  ▲ scan · 4 vulnerabilities · 1 critical · 3 high · 0 medium · 0 low                                                         Copy scan as JSON
+   █      bf08113  dev                   09:30  ● Deploy preview #78 running
+   █      bf08113  dev                   09:30  ● CI #814 running                                                                                                           Group by                                      [severity]
+   █      bf08113  dev                   09:28  ● dev #7 running                                                                                                            mqfs                                                 0/4
+   █      bf08113  dev                   09:27  ✓ build shop-api-44 complete in shop-dev
+   █      3447db9  main                  09:01  ✓ Deploy to shop-prod with a long workflow name #77 passed                                                                  · CRITICAL                                           0/1
+   █      3447db9  main                  09:00  ✓ main #42 passed                                                                                                           · HIGH                                               0/3
+   █      64ddc8a  main                  09:00  ! BackOff · pod shop-api-7d9f8-x2k4q in shop-test · 61 times                                                                · MEDIUM                                               0
+   █      3447db9  docs/readme           09:00  ✓ PR #122 merged · docs: rewrite the README for the new cart flow                                                           · LOW                                                  0
+   │
+   █      64ddc8a  main                  08:59  ! Unhealthy · pod shop-api-7d9f8-x2k4q in shop-test · 42 times
+   █      3447db9  main                  08:55  ✓ CI #813 passed
+   █      e6209dd  dev                   08:44  ○ CI #811 cancelled
+   █      e6209dd  dev                   08:43  ○ dev #6 aborted
+   █      64ddc8a  main                  08:42  ! OOMKilling · pod shop-api-7d9f8-oom7k in shop-test
+   █      3447db9  main                  08:40  ✓ build shop-api-43 complete in shop-dev
+   █      bf08113  dev                   08:40  ◀ PR #124 opened · release: dev into main
+   █      bf08113  dev                   08:40  ◀ PR #125 opened · release: dev into release/1.x
+   █      64ddc8a  main                  08:38  ✗ CI #812 failed
+   █      64ddc8a  main                  08:35  ! BackOff · pod shop-cache-0 in shop-test · 3 times
+   █      3447db9  main                  08:30  docs: rewrite the README for the new cart flow 🚀 and explain how discounts are rounded
+   █      64ddc8a  main                  08:30  ! FailedCreate · replica set shop-api-7d9f8 in shop-test · 3 times
+   █      64ddc8a  main                  08:20  ! ProgressDeadlineExceeded · deployment shop-api in shop-test
+   │
+   █      3447db9  docs/readme           07:30  ◀ PR #122 opened · docs: rewrite the README for the new cart flow
+   │
+   █      64ddc8a  main                  06:45  ✗ main #41 failed
+   █      69ddc1f  feature/dark-mode     06:30  ◀ PR #119 opened · feat(theme): dark mode
+   █      64ddc8a  main                  06:15  ! BuildFailed · build shop-api-41 in shop-dev
+   █      64ddc8a  main                  06:12  ! FailedMount · pod shop-api-41-build in shop-dev · 2 times
+   │
+   █      1b1b130  experiment/graph-la…  05:30  ○ PR #116 closed · experiment: compare both graph layouts
+   │
+   █      6adc455  feature/payments-re…  04:31  ✗ CI #815 failed
+   █      6adc455  feature/payments-re…  04:30  ◀ PR #123 opened · feat(payments): retry failed payments with exponential backoff
+   │
+
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                                                 Git   GitHub   Jenkins   OpenShift   Snyk
+  │
+  │   customer-notification-service   shop   shop-web                                                                                                       52 events
+  │
+
+                                                                                                         tab Git · enter done · esc back · ←/→ switch tab · ↑/↓ navigate           ● upgrade  ● override  ● no fix  ! mature exploit
 
 
