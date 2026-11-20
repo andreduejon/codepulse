@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { getCommitDetail, runGit } from "../src/adapters/git/repo";
 import { getFileDiff } from "../src/adapters/git/repo-diff";
 import { getRangeFiles, getStagedFiles, getUntrackedFiles } from "../src/adapters/git/repo-status";
@@ -108,6 +109,38 @@ test("a pull request's files and diff are its branch's since it left the target,
     // A commit Git hasn't, or a name that would be an option: nothing.
     expect(await getRangeFiles(root, "main", "f".repeat(40))).toBeNull();
     expect(await getRangeFiles(root, "--all", head)).toBeNull();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a pull request's renamed file is its old path gone and its new one added; a shallow clone has no merge base", async () => {
+  const root = await mkdtemp(join(tmpdir(), "codepulse-git-range-edges-"));
+  const repo = join(root, "repo");
+  const shallow = join(root, "shallow");
+  const git = async (cwd: string, ...args: string[]) => {
+    const result = await runGit(cwd, ["-c", "user.name=Test", "-c", "user.email=test@example.test", ...args]);
+    if (result.exitCode !== 0) throw new Error(result.stderr);
+    return result.stdout.trim();
+  };
+  try {
+    await mkdir(repo);
+    await git(repo, "init", "-b", "main");
+    await writeFile(join(repo, "old.txt"), "one\ntwo\nthree\n");
+    await git(repo, "add", ".");
+    await git(repo, "commit", "-m", "initial");
+    await git(repo, "checkout", "-b", "feature");
+    await git(repo, "mv", "old.txt", "new.txt");
+    await git(repo, "commit", "-m", "rename");
+    const head = await git(repo, "rev-parse", "HEAD");
+    const range = await getRangeFiles(repo, "main", head);
+    // Each path the diff dialog can open: the old one's deletion, the new one's addition.
+    expect(paths(range?.files ?? [])).toEqual(["A new.txt", "D old.txt"]);
+
+    // A clone of the branch's tip alone: Git can't tell where it left main.
+    await git(root, "clone", "-q", "--depth", "1", "--branch", "feature", pathToFileURL(repo).href, "shallow");
+    await git(shallow, "fetch", "-q", "--depth", "1", "origin", "main:refs/remotes/origin/main");
+    expect(await getRangeFiles(shallow, "origin/main", head)).toBeNull();
   } finally {
     await rm(root, { recursive: true, force: true });
   }
