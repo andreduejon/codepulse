@@ -41,6 +41,8 @@ All notable changes to this project will be documented in this file.
 - "Show in" from the Dashboard opens the graph's details on the event's own tab
   (a pull request's Pull requests, a warning's Events, else its provider's first)
   with the cursor on the event's row.
+- Help writes the Dashboard's filter commands as `:hide <provider>` and
+  `:show <provider>`.
 - Labels use sentence case throughout: Last run, Last scan, Commit date, Checked
   out, Color theme, Repository selector.
 - Debug names which list failed when a GitHub pull request list can't be read,
@@ -64,6 +66,30 @@ All notable changes to this project will be documented in this file.
 - Wrapping a long log (`w`) no longer mounts every line: a 20,000-line log
   stays near 110 MB instead of over 1 GB. Wrapped lines break at the width,
   not between words.
+- A configured branch (`branch` setting or argument) now scopes every page of
+  history and every refresh, not only the first load: the graph opens on that
+  branch's view.
+- File names with a tab, a newline or a quote are listed exactly and their
+  diffs open.
+- A stash made with `git stash -u` lists its untracked files, and they open.
+- A Git read that fails (a missing commit, a broken diff) shows an error
+  instead of "No changes" or an empty file list.
+- A branch or tag name with a comma stays one ref.
+- An OpenShift Pod labelled or annotated with its commit is placed on that
+  commit, listed or watched.
+- Clearing Group or App name in the Menu removes it from the saved settings,
+  so it stays cleared after a restart.
+- A Jenkins build without the Pipeline REST API (or a freestyle build) keeps its
+  Console row and test report. A Jenkins login page is reported as an
+  authentication failure, never shown as a console log.
+- A GitHub 401 while reading a run's jobs stops automatic requests until
+  Reload and says the token expired, as one on the runs does.
+- Snyk ranks a prerelease below its release, so the smallest fixing version
+  is suggested.
+- The Dashboard keeps newest-first order through the hour that repeats when
+  daylight saving ends.
+- "Show in" from the Dashboard lands on the event's row every time, also for
+  an event shown before, and on the run itself rather than its first job.
 
 ## [0.19.0] - 2026-11-18
 
