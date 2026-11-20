@@ -48,4 +48,50 @@ test("a wrapped line's rows: a wide character that doesn't fit at a row's end st
   // One two-column character a row at three columns: three rows, where six columns alone would say two.
   expect(wrappedRows("界界界", 3)).toBe(3);
   expect(wrappedRows(`${"a".repeat(9)}界`, 10)).toBe(2);
+  // As the renderer draws them: a tab takes two columns, a joined emoji is one two-column character.
+  expect(wrappedRows("a\tb", 3)).toBe(2);
+  expect(wrappedRows("👩‍💻👩‍💻👩‍💻", 4)).toBe(2);
+  expect(wrappedRows("界", 1)).toBe(1);
+});
+
+test("wrapped wide lines: G reaches the last line and a search shows its hit", async () => {
+  const lines = Array.from({ length: 500 }, (_, i) => ({
+    text: `${"界".repeat(71)}${String(i).padStart(6, "0")}X`,
+    lineNo: i + 1,
+  }));
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={createThemeState()}>
+        <LogViewer
+          title={() => [{ text: "Wide" }]}
+          lines={() => lines}
+          state={() => null}
+          searchPlaceholder={() => "Search..."}
+          onClose={() => {}}
+        />
+      </ThemeContext.Provider>
+    ),
+    { width: 100, height: 30 },
+  );
+  const settle = async () => {
+    for (let i = 0; i < 6; i++) {
+      await Bun.sleep(0);
+      await setup.renderOnce();
+    }
+  };
+  try {
+    await settle();
+    setup.mockInput.pressKey("w");
+    await settle();
+    setup.mockInput.pressKey("G");
+    await settle();
+    expect(setup.captureCharFrame()).toContain("000499X");
+    setup.mockInput.pressKey("/");
+    await settle();
+    await setup.mockInput.typeText("000400");
+    await settle();
+    expect(setup.captureCharFrame()).toContain("000400X");
+  } finally {
+    setup.renderer.destroy();
+  }
 });

@@ -7,9 +7,9 @@
  * and the entries ←/→ move between.
  */
 
-import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
+import type { ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
-import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show, untrack } from "solid-js";
+import { createEffect, createMemo, createSignal, For, onMount, Show, untrack } from "solid-js";
 import type { StatusCategory } from "../../../core/status";
 import { useScrollWindow } from "../../hooks/use-scroll-window";
 import { useT } from "../../hooks/use-t";
@@ -23,7 +23,6 @@ import {
   highlightHits,
   LineNumber,
   LogSearchRow,
-  lastVisibleRow,
   useLogSearch,
   useSidewaysReveal,
   useVisibleNumberWidth,
@@ -58,18 +57,21 @@ export interface LogViewerNavigation {
   go: (direction: -1 | 1) => void;
 }
 
+const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
 /**
- * The rows a line takes wrapped by character at `width` columns: a wide character (two columns) that doesn't fit at a
- * row's end starts the next one.
+ * The rows a line takes wrapped by character at `width` columns, as the renderer draws it: a character (a grapheme,
+ * so a joined emoji is one) that doesn't fit at a row's end starts the next one, and a tab takes two columns.
  */
 export function wrappedRows(text: string, width: number): number {
   // Plain ASCII (most logs): one column a character, the length alone says it.
   if (/^[\x20-\x7e]*$/.test(text)) return Math.max(1, Math.ceil(text.length / width));
   let rows = 1;
   let used = 0;
-  for (const char of text) {
-    const columns = cellWidth(char);
-    if (used + columns > width) {
+  for (const { segment } of graphemes.segment(text)) {
+    const columns = segment === "\t" ? 2 : cellWidth(segment);
+    // A character wider than the whole row still takes one: an empty row doesn't move it on.
+    if (used > 0 && used + columns > width) {
       rows++;
       used = 0;
     }
@@ -110,8 +112,6 @@ export function LogViewer(props: Readonly<LogViewerProps>) {
   let scrollboxRef: ScrollBoxRenderable | undefined;
 
   const texts = () => props.lines().map(line => line.text);
-  /** The mounted lines' elements by index, for the last one on the screen while wrapped. */
-  const lineRefs: (Renderable | undefined)[] = [];
   // Before the window: its heights need the text's width, which needs the numbers' (rule 1 in agents.md).
   const [textWidth, setTextWidth] = createSignal(1);
   /**
@@ -132,13 +132,10 @@ export function LogViewer(props: Readonly<LogViewerProps>) {
   });
   const numberWidth = useVisibleNumberWidth({
     scrollbox: () => scrollboxRef,
-    lastVisible: (scrollbox, count) => {
-      if (!wrapEnabled()) return Math.max(0, Math.min(count - 1, scrollbox.scrollTop + scrollbox.viewport.height - 1));
-      // Among the mounted lines: the screen is inside them.
-      const { start, end } = untrack(lineWindow.range);
-      const last = lastVisibleRow(scrollbox, Math.min(end, count) - start, index => lineRefs[start + index]);
-      return last === null ? null : start + last;
-    },
+    // Wrapped, the numbers are as wide as the last line's from the start: a column that grew while scrolling would
+    // wrap every line again under the view, and `G` or a search would land short of its line.
+    lastVisible: (scrollbox, count) =>
+      wrapEnabled() ? count - 1 : Math.max(0, Math.min(count - 1, scrollbox.scrollTop + scrollbox.viewport.height - 1)),
     lines: props.lines,
     numberAt: index => props.lines()[index]?.lineNo ?? 0,
     layoutKey: wrapEnabled,
@@ -247,21 +244,10 @@ export function LogViewer(props: Readonly<LogViewerProps>) {
     const wrapMode = () => (wrapEnabled() ? "char" : "none");
     const text = (value: string) => highlightHits(reveal(value), search.term(), { fg: th.background, bg: th.accent });
     const isCurrentHit = () => search.current() === index();
-    let mounted: Renderable | undefined;
-    /** Where this line put its element: read no signal while it is cleaned up. */
-    let at = -1;
-    const ref = (element: Renderable) => {
-      mounted = element;
-      at = index();
-      lineRefs[at] = element;
-    };
-    onCleanup(() => {
-      if (at >= 0 && lineRefs[at] === mounted) lineRefs[at] = undefined;
-    });
     const kind = line.kind ?? "normal";
     if (kind === "group") {
       return (
-        <box ref={ref} flexDirection="row" width="100%">
+        <box flexDirection="row" width="100%">
           <LineNumber text={lineNo()} current={isCurrentHit()} />
           <text wrapMode={wrapMode()} fg={th.accent}>
             <strong>
@@ -281,7 +267,7 @@ export function LogViewer(props: Readonly<LogViewerProps>) {
             ? th.foregroundMuted
             : th.foreground;
     return (
-      <box ref={ref} flexDirection="row" width="100%" backgroundColor={kind === "error" ? th.diffRemovedBg : undefined}>
+      <box flexDirection="row" width="100%" backgroundColor={kind === "error" ? th.diffRemovedBg : undefined}>
         {/* A summary row's mark takes its line number's place, right-aligned, so the text starts with the lines'. */}
         <Show
           when={!isCurrentHit() && line.mark}
