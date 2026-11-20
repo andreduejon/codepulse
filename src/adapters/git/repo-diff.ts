@@ -19,6 +19,9 @@ async function readWorktreeFile(repoPath: string, filePath: string): Promise<Fil
   return textToFileContent(filePath, new TextDecoder().decode(view), cut);
 }
 
+/** A file's exact path for a diff: Git reads `--` arguments as patterns (`:(top)x`, `*`) without this. */
+const literal = (path: string) => `:(literal)${path}`;
+
 /** Git's word for a path a commit hasn't, as `show` and `blame` say it. */
 const MISSING_PATH = /exists on disk, but not in|does not exist|no such path/i;
 
@@ -49,19 +52,19 @@ export async function getFileDiff(
   switch (source) {
     case "commit":
       // First parent, like the commit's file list (merges included); root commits fall back below.
-      args = ["diff-tree", "-p", "--no-commit-id", `${commitHash}^1`, commitHash, "--", filePath];
+      args = ["diff-tree", "-p", "--no-commit-id", `${commitHash}^1`, commitHash, "--", literal(filePath)];
       break;
     case "stash":
-      args = ["diff", "-p", `${commitHash}^1`, commitHash, "--", filePath];
+      args = ["diff", "-p", `${commitHash}^1`, commitHash, "--", literal(filePath)];
       break;
     case "staged":
-      args = ["diff", "--cached", "-p", "--", filePath];
+      args = ["diff", "--cached", "-p", "--", literal(filePath)];
       break;
     case "unstaged":
-      args = ["diff", "-p", "--", filePath];
+      args = ["diff", "-p", "--", literal(filePath)];
       break;
     case "range":
-      args = ["diff", "-p", base ?? `${commitHash}^1`, commitHash, "--", filePath];
+      args = ["diff", "-p", base ?? `${commitHash}^1`, commitHash, "--", literal(filePath)];
       break;
   }
 
@@ -71,7 +74,7 @@ export async function getFileDiff(
   if (result.exitCode !== 0 && source === "commit" && /bad revision|unknown revision/.test(result.stderr)) {
     result = await runGit(
       repoPath,
-      ["diff-tree", "-p", "--no-commit-id", "--root", commitHash, "--", filePath],
+      ["diff-tree", "-p", "--no-commit-id", "--root", commitHash, "--", literal(filePath)],
       signal,
       MAX_FILE_BYTES,
     );
@@ -81,7 +84,7 @@ export async function getFileDiff(
   if (source === "stash" && result.exitCode === 0 && !result.stdout.trim()) {
     const untracked = await runGit(
       repoPath,
-      ["diff", "-p", `${commitHash}^1`, `${commitHash}^3`, "--", filePath],
+      ["diff", "-p", `${commitHash}^1`, `${commitHash}^3`, "--", literal(filePath)],
       signal,
       MAX_FILE_BYTES,
     );

@@ -158,7 +158,8 @@ test.skipIf(process.platform === "win32")(
     };
     try {
       await git("init");
-      const names = ["tab\there.txt", "new\nline.txt", 'say "hi".txt'];
+      // And names Git would read as a pattern: magic and a wildcard.
+      const names = ["tab\there.txt", "new\nline.txt", 'say "hi".txt', ":(top)magic.txt", "star*.txt"];
       for (const name of names) await writeFile(join(root, name), "one\n");
       await git("add", ".");
       await git("commit", "-m", "odd names");

@@ -90,6 +90,17 @@ All notable changes to this project will be documented in this file.
   is suggested.
 - The Dashboard keeps newest-first order through the hour that repeats when
   daylight saving ends.
+- A file whose name Git would read as a pattern (`:(top)x`, `*`) opens its
+  diff.
+- A failed `git status` shows the history with an error instead of a clean
+  working tree; a failed file, blame or stash read is an error too.
+- Switching to a repository applies its configured branch, as at startup.
+- An OpenShift watch that fails stops the others before the list is read
+  again, and a terminating Pod is on no commit, also one labelled with its own.
+- A Jenkins authentication failure on a build's stages stops automatic
+  requests until Reload, as one on the builds does.
+- Wrapped log lines with wide characters (CJK) take their real height, so `G`
+  and search land on the right line.
 - "Show in" from the Dashboard lands on the event's row every time, also for
   an event shown before, and on the run itself rather than its first job.
 
