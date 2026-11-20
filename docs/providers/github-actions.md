@@ -114,15 +114,16 @@ to the one its target branch points at, with `◀` at the target, as the merge w
 them.
 
 ```
-█◀──╮   3447db9  main  docs: rewrite the README
-│   │
-│ █─╯   6adc455  feature/payments-retry  wip(payments): retry policy types
+█◀╮   3447db9  main  docs: rewrite the README
+│ │
+│ █   6adc455  feature/payments-retry  wip(payments): retry policy types
 ```
 
 When the target is below (it hasn't moved since the branch left it), the arrow is at the
-bottom. The line runs in the first column right of both that no line uses between them,
-so the graph's lanes don't move; only when every column is taken does the graph get one
-more. Where it crosses a lane, the lane shows `┼` in its own colour. It shows when the graph has both commits loaded (the target as GitHub names it,
+bottom. The line comes straight into the branch's commit along its column when nothing
+uses that column between the two (a branch tip has nothing above it); otherwise it runs
+in the first column right of both that no line uses between them. Either way the graph's
+lanes don't move; only when every column is taken does the graph get one more. Where it crosses a lane, the lane shows `┼` in its own colour. It shows when the graph has both commits loaded (the target as GitHub names it,
 else `origin/<target>`); it goes when the tab closes.
 
 The open pull requests are one request (`pulls?state=open`, up to 500) on the first

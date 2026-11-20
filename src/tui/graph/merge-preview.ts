@@ -1,8 +1,9 @@
 /**
  * A pull request's merge, before it happens: while its tab is open, a muted line from the commit its branch points at
- * to the one the target branch points at, with `◀` at the target, as the merge would join them. It runs in the first column right of
- * both that no line uses between them, drawn over the rows as they are: the graph's own lanes do not move. Only when
- * every column is taken does it get one more, right of the lanes.
+ * to the one the target branch points at, with `◀` at the target, as the merge would join them. It comes straight
+ * into the head along the head's own column when nothing uses it between them (a branch tip has nothing above it),
+ * else it runs in the first column right of both that no line uses between them; it is drawn over the rows as they
+ * are: the graph's own lanes do not move. Only when every column is taken does it get one more, right of the lanes.
  */
 import type { GraphRow } from "../../core/git/types";
 import type { GraphChar } from "./render";
@@ -25,6 +26,8 @@ export interface MergePreviewSpan {
   extra: boolean;
   /** Which end is the target (the arrow's): the top one when the target moved on since the branch left it. */
   target: "top" | "bottom";
+  /** The head's end when the line comes straight into its node along its column: that end draws nothing of its own. */
+  direct: "top" | "bottom" | null;
 }
 
 /** Whether no line of the row (its own, its connector, its fan-out lines) uses the column. */
@@ -61,12 +64,28 @@ export function mergePreviewSpan(
   const bottom = Math.max(head, base);
   const topNode = rows[top]?.nodeColumn ?? 0;
   const bottomNode = rows[bottom]?.nodeColumn ?? 0;
+  const target = base < head ? "top" : "bottom";
+  const ends = { top, bottom, topNode, bottomNode, target } as const;
+  // Straight into the head along its own column, right of the target's node: nothing on it between them, nor where the
+  // corner goes on the target's line, nor on the head's side toward the target (above it: the lines fanning into it;
+  // below it: its own lane, which goes on to its parent).
+  const headEnd = target === "top" ? "bottom" : "top";
+  const [headRow, targetRow] = headEnd === "bottom" ? [rows[bottom], rows[top]] : [rows[top], rows[bottom]];
+  const headNode = headRow?.nodeColumn ?? 0;
+  if (headRow && targetRow && headNode > targetRow.nodeColumn) {
+    const headSideFree =
+      headEnd === "bottom"
+        ? !(headRow.fanOutRows ?? []).some(line => line.some(connector => connector.column === headNode))
+        : !headRow.columns[headNode]?.active;
+    if (headSideFree && isFree(targetRow, headNode) && rows.slice(top + 1, bottom).every(row => isFree(row, headNode)))
+      return { ...ends, column: headNode, extra: false, direct: headEnd };
+  }
   const between = rows.slice(top, bottom + 1);
   let column = Math.max(topNode, bottomNode) + 1;
   while (column < columns && !between.every(row => isFree(row, column))) column++;
   const extra = column >= columns;
   if (extra && columns + 1 > maxColumns) return null;
-  return { top, bottom, topNode, bottomNode, column, extra, target: base < head ? "top" : "bottom" };
+  return { ...ends, column, extra, direct: null };
 }
 
 /** Which of a commit's graph lines: the fan-out lines above it, its own, the connector below it. */
@@ -90,7 +109,8 @@ export function withMergePreview(
     (index > span.top && index < span.bottom) ||
     (index === span.top && part === "below") ||
     (index === span.bottom && part === "above");
-  if (!isEnd && !through) return chars;
+  // The head the line comes straight into: its node ends it.
+  if ((!isEnd && !through) || (isEnd && span.direct === (index === span.top ? "top" : "bottom"))) return chars;
   const cells = chars.flatMap(gc => [...gc.char].map(char => ({ ...gc, char })));
   while (cells.length < span.column * 2 + 2) cells.push({ char: " ", color });
   const at = span.column * 2;
