@@ -4,7 +4,7 @@
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
     █                           bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request…   2             running            Reload commit
     │                                                                                                                                         total pull requests                                    1
-    █                           e6209dd  feat(api): add a health endpoint                                    1             45m ago            └─ ▸ PR #123 feat(payments): retry failed paym…  40m ago
+    █                           e6209dd  feat(api): add a health endpoint                                    1             45m ago            └─ ▸ PR #123 feat(payments): retry failed pa…  40m ago ◀
     │
     █                           3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…   2             28m ago
     │
@@ -97,7 +97,7 @@
   │   customer-notification-service   shop   shop-web                                                                 main   86 commits
   │
 
-                                                                     tab Jenkins · enter reload · esc back · ←/→ switch tab · ↑/↓ navigate
+                                                                     tab Jenkins · enter reload · esc back · ←/→ switch tab · ↑/↓ navigate                         ◀ open  ◀ draft  ✓ merged  ○ closed
 
 
 === shot 2: target-above (200x100) ===
@@ -106,7 +106,7 @@
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
     █                           bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request…   2             running            Reload commit
     │                                                                                                                                         total pull requests                                    1
-    █                           e6209dd  feat(api): add a health endpoint                                    1             45m ago            └─ ▸ PR #123 feat(payments): retry failed paym…  40m ago
+    █                           e6209dd  feat(api): add a health endpoint                                    1             45m ago            └─ ▸ PR #123 feat(payments): retry failed pa…  40m ago ◀
     │
     █◀╮                         3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…   2             28m ago
     │ │
@@ -199,7 +199,7 @@
   │   customer-notification-service   shop   shop-web                                                                 main   86 commits
   │
 
-                                                                     tab Jenkins · enter reload · esc back · ←/→ switch tab · ↑/↓ navigate
+                                                                     tab Jenkins · enter reload · esc back · ←/→ switch tab · ↑/↓ navigate                         ◀ open  ◀ draft  ✓ merged  ○ closed
 
 
 === shot 3: target-below (200x100) ===
@@ -208,8 +208,8 @@
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
     █─╮                         bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request    2             running            Reload commit
     │ │                                                                                                                                       total pull requests                                    2
-    █ │                         e6209dd  feat(api): add a health endpoint                                    1             45m ago            ├─ ▸ PR #124 release: dev into main               5m ago
-    │ │                                                                                                                                       └─ ▸ PR #125 release: dev into release/1.x        5m ago
+    █ │                         e6209dd  feat(api): add a health endpoint                                    1             45m ago            ├─ ▸ PR #124 release: dev into main             5m ago ◀
+    │ │                                                                                                                                       └─ ▸ PR #125 release: dev into release/1.x      5m ago ◀
     █◀╯                         3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…   2             28m ago
     │
     │ █                         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry…   1             4h ago
@@ -301,7 +301,7 @@
   │   customer-notification-service   shop   shop-web                                                                 main   86 commits
   │
 
-                                                                     tab Jenkins · enter reload · esc back · ←/→ switch tab · ↑/↓ navigate
+                                                                     tab Jenkins · enter reload · esc back · ←/→ switch tab · ↑/↓ navigate                         ◀ open  ◀ draft  ✓ merged  ○ closed
 
 
 === shot 4: crossing-lanes (200x100) ===
@@ -310,8 +310,8 @@
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
     █─────────────────╮         bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request    2             running            Reload commit
     │                 │                                                                                                                       total pull requests                                    2
-    █                 │         e6209dd  feat(api): add a health endpoint                                    1             45m ago            ├─ ▸ PR #124 release: dev into main               5m ago
-    │                 │                                                                                                                       └─ ▾ PR #125 release: dev into release/1.x        5m ago
+    █                 │         e6209dd  feat(api): add a health endpoint                                    1             45m ago            ├─ ▸ PR #124 release: dev into main             5m ago ◀
+    │                 │                                                                                                                       └─ ▾ PR #125 release: dev into release/1.x      5m ago ◀
     █                 │         3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…   2             28m ago               ├─ dev → release/1.x
     │                 │                                                                                                                          ├─ @ana-lima
     │ █               │         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry…   1             4h ago                ├─ ▾ data/
@@ -403,7 +403,7 @@
   │   customer-notification-service   shop   shop-web                                                                 main   86 commits
   │
 
-                                                          tab Jenkins · enter collapse · o open · esc back · ←/→ switch tab · ↑/↓ navigate
+                                                          tab Jenkins · enter collapse · o open · esc back · ←/→ switch tab · ↑/↓ navigate                         ◀ open  ◀ draft  ✓ merged  ○ closed
 
 
 === shot 5: draft (200x100) ===
@@ -412,7 +412,7 @@
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
     █◀──────────────╮           bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request…   2             running            Reload commit
     │               │                                                                                                                         total pull requests                                    1
-    █               │           e6209dd  feat(api): add a health endpoint                                    1             45m ago            └─ ▸ PR #119 feat(theme): dark mode            Yesterday
+    █               │           e6209dd  feat(api): add a health endpoint                                    1             45m ago            └─ ▸ PR #119 feat(theme): dark mode          Yesterday ◀
     │               │
     █               │           3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…   2             28m ago
     │               │
@@ -505,7 +505,7 @@
   │   customer-notification-service   shop   shop-web                                                                 main   86 commits
   │
 
-                                                                     tab Jenkins · enter reload · esc back · ←/→ switch tab · ↑/↓ navigate
+                                                                     tab Jenkins · enter reload · esc back · ←/→ switch tab · ↑/↓ navigate                         ◀ open  ◀ draft  ✓ merged  ○ closed
 
 
 === shot 6: not-fetched (200x100) ===
@@ -514,7 +514,7 @@
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
     █                           bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request…   2             running            Reload commit
     │                                                                                                                                         total pull requests                                    1
-    █                           e6209dd  feat(api): add a health endpoint                                    1             45m ago            └─ ▾ PR #127 feat(metrics): sales dashboard       3d ago
+    █                           e6209dd  feat(api): add a health endpoint                                    1             45m ago            └─ ▾ PR #127 feat(metrics): sales dashboard     3d ago ◀
     │                                                                                                                                            ├─ feature/metrics-dashboard → staging
     █                           3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…   2             28m ago               ├─ @demo-dev
     │                                                                                                                                            └─ Its commits aren't fetched here: f fetches them.
@@ -607,6 +607,6 @@
   │   customer-notification-service   shop   shop-web                                                                 main   86 commits
   │
 
-                                                          tab Jenkins · enter collapse · o open · esc back · ←/→ switch tab · ↑/↓ navigate
+                                                          tab Jenkins · enter collapse · o open · esc back · ←/→ switch tab · ↑/↓ navigate                         ◀ open  ◀ draft  ✓ merged  ○ closed
 
 

@@ -10,7 +10,7 @@ import { useGit } from "../../context/git";
 import { useAppState } from "../../context/state";
 import { detailEntry, type ProviderDetailSource } from "../shared/detail-entry";
 import { ActionsDetailTab } from "./detail-tab";
-import { GITHUB_LEGEND } from "./legend";
+import { GITHUB_LEGEND, PULLS_LEGEND } from "./legend";
 import { PullRequestsTab } from "./pulls-tab";
 
 /** What GitHub Actions hands the detail view. */
@@ -23,6 +23,8 @@ export interface GitHubDetailSource extends ProviderDetailSource<GitHubCommitDat
   onOpenJobLog?: (job: GitHubJob, run: GitHubWorkflowRun, jobs?: GitHubJob[], search?: string) => void;
   /** The open pull requests whose branch points at a commit, by number; none without it. */
   pullRequestsAt?: (sha: string) => GitHubPullRequest[];
+  /** The merged or closed ones whose branch pointed at it. */
+  closedPullRequestsAt?: (sha: string) => GitHubPullRequest[];
 }
 
 export const githubDetail = detailEntry<GitHubDetailSource>({
@@ -46,7 +48,10 @@ export const githubDetail = detailEntry<GitHubDetailSource>({
   legend: (source, sha) => ((source.getCommitData(sha)?.runs.length ?? 0) > 0 ? GITHUB_LEGEND : null),
 });
 
-/** The Pull requests tab: only on a commit a pull request's branch points at. */
+const hasPulls = (source: GitHubDetailSource, sha: string) =>
+  (source.pullRequestsAt?.(sha).length ?? 0) + (source.closedPullRequestsAt?.(sha).length ?? 0) > 0;
+
+/** The Pull requests tab: only on a commit a pull request's branch points (or pointed, merged or closed) at. */
 export const githubPullsDetail = detailEntry<GitHubDetailSource>({
   Tab: props => {
     // Rendered inside the details, below the app's providers: Git and the open repository are there.
@@ -66,6 +71,9 @@ export const githubPullsDetail = detailEntry<GitHubDetailSource>({
         onMouseFocus={props.context.onMouseFocus}
         sha={props.context.sha}
         pullRequestsAt={sha => props.source.pullRequestsAt?.(sha) ?? []}
+        closedPullRequestsAt={sha => props.source.closedPullRequestsAt?.(sha) ?? []}
+        target={props.context.target}
+        targetColor={props.context.targetColor}
         loadFiles={loadFiles}
         onOpenDiff={props.context.onOpenDiff}
         onMergePreview={props.context.onMergePreview}
@@ -77,6 +85,7 @@ export const githubPullsDetail = detailEntry<GitHubDetailSource>({
       />
     );
   },
-  // Like the other provider tabs, no count: its first row has the total, the graph a chip for each.
-  label: (source, sha) => ((source.pullRequestsAt?.(sha).length ?? 0) > 0 ? "Pull requests" : null),
+  // Like the other provider tabs, no count: its first row has the total, the graph a chip for each open one.
+  label: (source, sha) => (hasPulls(source, sha) ? "Pull requests" : null),
+  legend: (source, sha) => (hasPulls(source, sha) ? PULLS_LEGEND : null),
 });

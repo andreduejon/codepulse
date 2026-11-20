@@ -664,8 +664,11 @@ export function mapApiPullRequest(raw: unknown): GitHubPullRequest | null {
   if (typeof number !== "number" || title === null || url === null || headRef === null || baseRef === null) return null;
   if (!headSha || !/^[0-9a-f]{40}$/i.test(headSha)) return null;
   const baseSha = text(base?.sha) ?? "";
+  const mergedAt = text(item?.merged_at);
+  const closedAt = mergedAt ?? text(item?.closed_at);
   return {
     number,
+    state: mergedAt ? "merged" : item?.state === "closed" && closedAt ? "closed" : "open",
     title,
     url,
     draft: item?.draft === true,
@@ -674,21 +677,25 @@ export function mapApiPullRequest(raw: unknown): GitHubPullRequest | null {
     headRef,
     baseRef,
     baseSha: /^[0-9a-f]{40}$/i.test(baseSha) ? baseSha.toLowerCase() : "",
+    createdAt: text(item?.created_at) ?? "",
     updatedAt: text(item?.updated_at) ?? "",
+    closedAt: item?.state === "closed" ? closedAt : null,
   };
 }
 
-/** The repository's open pull requests, newest first; on a failure, its banner and what was read before it. */
-export async function fetchOpenPullRequests(
+/** Pull requests by a list query, up to `maxPages` pages; on a failure, its banner and what was read before it. */
+async function fetchPullRequestPages(
   repo: GitHubRepo,
   token: string,
+  query: string,
+  maxPages: number,
   signal?: AbortSignal,
 ): Promise<GitHubResult<GitHubPullRequest[]>> {
   const origin = apiBase(repo);
-  let url: string | null = `${origin}/pulls?state=open&per_page=100`;
+  let url: string | null = `${origin}/pulls?${query}&per_page=100`;
   const pulls: GitHubPullRequest[] = [];
   try {
-    for (let page = 0; page < MAX_PULL_PAGES && url; page++) {
+    for (let page = 0; page < maxPages && url; page++) {
       const res = await fetchWithRetry(url, { headers: createHeaders(token), signal });
       if (!res.ok)
         return {
@@ -701,10 +708,18 @@ export async function fetchOpenPullRequests(
       pulls.push(...json.flatMap(raw => mapApiPullRequest(raw) ?? []));
       url = nextGithubLink(res.headers.get("link"), origin);
     }
-    if (url) debugError("GitHub", `Open pull requests truncated after ${MAX_PULL_PAGES} pages`);
+    if (url && maxPages > 1) debugError("GitHub", `Pull requests truncated after ${maxPages} pages`);
     return { data: pulls, error: null };
   } catch (err) {
     if (signal?.aborted) throw err;
     return { data: pulls, error: bannerOrFallback(err, GITHUB_BANNER.fetchFailed, "GitHub") };
   }
 }
+
+/** The repository's open pull requests, newest first. */
+export const fetchOpenPullRequests = (repo: GitHubRepo, token: string, signal?: AbortSignal) =>
+  fetchPullRequestPages(repo, token, "state=open", MAX_PULL_PAGES, signal);
+
+/** The 100 pull requests merged or closed most recently (by their last update): what the Dashboard's window shows. */
+export const fetchClosedPullRequests = (repo: GitHubRepo, token: string, signal?: AbortSignal) =>
+  fetchPullRequestPages(repo, token, "state=closed&sort=updated&direction=desc", 1, signal);

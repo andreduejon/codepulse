@@ -1243,7 +1243,10 @@ describe("fetchOpenPullRequests", () => {
         headRef: "feature/retry",
         baseRef: "main",
         baseSha: "b".repeat(40),
+        state: "open",
+        createdAt: "",
         updatedAt: "2026-03-02T09:00:00Z",
+        closedAt: null,
       },
       expect.objectContaining({ number: 7, draft: true, author: "" }),
     ]);

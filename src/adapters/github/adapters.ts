@@ -15,6 +15,7 @@ export function githubAdapters(cacheRoot?: string, registry?: ProviderCacheRegis
       fetchJobAnnotations: (...args) => api.fetchJobAnnotations(...args),
       fetchJobLog: (...args) => api.fetchJobLog(...args),
       fetchOpenPullRequests: (...args) => api.fetchOpenPullRequests(...args),
+      fetchClosedPullRequests: (...args) => api.fetchClosedPullRequests(...args),
     },
     cache: maxEntries => new GitHubCache({ root: cacheRoot, maxEntries, registry }),
     token: envVar => api.getGitHubToken(envVar),

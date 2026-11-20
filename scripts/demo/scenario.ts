@@ -193,7 +193,10 @@ export interface FakePull {
   base: string;
   author: string;
   draft?: boolean;
+  createdAgoMin: number;
   updatedAgoMin: number;
+  /** Merged or closed without merging, so long ago. */
+  ended?: { merged: boolean; agoMin: number };
 }
 
 /**
@@ -212,6 +215,7 @@ export function githubPulls(): FakePull[] {
       baseRef: "main",
       base: "readme",
       author: "mei-chen",
+      createdAgoMin: 300,
       updatedAgoMin: 40,
     },
     {
@@ -222,6 +226,7 @@ export function githubPulls(): FakePull[] {
       baseRef: "main",
       base: "readme",
       author: "ana-lima",
+      createdAgoMin: 50,
       updatedAgoMin: 5,
     },
     {
@@ -232,6 +237,7 @@ export function githubPulls(): FakePull[] {
       baseRef: "release/1.x",
       base: "rel142",
       author: "ana-lima",
+      createdAgoMin: 50,
       updatedAgoMin: 5,
     },
     {
@@ -243,6 +249,7 @@ export function githubPulls(): FakePull[] {
       base: "metrics",
       author: "lena-fischer",
       draft: true,
+      createdAgoMin: 2880,
       updatedAgoMin: 26 * 60,
     },
     {
@@ -253,7 +260,53 @@ export function githubPulls(): FakePull[] {
       baseRef: "staging",
       base: UNFETCHED,
       author: "demo-dev",
+      createdAgoMin: 14400,
       updatedAgoMin: 3 * 24 * 60,
+    },
+  ];
+}
+
+/**
+ * The shop's pull requests merged or closed most recently, for the Dashboard's log and the Pull requests tab: two
+ * merged (one opened within the Dashboard's window, one before it) and one closed without merging.
+ */
+export function githubClosedPulls(): FakePull[] {
+  return [
+    {
+      number: 116,
+      title: "experiment: compare both graph layouts",
+      head: "exp3",
+      headRef: "experiment/graph-layout",
+      baseRef: "main",
+      base: "readme",
+      author: "lena-fischer",
+      createdAgoMin: 8 * 24 * 60,
+      updatedAgoMin: 25 * 60,
+      ended: { merged: false, agoMin: 25 * 60 },
+    },
+    {
+      number: 23,
+      title: "feat(i18n): German and French checkout",
+      head: "i18n3",
+      headRef: "feature/i18n",
+      baseRef: "main",
+      base: "readme",
+      author: "sam-okafor",
+      createdAgoMin: 4 * 24 * 60,
+      updatedAgoMin: (2 * 24 + 8) * 60,
+      ended: { merged: true, agoMin: (2 * 24 + 8) * 60 },
+    },
+    {
+      number: 9,
+      title: "feat(search): search as you type",
+      head: "search5",
+      headRef: "feature/search",
+      baseRef: "main",
+      base: "readme",
+      author: "mei-chen",
+      createdAgoMin: 12 * 24 * 60,
+      updatedAgoMin: (2 * 24 + 12) * 60,
+      ended: { merged: true, agoMin: (2 * 24 + 12) * 60 },
     },
   ];
 }

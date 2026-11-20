@@ -66,6 +66,8 @@
    █      e6209dd  dev                   08:43  ○ dev #6 aborted
    █      64ddc8a  main                  08:42  ! OOMKilling · pod shop-api-7d9f8-oom7k in shop-test
    █      3447db9  main                  08:40  ✓ build shop-api-43 complete in shop-dev
+   █      bf08113  dev                   08:40  ◀ PR #124 opened · release: dev into main
+   █      bf08113  dev                   08:40  ◀ PR #125 opened · release: dev into release/1.x
    █      64ddc8a  main                  08:38  ✗ CI #812 failed
    █      64ddc8a  main                  08:35  ! BackOff · pod shop-cache-0 in shop-test · 3 times
    █      3447db9  main                  08:30  docs: rewrite the README for the new cart flow 🚀 and explain how discounts are rounded
@@ -77,16 +79,14 @@
    █      64ddc8a  main                  06:12  ! FailedMount · pod shop-api-41-build in shop-dev · 2 times
    │
    █      6adc455  feature/payments-re…  04:31  ✗ CI #815 failed
+   █      6adc455  feature/payments-re…  04:30  ◀ PR #123 opened · feat(payments): retry failed payments with exponential backoff
    │
    █      6adc455  feature/payments-re…  03:54  ✗ feature/payments-retry-with-a-really-long-branch-name #3 failed
-   █      64ddc8a  main                  03:10  ✓ build shop-api-42 complete in shop-dev
-   │
-   █      64ddc8a  main                  02:54  ✗ build shop-api-41 failed in shop-dev
 
   │
   │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                                       Git   GitHub   Jenkins   OpenShift   Snyk
   │
-  │   customer-notification-service   shop   shop-web                                                                                             42 events
+  │   customer-notification-service   shop   shop-web                                                                                             50 events
   │
 
                                                                                                             tab Git · enter details · r refresh · ↑/↓ navigate

@@ -94,9 +94,12 @@ branch; a chip is never shortened (a cut number would read as another), so one t
 doesn't fit goes into the muted `+N` with the refs that don't.
 
 Such a commit has a **Pull requests** tab after **Actions**, as Stashes is; other commits
-don't show it. It lists each
-pull request on one short row: its number, title and when it was last updated, a draft
-muted. `o` opens it on GitHub; Reload commit reads the runs and the pull requests again.
+don't show it. It lists each open pull request on one short row: its number, title, when
+it was last updated and its mark (`◀`, muted for a draft); then each one merged (`✓`) or
+closed without merging (`○`) recently whose branch pointed at the commit, muted, with when
+it ended. Those have no files and are no cursor stops; the legend below the tab names the
+marks. `o` opens a pull request on GitHub; Reload commit reads the runs and the pull
+requests again.
 
 Enter opens a pull request: muted leaves with its branch and the one it would merge into
 (`dev → main`), its author (`@ana-lima`) and `draft` for a draft, then the files it changed,
@@ -128,9 +131,18 @@ in the first column right of both that no line uses between them. Either way the
 lanes don't move; only when every column is taken does the graph get one more. Where it crosses a lane, the lane shows `┼` in its own colour. It shows when the graph has both commits loaded (the target as GitHub names it,
 else `origin/<target>`); it goes when the tab closes.
 
-The open pull requests are one request (`pulls?state=open`, up to 500) on the first
-fetch, on each refresh and on a Reload. One that fails keeps the last list and is
-only recorded in the Debug dialog.
+The open pull requests are one request (`pulls?state=open`, up to 500), and the ones merged
+or closed most recently another (`pulls?state=closed`, the 100 last updated), side by side
+on the first fetch, on each refresh and on a Reload. A list that fails keeps its last one
+and is only recorded in the Debug dialog. Neither is saved: after a restart they come back
+with the first fetch.
+
+On the **Dashboard** each pull request is an event when it was opened (`◀ PR #123 opened`,
+muted for a draft), and one when it was merged (`✓ PR #118 merged`) or closed without
+merging (`○ PR #116 closed`), on its branch's commit; each leaves the log when it is older
+than the time window. An event's details open on its row in **Pull requests**, marked in
+the Dashboard's colour. They show for the open app only: the pull requests are held, not
+saved for the other apps of a group.
 
 ## Errors and limits
 

@@ -19,7 +19,9 @@
    «jenkinsBg:█»      «foregroundMuted:e6209dd»  «foregroundMuted:dev»                   «foregroundMuted:08:43»  «foregroundMuted:○ »dev #6 aborted                                                                              «foregroundMuted:· LOW»                                                 «foregroundMuted: 0»
    «openShiftBg:█»      «foregroundMuted:64ddc8a»  «foregroundMuted:main»                  «foregroundMuted:08:42»  «warning|severityMedium:! »OOMKilling · pod shop-api-7d9f8-oom7k in shop-test
    «openShiftBg:█»      «foregroundMuted:3447db9»  «foregroundMuted:main»                  «foregroundMuted:08:40»  «success|diffAdded:✓ »build shop-api-43 complete in shop-dev                                                      «foregroundMuted:· NEW  vs 3447db9, 2 commits back»                     «foregroundMuted: 0»
-   «primary|info|githubActionsBg:█»      «foregroundMuted:64ddc8a»  «foregroundMuted:main»                  «foregroundMuted:08:38»  «error|severityCritical|diffRemoved:✗ »CI #812 failed                                                                              «foregroundMuted:· FIXED  vs 3447db9, 2 commits back»                   «foregroundMuted: 0»
+   «primary|info|githubActionsBg:█»      «foregroundMuted:bf08113»  «foregroundMuted:dev»                   «foregroundMuted:08:40»  «primary|info|githubActionsBg:◀ »PR #124 opened · release: dev into main                                                     «foregroundMuted:· FIXED  vs 3447db9, 2 commits back»                   «foregroundMuted: 0»
+   «primary|info|githubActionsBg:█»      «foregroundMuted:bf08113»  «foregroundMuted:dev»                   «foregroundMuted:08:40»  «primary|info|githubActionsBg:◀ »PR #125 opened · release: dev into release/1.x
+   «primary|info|githubActionsBg:█»      «foregroundMuted:64ddc8a»  «foregroundMuted:main»                  «foregroundMuted:08:38»  «error|severityCritical|diffRemoved:✗ »CI #812 failed
    «openShiftBg:█»      «foregroundMuted:64ddc8a»  «foregroundMuted:main»                  «foregroundMuted:08:35»  «warning|severityMedium:! »BackOff · pod shop-cache-0 in shop-test · 3 times
    «gitBg|accent:█»      «foregroundMuted:3447db9»  «foregroundMuted:main»                  «foregroundMuted:08:30»  docs: rewrite the README for the new cart flow 🚀 and explain how discounts are rounded
    «openShiftBg:█»      «foregroundMuted:64ddc8a»  «foregroundMuted:main»                  «foregroundMuted:08:30»  «warning|severityMedium:! »FailedCreate · replica set shop-api-7d9f8 in shop-test · 3 times
@@ -30,16 +32,14 @@
    «openShiftBg:█»      «foregroundMuted:64ddc8a»  «foregroundMuted:main»                  «foregroundMuted:06:12»  «warning|severityMedium:! »FailedMount · pod shop-api-41-build in shop-dev · 2 times
    «backgroundElementActive|border:│»
    «primary|info|githubActionsBg:█»      «foregroundMuted:6adc455»  «foregroundMuted:feature/payments-re…»  «foregroundMuted:04:31»  «error|severityCritical|diffRemoved:✗ »CI #815 failed
+   «primary|info|githubActionsBg:█»      «foregroundMuted:6adc455»  «foregroundMuted:feature/payments-re…»  «foregroundMuted:04:30»  «primary|info|githubActionsBg:◀ »PR #123 opened · feat(payments): retry failed payments with exponential backoff
    «backgroundElementActive|border:│»
    «jenkinsBg:█»      «foregroundMuted:6adc455»  «foregroundMuted:feature/payments-re…»  «foregroundMuted:03:54»  «error|severityCritical|diffRemoved:✗ »feature/payments-retry-with-a-really-long-branch-name #3 failed
-   «openShiftBg:█»      «foregroundMuted:64ddc8a»  «foregroundMuted:main»                  «foregroundMuted:03:10»  «success|diffAdded:✓ »build shop-api-42 complete in shop-dev
-   «backgroundElementActive|border:│»
-   «openShiftBg:█»      «foregroundMuted:64ddc8a»  «foregroundMuted:main»                  «foregroundMuted:02:54»  «error|severityCritical|diffRemoved:✗ »build shop-api-41 failed in shop-dev
 
   «dashboardBg:│»
   «dashboardBg:│»  «background|githubActionsFg|jenkinsFg|+3/dashboardBg: Dashboard » «foregroundMuted/backgroundElementActive|border: Git » «foregroundMuted/backgroundElementActive|border: GitHub » «foregroundMuted/backgroundElementActive|border: Jenkins » «foregroundMuted/backgroundElementActive|border: OpenShift » «foregroundMuted/backgroundElementActive|border: Snyk »                                 «background|githubActionsFg|jenkinsFg|+3/gitBg|accent: Git » «background|githubActionsFg|jenkinsFg|+3/primary|info|githubActionsBg: GitHub » «background|githubActionsFg|jenkinsFg|+3/jenkinsBg: Jenkins » «background|githubActionsFg|jenkinsFg|+3/openShiftBg: OpenShift » «background|githubActionsFg|jenkinsFg|+3/snykBg: Snyk »
   «dashboardBg:│»
-  «dashboardBg:│»  «foregroundMuted/backgroundElementActive|border: customer-notification-service » «background|githubActionsFg|jenkinsFg|+3/dashboardBg: shop » «foregroundMuted/backgroundElementActive|border: shop-web »                                                                       «foregroundMuted/backgroundElementActive|border: 42 events »
+  «dashboardBg:│»  «foregroundMuted/backgroundElementActive|border: customer-notification-service » «background|githubActionsFg|jenkinsFg|+3/dashboardBg: shop » «foregroundMuted/backgroundElementActive|border: shop-web »                                                                       «foregroundMuted/backgroundElementActive|border: 50 events »
   «dashboardBg:│»
 
                                                                        tab«foregroundMuted: Git · »enter«foregroundMuted: show in Snyk · »→«foregroundMuted: details · »r«foregroundMuted: refresh · »↑/↓«foregroundMuted: navigate»           «success|diffAdded:● »«foregroundMuted:upgrade»  «warning|severityMedium:● »«foregroundMuted:override»  «foregroundMuted:● no fix»  «error|severityCritical|diffRemoved:! »«foregroundMuted:mature exploit»

@@ -80,8 +80,8 @@ Normal clears highlighting without changing branch perspective.
 ### Dashboard
 
 The Dashboard is the first tab: everything that happened to the open app, newest first. Each event is a knot on the
-app's rope in its provider's color: commits on the main branch, GitHub runs, Jenkins builds, OpenShift builds and
-warnings, and Snyk scans, with their commit, branch and time. A build that is still running shows as running and turns
+app's rope in its provider's color: commits on the main branch, GitHub runs and pull requests (opened, merged,
+closed), Jenkins builds, OpenShift builds and warnings, and Snyk scans, with their commit, branch and time. A build that is still running shows as running and turns
 into how it ended. The branch is the one the provider names (a GitHub run's, a Jenkins multibranch job's, an OpenShift
 build's Git ref), else the branch the commit was made on.
 

@@ -48,6 +48,12 @@ export interface GitHubApiPort {
     token: string,
     signal?: AbortSignal,
   ) => Promise<GitHubResult<GitHubPullRequest[]>>;
+  /** The pull requests merged or closed most recently. */
+  fetchClosedPullRequests: (
+    repo: GitHubRepo,
+    token: string,
+    signal?: AbortSignal,
+  ) => Promise<GitHubResult<GitHubPullRequest[]>>;
 }
 
 /** The cache: finished runs and their jobs per commit, and job logs. */
@@ -117,8 +123,9 @@ export function createGitHubService(ports: GitHubServicePorts) {
   const queriedSHAs = new Set<string>();
   /** After a 401: no automatic requests until a Reload. */
   let authFrozen = false;
-  /** The open pull requests, as the last list read them: kept when a list fails. */
+  /** The open pull requests and those merged or closed most recently, each list as last read (kept on a failure). */
   let pullRequests: GitHubPullRequest[] = [];
+  let closedPullRequests: GitHubPullRequest[] = [];
   /** Whether a list was read for this repository: the first fetch reads one, refreshes and Reloads read it again. */
   let pullsRead = false;
   /** Skip unsupported WorkflowRun.jobs after the first retry. */
@@ -198,8 +205,9 @@ export function createGitHubService(ports: GitHubServicePorts) {
   }
 
   /**
-   * The open pull requests, read with each fetch of the window. One that fails keeps the last list and only goes to
-   * Debug: the runs say what is wrong with the token or the host.
+   * The open pull requests and the ones merged or closed most recently, read with each fetch of the window (two
+   * requests side by side). A list that fails keeps its last one and only goes to Debug: the runs say what is wrong with
+   * the token or the host.
    */
   async function fetchPullRequests(signal?: AbortSignal): Promise<void> {
     const epoch = lifecycle().getEpoch();
@@ -207,15 +215,18 @@ export function createGitHubService(ports: GitHubServicePorts) {
     const repo = ports.repo();
     const token = ports.token(ports.config().tokenEnvVar);
     if (!repo || !token) return;
-    // Aborted with the fetch it runs beside: nothing to say.
-    const result = await ports.api.fetchOpenPullRequests(repo, token, signal).catch(() => null);
-    if (!result || signal?.aborted || !lifecycle().isCurrent(epoch, repoPath)) return;
-    if (result.error) {
-      debugError("GitHub", `Pull requests: ${result.error}`);
-      return;
+    // Aborted with the fetch they run beside: nothing to say.
+    const [open, closed] = await Promise.all([
+      ports.api.fetchOpenPullRequests(repo, token, signal).catch(() => null),
+      ports.api.fetchClosedPullRequests(repo, token, signal).catch(() => null),
+    ]);
+    if (signal?.aborted || !lifecycle().isCurrent(epoch, repoPath)) return;
+    for (const result of [open, closed]) if (result?.error) debugError("GitHub", `Pull requests: ${result.error}`);
+    if (open && !open.error) {
+      pullRequests = open.data;
+      pullsRead = true;
     }
-    pullRequests = result.data;
-    pullsRead = true;
+    if (closed && !closed.error) closedPullRequests = closed.data;
     ports.onDataChange();
   }
 
@@ -368,6 +379,7 @@ export function createGitHubService(ports: GitHubServicePorts) {
     jobsRunVersion.clear();
     queriedSHAs.clear();
     pullRequests = [];
+    closedPullRequests = [];
     pullsRead = false;
     authFrozen = false;
     jobsUnsupported = false;
@@ -500,6 +512,13 @@ export function createGitHubService(ports: GitHubServicePorts) {
     /** The open pull requests whose branch points at this commit, by number. Not reactive: the adapter makes it so. */
     pullRequestsAt: (sha: string): GitHubPullRequest[] =>
       pullRequests.filter(pr => pr.headSha.toLowerCase() === sha.toLowerCase()).sort((a, b) => a.number - b.number),
+    /** The merged or closed ones whose branch pointed at this commit, last ended first. Not reactive. */
+    closedPullRequestsAt: (sha: string): GitHubPullRequest[] =>
+      closedPullRequests
+        .filter(pr => pr.headSha.toLowerCase() === sha.toLowerCase())
+        .sort((a, b) => (b.closedAt ?? "").localeCompare(a.closedAt ?? "")),
+    /** Every pull request it holds, open and recently ended: the Dashboard's events. Not reactive. */
+    heldPullRequests: (): GitHubPullRequest[] => [...pullRequests, ...closedPullRequests],
     /** Every run held for the open repository. Not reactive: the adapter makes it so. */
     heldEntries: () => [...commitDataCache.values()],
     queriedSHAs,

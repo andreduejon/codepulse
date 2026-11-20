@@ -71,6 +71,22 @@ export const GOLDEN_PLAYS: readonly GoldenPlay[] = [
     ],
   },
   {
+    name: "github-pull-events",
+    covers:
+      "pull requests on the Dashboard: opened, merged, closed, a draft, each at its time; a merged one's details on " +
+      "its Pull requests row, muted with its mark, and the legend",
+    args: [
+      "--size",
+      "240x100",
+      "--play",
+      [
+        'click:Dashboard wait:"PR #23 merged" shot:log',
+        'click:"PR #23 merged" wait:"total pull requests" shot:merged',
+        'click:"PR #119 opened" wait:"total pull requests" shot:draft',
+      ].join("\n"),
+    ],
+  },
+  {
     name: "github-merge-preview",
     covers:
       "the graph's preview of the merge of the pull request under the mouse or the cursor, each case: none selected, " +

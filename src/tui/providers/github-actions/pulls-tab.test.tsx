@@ -13,6 +13,9 @@ const SHA = "a".repeat(40);
 
 const pull = (overrides: Partial<GitHubPullRequest> = {}): GitHubPullRequest => ({
   number: 124,
+  state: "open",
+  createdAt: new Date(Date.now() - 60 * 60_000).toISOString(),
+  closedAt: null,
   title: "release: dev into main",
   url: "https://github.com/demo/shop/pull/124",
   draft: false,
@@ -56,8 +59,8 @@ test("the tab lists the commit's open pull requests, one short row each: number,
     expect(lines).toEqual([
       "Reload commit",
       "total pull requests 2",
-      "├─ ▸ PR #124 release: dev into main 5m ago",
-      "└─ ▸ PR #125 wip: dark mode 5m ago",
+      "├─ ▸ PR #124 release: dev into main 5m ago ◀",
+      "└─ ▸ PR #125 wip: dark mode 5m ago ◀",
     ]);
     const fgOf = (text: string) => {
       const y = frame.split("\n").findIndex(line => line.includes(text));
@@ -141,13 +144,13 @@ test("Enter opens a pull request: its branch, target and author, then its files 
     await enterOn(1);
     expect(loadFiles).toHaveBeenCalledTimes(1);
     expect(lines()).toEqual([
-      "├─ ▾ PR #124 release: dev into main 5m ago",
+      "├─ ▾ PR #124 release: dev into main 5m ago ◀",
       "│ ├─ dev → main",
       "│ ├─ @ana-lima",
       "│ ├─ ▾ src/api/",
       "│ │ └─ metrics.ts A +40 -0",
       "│ └─ README.md M +2 -1",
-      "└─ ▸ PR #125 release: dev into main 5m ago",
+      "└─ ▸ PR #125 release: dev into main 5m ago ◀",
     ]);
     // Enter on a file: its diff, from where the branch left the target to its head, between the PR's files.
     await enterOn(4);
@@ -226,4 +229,82 @@ test("the graph previews a merge only for the pull request under the mouse or th
   }
   // Closing the tab clears it.
   expect(previews.at(-1)).toBeNull();
+});
+
+test("merged and closed ones follow the open ones, muted, not selectable, with their end and mark; the legend says which", async () => {
+  const theme = createThemeState();
+  const [cursor, setCursor] = createSignal(0);
+  const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+  const navRef: DetailNavRef = {
+    itemCount: 0,
+    itemRefs: [],
+    activateCurrentItem: () => false,
+    lastJumpFrom: null,
+    pendingJumpDirection: null,
+    scrollToFile: () => {},
+  };
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={theme}>
+        <box width={90} flexDirection="column">
+          <PullRequestsTab
+            sha={SHA}
+            pullRequestsAt={() => [pull()]}
+            closedPullRequestsAt={() => [
+              pull({ number: 118, state: "merged", title: "fix(cart): round discounts", closedAt: ago(120) }),
+              pull({ number: 117, state: "closed", title: "wip: a new checkout", closedAt: ago(300) }),
+            ]}
+            target="118"
+            targetColor="#ff00ff"
+            navRef={navRef}
+            detailCursorIndex={cursor}
+            detailFocused={() => true}
+            setDetailCursorAction={mock(() => {})}
+            setDetailCursorIndex={setCursor}
+          />
+        </box>
+      </ThemeContext.Provider>
+    ),
+    { width: 94, height: 10 },
+  );
+  try {
+    await setup.renderOnce();
+    const frame = setup.captureCharFrame();
+    expect(
+      frame
+        .split("\n")
+        .map(line => line.replace(/\s+/g, " ").trim())
+        .filter(Boolean)
+        .slice(1),
+    ).toEqual([
+      "total pull requests 3",
+      "├─ ▸ PR #124 release: dev into main 5m ago ◀",
+      "├─ PR #118 fix(cart): round discounts 2h ago ✓",
+      "└─ PR #117 wip: a new checkout 5h ago ○",
+    ]);
+    const fgOf = (text: string) => {
+      const y = frame.split("\n").findIndex(line => line.includes(text));
+      return setup.captureSpans().lines[y]?.spans.find(span => span.text.includes(text))?.fg;
+    };
+    // The Dashboard's merged one in its colour; the closed one muted.
+    expect(fgOf("PR #118")).toEqual(RGBA.fromHex("#ff00ff"));
+    expect(fgOf("PR #117")).toEqual(RGBA.fromHex(theme.theme().foregroundMuted));
+    // Neither is a cursor stop: Reload commit and PR #124 only.
+    expect(navRef.itemCount).toBe(2);
+  } finally {
+    setup.renderer.destroy();
+  }
+  const source = {
+    getCommitData: () => null,
+    fetchJobsForRun: async () => ({ jobs: [], error: null }),
+    closedPullRequestsAt: () => [pull({ number: 118, state: "merged" as const })],
+  } as GitHubDetailSource;
+  // A commit only a merged one pointed at has the tab too, and its legend.
+  expect(githubPullsDetail.label(source, SHA)).toBe("Pull requests");
+  expect(githubPullsDetail.legend(source, SHA)?.map(([, label]) => label)).toEqual([
+    "open",
+    "draft",
+    "merged",
+    "closed",
+  ]);
 });

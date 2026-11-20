@@ -18,6 +18,7 @@ import {
   type FakeRun,
   FIXED_NOW,
   followLine,
+  githubClosedPulls,
   githubPulls,
   githubRuns,
   githubTimes,
@@ -296,21 +297,28 @@ function github(url: URL, method: string, body: string): Response {
     const run = repoRuns.find(item => item.id === Number(runJobs[1]));
     return run ? json({ total_count: run.jobs.length, jobs: run.jobs.map(restJob) }) : notFound();
   }
-  if (path === "/pulls")
+  if (path === "/pulls") {
+    const ago = (minutes: number) => new Date(started - minutes * 60_000).toISOString();
+    const closed = url.searchParams.get("state") === "closed";
     return json(
       repo !== "shop" || isEmpty("github")
         ? []
-        : githubPulls().map(pull => ({
+        : (closed ? githubClosedPulls() : githubPulls()).map(pull => ({
             number: pull.number,
+            state: pull.ended ? "closed" : "open",
             title: pull.title,
             html_url: `https://github.com/demo/${repo}/pull/${pull.number}`,
             draft: pull.draft === true,
             user: { login: pull.author },
             head: { sha: state.shas[pull.head], ref: pull.headRef },
             base: { ref: pull.baseRef, sha: state.shas[pull.base] ?? pull.base },
-            updated_at: new Date(started - pull.updatedAgoMin * 60_000).toISOString(),
+            created_at: ago(pull.createdAgoMin),
+            updated_at: ago(pull.updatedAgoMin),
+            closed_at: pull.ended ? ago(pull.ended.agoMin) : null,
+            merged_at: pull.ended?.merged ? ago(pull.ended.agoMin) : null,
           })),
     );
+  }
   const allJobs = repoRuns.flatMap(run => run.jobs);
   const annotations = path.match(/^\/check-runs\/(\d+)\/annotations$/);
   if (annotations) return json(allJobs.find(job => job.id === Number(annotations[1]))?.annotations ?? []);

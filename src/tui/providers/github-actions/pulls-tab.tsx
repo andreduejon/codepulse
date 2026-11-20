@@ -24,6 +24,7 @@ import { buildFileTree, type FileTreeRow, flattenFileTree } from "../../utils/fi
 import { ProviderActionRow, ProviderSummaryRow, ScrollingLabel, useDetailRowMouse } from "../shared/detail-rows";
 import { useDetailTree } from "../shared/detail-tree";
 import { type RowShortcut, useOpenRowShortcut } from "../shared/open-row";
+import { pullMark } from "./legend";
 
 /** A pull request's files: where its branch left the target's, and what it changed since. */
 export interface PullFiles {
@@ -34,6 +35,11 @@ export interface PullFiles {
 export interface PullRequestsTabProps {
   sha: string;
   pullRequestsAt: (sha: string) => GitHubPullRequest[];
+  /** The ones merged or closed recently whose branch pointed at it: muted rows after the open ones, no files. */
+  closedPullRequestsAt?: (sha: string) => GitHubPullRequest[];
+  /** The Dashboard's pull request (its number): its row marked in `targetColor`, an open one's with the cursor. */
+  target?: string;
+  targetColor?: string;
   /** Its files from Git; null when Git hasn't both its commits (its branch or the target's isn't fetched). */
   loadFiles?: (pr: GitHubPullRequest) => Promise<PullFiles | null>;
   /** Opens a file's diff; without it the files don't open (the Dashboard's details). */
@@ -67,6 +73,7 @@ type Loaded = { state: "loading" } | { state: "missing" } | ({ state: "ready" } 
 
 type Row =
   | { kind: "pull"; key: string; pr: GitHubPullRequest; last: boolean; open: boolean }
+  | { kind: "ended"; key: string; pr: GitHubPullRequest; last: boolean }
   | { kind: "note"; key: string; lead: string; text: string; last: boolean }
   | { kind: "file"; key: string; pr: GitHubPullRequest; row: FileTreeRow; loaded: PullFiles; collapsed: boolean };
 
@@ -103,6 +110,7 @@ export function PullRequestsTab(props: Readonly<PullRequestsTabProps>) {
   };
 
   const pulls = () => props.pullRequestsAt(props.sha);
+  const ended = () => props.closedPullRequestsAt?.(props.sha) ?? [];
   const [loaded, setLoaded] = createSignal<ReadonlyMap<string, Loaded>>(new Map());
   // An opened pull request reads its files once per version (a push or a new target reads them again).
   createEffect(() => {
@@ -119,9 +127,9 @@ export function PullRequestsTab(props: Readonly<PullRequestsTabProps>) {
     }
   });
 
-  const rows = createMemo<Row[]>(() =>
-    pulls().flatMap((pr, index): Row[] => {
-      const last = index === pulls().length - 1;
+  const rows = createMemo<Row[]>(() => [
+    ...pulls().flatMap((pr, index): Row[] => {
+      const last = index === pulls().length - 1 && ended().length === 0;
       const isOpen = open().has(pr.number);
       const head: Row = { kind: "pull", key: pullKey(pr), pr, last, open: isOpen };
       if (!isOpen) return [head];
@@ -164,11 +172,15 @@ export function PullRequestsTab(props: Readonly<PullRequestsTabProps>) {
         ),
       ];
     }),
-  );
+    // Merged or closed: a row each, muted, no files and no cursor stop.
+    ...ended().map(
+      (pr, index): Row => ({ kind: "ended", key: `ended:${pr.number}`, pr, last: index === ended().length - 1 }),
+    ),
+  ]);
   const reloadEnabled = () => !props.unavailableReason;
   const keys = createMemo(() => [
     ...(reloadEnabled() ? [RELOAD] : []),
-    ...rows().flatMap(row => (row.kind === "note" ? [] : [row.key])),
+    ...rows().flatMap(row => (row.kind === "note" || row.kind === "ended" ? [] : [row.key])),
   ]);
   const indexes = createMemo(() => new Map(keys().map((key, index) => [key, index])));
   const indexOf = (key: string) => indexes().get(key) ?? -1;
@@ -177,6 +189,18 @@ export function PullRequestsTab(props: Readonly<PullRequestsTabProps>) {
     const key = keys()[props.detailCursorIndex()];
     return key === RELOAD ? RELOAD : rows().find(row => row.key === key);
   };
+
+  // The Dashboard's open pull request: the tab's focus starts on it, once per commit (kept in the memory).
+  const targetFocus = props.memory?.("targetFocus", () => ({ key: null as string | null })) ?? { key: null };
+  createEffect(() => {
+    const pr = pulls().find(isTarget);
+    if (!pr || !props.detailFocused()) return;
+    const key = `${props.sha}\u0000${pr.number}`;
+    if (targetFocus.key === key) return;
+    targetFocus.key = key;
+    props.setDetailCursorIndex(indexOf(pullKey(pr)));
+    props.navRef?.scrollToCursor?.();
+  });
 
   const activate = () => {
     const row = current();
@@ -246,10 +270,48 @@ export function PullRequestsTab(props: Readonly<PullRequestsTabProps>) {
     del: Math.max(2, ...files.map(file => `-${file.deletions}`.length)),
   });
 
+  /** Its age (an open one's last update, an ended one's end) and its mark after it, as a run shows when and how. */
+  const when = (pr: GitHubPullRequest) => {
+    const at = pr.state === "open" ? pr.updatedAt : (pr.closedAt ?? "");
+    const mark = pullMark(pr.state, pr.draft);
+    return (
+      <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+        {at ? `  ${formatRelativeDate(at)} ` : "  "}
+        <span style={{ fg: mark.color(t()) }}>{mark.icon}</span>
+      </text>
+    );
+  };
+  /** The Dashboard's pull request: its row in the Dashboard's colour. */
+  const isTarget = (pr: GitHubPullRequest) => !!props.target && props.target === String(pr.number);
+
+  const renderEnded = (row: Extract<Row, { kind: "ended" }>) => (
+    <box flexDirection="row" width="100%">
+      <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().border}>
+        {row.last ? "└─ " : "├─ "}
+      </text>
+      <ScrollingLabel
+        selectable={!props.mouseEnabled}
+        text={`PR #${row.pr.number} ${row.pr.title}`}
+        active={false}
+        fg={isTarget(row.pr) && props.targetColor ? props.targetColor : t().foregroundMuted}
+        grow={false}
+      />
+      <box flexGrow={1} />
+      {when(row.pr)}
+    </box>
+  );
+
   const renderPull = (row: Extract<Row, { kind: "pull" }>) => {
     const pr = row.pr;
-    // A draft is not ready for review: muted, as its chip in the graph.
-    const fg = () => (cursored(row.key) ? t().accent : pr.draft ? t().foregroundMuted : t().foreground);
+    // A draft is not ready for review: muted, as its chip in the graph. The Dashboard's: in its colour.
+    const fg = () =>
+      cursored(row.key)
+        ? t().accent
+        : isTarget(pr) && props.targetColor
+          ? props.targetColor
+          : pr.draft
+            ? t().foregroundMuted
+            : t().foreground;
     return (
       <box
         {...mouse.mouseRow(row.key, () => indexOf(row.key))}
@@ -277,9 +339,7 @@ export function PullRequestsTab(props: Readonly<PullRequestsTabProps>) {
           grow={false}
         />
         <box flexGrow={1} />
-        <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-          {pr.updatedAt ? `  ${formatRelativeDate(pr.updatedAt)}` : ""}
-        </text>
+        {when(pr)}
       </box>
     );
   };
@@ -297,11 +357,12 @@ export function PullRequestsTab(props: Readonly<PullRequestsTabProps>) {
         index={() => indexOf(RELOAD)}
         rowRef={tree.ref(RELOAD)}
       />
-      <ProviderSummaryRow label="total pull requests" count={pulls().length} />
+      <ProviderSummaryRow label="total pull requests" count={pulls().length + ended().length} />
       <For each={rows()}>
         {row => (
           <Switch>
             <Match when={row.kind === "pull" && row}>{pull => renderPull(pull())}</Match>
+            <Match when={row.kind === "ended" && row}>{done => renderEnded(done())}</Match>
             <Match when={row.kind === "note" && row}>
               {note => (
                 <text selectable={!props.mouseEnabled} wrapMode="none" fg={t().foregroundMuted}>

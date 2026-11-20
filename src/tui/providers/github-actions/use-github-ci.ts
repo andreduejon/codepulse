@@ -36,6 +36,10 @@ export interface UseGitHubCIResult {
   heldEntries: () => GitHubCommitData[];
   /** The open pull requests whose branch points at this commit, by number. Reactive. */
   pullRequestsAt: (sha: string) => GitHubPullRequest[];
+  /** The merged or closed ones whose branch pointed at it, last ended first. Reactive. */
+  closedPullRequestsAt: (sha: string) => GitHubPullRequest[];
+  /** Every pull request it holds, open and recently ended: the Dashboard's events. Reactive. */
+  heldPullRequests: () => GitHubPullRequest[];
   /**
    * Fetch jobs for a run on demand and cache them.
    * Returns the jobs once fetched (or from cache).
@@ -171,6 +175,14 @@ export function useGitHubCI(opts: {
     pullRequestsAt: (sha: string) => {
       dataVersion();
       return service.pullRequestsAt(sha);
+    },
+    closedPullRequestsAt: (sha: string) => {
+      dataVersion();
+      return service.closedPullRequestsAt(sha);
+    },
+    heldPullRequests: () => {
+      dataVersion();
+      return service.heldPullRequests();
     },
     fetchJobsForRun: service.fetchJobsForRun,
     fetchJobLogForJob: service.fetchJobLogForJob,

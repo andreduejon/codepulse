@@ -119,9 +119,13 @@ export interface GitHubCommitData {
   runs: GitHubWorkflowRun[];
 }
 
-/** An open pull request, as the graph's chip and the Pull requests tab show it. */
+/**
+ * A pull request: an open one as the graph's chip, the Pull requests tab and the Dashboard show it; a merged or closed
+ * one in the tab and on the Dashboard only.
+ */
 export interface GitHubPullRequest {
   number: number;
+  state: "open" | "merged" | "closed";
   title: string;
   url: string;
   draft: boolean;
@@ -133,7 +137,10 @@ export interface GitHubPullRequest {
   /** The branch it would merge into, and the commit that branch points at ("" when GitHub didn't say). */
   baseRef: string;
   baseSha: string;
+  createdAt: string;
   updatedAt: string;
+  /** When it was merged, or closed without merging; null while it is open. */
+  closedAt: string | null;
 }
 
 /** GitHub repository coordinates, parsed from the remote URL. */

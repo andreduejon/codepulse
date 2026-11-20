@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { githubEvents } from "../github/events";
-import type { GitHubWorkflowRun } from "../github/types";
+import { githubEvents, githubPullEventKind, githubPullEvents } from "../github/events";
+import type { GitHubPullRequest, GitHubWorkflowRun } from "../github/types";
 import { jenkinsEvents } from "../jenkins/events";
 import type { JenkinsRun } from "../jenkins/types";
 import { isOpenShiftWarningEvent, openShiftEvents } from "../openshift/events";
@@ -428,5 +428,51 @@ describe("keepUnchangedRows", () => {
     expect(after[2]).toBe(before[1]);
     // b is in the first knot now, not after a gap.
     expect(after[3]).not.toBe(before[3]);
+  });
+});
+
+describe("GitHub pull requests", () => {
+  const pr = (overrides: Partial<GitHubPullRequest> = {}): GitHubPullRequest => ({
+    number: 123,
+    state: "open",
+    title: "feat(payments): retry",
+    url: "https://github.com/o/r/pull/123",
+    draft: false,
+    author: "mei",
+    headSha: SHA,
+    headRef: "feature/retry",
+    baseRef: "main",
+    baseSha: "",
+    createdAt: "2026-03-01T09:00:00Z",
+    updatedAt: "2026-03-02T09:00:00Z",
+    closedAt: null,
+    ...overrides,
+  });
+
+  test("each is opened at its creation, and merged or closed at its end, on its branch's commit", () => {
+    const events = githubPullEvents("/repo/shop", [
+      pr(),
+      pr({ number: 118, state: "merged", closedAt: "2026-03-02T08:00:00Z" }),
+      pr({ number: 117, state: "closed", closedAt: "2026-03-02T07:00:00Z", createdAt: "" }),
+      pr({ number: 119, draft: true }),
+    ]);
+    expect(events.map(event => [event.text, event.time, event.status])).toEqual([
+      ["PR #123 opened · feat(payments): retry", at("2026-03-01T09:00:00Z"), "unknown"],
+      ["PR #118 opened · feat(payments): retry", at("2026-03-01T09:00:00Z"), "unknown"],
+      ["PR #118 merged · feat(payments): retry", at("2026-03-02T08:00:00Z"), "pass"],
+      // No creation time: only its end.
+      ["PR #117 closed · feat(payments): retry", at("2026-03-02T07:00:00Z"), "cancelled"],
+      // A draft's opening: not ready for review, its mark muted.
+      ["PR #119 opened · feat(payments): retry", at("2026-03-01T09:00:00Z"), "skipped"],
+    ]);
+    expect(events[2]).toMatchObject({
+      sha: SHA,
+      branch: "feature/retry",
+      url: "https://github.com/o/r/pull/123",
+      tab: "github-pulls",
+      entry: "118",
+    });
+    expect(events.map(githubPullEventKind)).toEqual(["opened", "opened", "merged", "closed", "opened"]);
+    expect(githubPullEventKind({ ...events[0], id: "/repo/shop:github-actions:7" } as DashboardEvent)).toBeNull();
   });
 });
