@@ -27,6 +27,14 @@ function assertNotNull<T>(value: T, label = "value"): asserts value is NonNullab
 }
 
 describe("repo.ts parsing", () => {
+  test("parseRefs — a comma inside a branch name stays one ref", () => {
+    expect(parseRefs("HEAD -> feature,one, origin/feature,one, tag: v1,2", new Set(["origin"]))).toEqual([
+      { name: "feature,one", type: "branch", isCurrent: true },
+      { name: "origin/feature,one", type: "remote", isCurrent: false },
+      { name: "v1,2", type: "tag", isCurrent: false },
+    ]);
+  });
+
   test("parseRefs — empty/blank string returns []", () => {
     const refs = parseRefs("", new Set());
     expect(refs.length).toBe(0);
