@@ -273,3 +273,18 @@ test("a reset drops the pull request lists still on their way", async () => {
   expect(aborted).toBe(true);
   expect(h.service.pullRequestsAt(SHA)).toEqual([]);
 });
+
+test("the pull request lists stop with the lifecycle's requests, also once the runs are done", async () => {
+  const h = harness();
+  let aborted = false;
+  h.api.fetchOpenPullRequests.mockImplementationOnce(
+    (_repo, _token, signal) =>
+      new Promise(() => {
+        signal?.addEventListener("abort", () => (aborted = true));
+      }),
+  );
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  expect(aborted).toBe(false);
+  h.lifecycle.dispose();
+  expect(aborted).toBe(true);
+});

@@ -225,11 +225,18 @@ export function createGitHubService(ports: GitHubServicePorts) {
     pullsRequest = request;
     const stop = () => request.abort();
     signal?.addEventListener("abort", stop, { once: true });
-    // Aborted (with the fetch they run beside, by a newer read, by a reset): nothing to say.
-    const [open, closed] = await Promise.all([
-      ports.api.fetchOpenPullRequests(repo, token, request.signal).catch(() => null),
-      ports.api.fetchClosedPullRequests(repo, token, request.signal).catch(() => null),
-    ]);
+    // Aborted (with the fetch they run beside, by a newer read, by a reset, by the lifecycle's own stop: suspended or
+    // disposed, as its requests are): nothing to say.
+    const [open, closed] = await lifecycle()
+      .runRequest(
+        listSignal =>
+          Promise.all([
+            ports.api.fetchOpenPullRequests(repo, token, listSignal).catch(() => null),
+            ports.api.fetchClosedPullRequests(repo, token, listSignal).catch(() => null),
+          ]),
+        request.signal,
+      )
+      .catch(() => [null, null] as const);
     signal?.removeEventListener("abort", stop);
     if (pullsRequest === request) pullsRequest = null;
     if (request.signal.aborted || !lifecycle().isCurrent(epoch, repoPath)) return;

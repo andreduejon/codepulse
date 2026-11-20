@@ -365,3 +365,62 @@ test("files Git hadn't (not fetched) are read again when the provider's data cha
     setup.renderer.destroy();
   }
 });
+
+test("a change while files are read is not lost: a late 'not there' is read once more", async () => {
+  const [cursor, setCursor] = createSignal(1);
+  const [pulls, setPulls] = createSignal([pull()]);
+  const answers: ((files: PullFiles | null) => void)[] = [];
+  const loadFiles = mock(() => new Promise<PullFiles | null>(resolve => answers.push(resolve)));
+  const navRef: DetailNavRef = {
+    itemCount: 0,
+    itemRefs: [],
+    activateCurrentItem: () => false,
+    lastJumpFrom: null,
+    pendingJumpDirection: null,
+    scrollToFile: () => {},
+  };
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={createThemeState()}>
+        <box width={90} flexDirection="column">
+          <PullRequestsTab
+            sha={SHA}
+            pullRequestsAt={pulls}
+            loadFiles={loadFiles}
+            navRef={navRef}
+            detailCursorIndex={cursor}
+            detailFocused={() => true}
+            setDetailCursorAction={mock(() => {})}
+            setDetailCursorIndex={setCursor}
+          />
+        </box>
+      </ThemeContext.Provider>
+    ),
+    { width: 94, height: 12 },
+  );
+  const settle = async () => {
+    for (let i = 0; i < 4; i++) {
+      await Bun.sleep(0);
+      await setup.renderOnce();
+    }
+  };
+  try {
+    navRef.activateCurrentItem();
+    await settle();
+    expect(loadFiles).toHaveBeenCalledTimes(1);
+    // The commits arrive (a refresh) while the first read, which started before them, is still on its way.
+    setPulls([pull()]);
+    await settle();
+    answers[0]?.(null);
+    await settle();
+    expect(loadFiles).toHaveBeenCalledTimes(2);
+    answers[1]?.({
+      mergeBase: "b".repeat(40),
+      files: [{ path: "README.md", status: "M", additions: 2, deletions: 1 }],
+    });
+    await settle();
+    expect(setup.captureCharFrame()).toContain("README.md");
+  } finally {
+    setup.renderer.destroy();
+  }
+});

@@ -122,26 +122,36 @@ export function PullRequestsTab(props: Readonly<PullRequestsTabProps>) {
   const [loaded, setLoaded] = createSignal<ReadonlyMap<string, Loaded>>(new Map());
   /** The versions being read now (a mutable ref: an effect run during a read must not start another). */
   const reading = new Set<string>();
+  /** Versions whose provider data changed while they were read: a late "not there" is read once more. */
+  const changedWhileRead = new Set<string>();
+  const read = (load: (pr: GitHubPullRequest) => Promise<PullFiles | null>, pr: GitHubPullRequest, version: string) => {
+    reading.add(version);
+    void load(pr)
+      .catch(() => null)
+      .then(files => {
+        reading.delete(version);
+        if (!files && changedWhileRead.delete(version)) return read(load, pr, version);
+        changedWhileRead.delete(version);
+        const next: Loaded = files
+          ? { state: "ready", ...files, widths: statWidths(files.files) }
+          : { state: "missing" };
+        setLoaded(map => new Map(map).set(version, next));
+      });
+  };
   // An opened pull request reads its files once per version (a push or a new target reads them again). One Git hadn't
   // (not fetched) is read again, quietly, with each change of the provider's data: a Reload commit, a refresh.
   createEffect(() => {
     for (const pr of pulls()) {
       const version = versionKey(pr);
       const known = untrack(loaded).get(version);
-      if (!open().has(pr.number) || !props.loadFiles || reading.has(version) || (known && known.state !== "missing"))
+      if (!open().has(pr.number) || !props.loadFiles) continue;
+      if (reading.has(version)) {
+        changedWhileRead.add(version);
         continue;
-      reading.add(version);
+      }
+      if (known && known.state !== "missing") continue;
       if (!known) setLoaded(map => new Map(map).set(version, { state: "loading" }));
-      void props
-        .loadFiles(pr)
-        .catch(() => null)
-        .then(files => {
-          reading.delete(version);
-          const next: Loaded = files
-            ? { state: "ready", ...files, widths: statWidths(files.files) }
-            : { state: "missing" };
-          setLoaded(map => new Map(map).set(version, next));
-        });
+      read(props.loadFiles, pr, version);
     }
   });
 

@@ -119,10 +119,14 @@ export function useDashboardController(opts: {
     view: ProviderView;
     tab?: string;
   } | null>(null);
-  /** The event's commit in its provider's view, with that provider's details open on it, on the event's own tab. */
+  /**
+   * The event's commit in its provider's view, with that provider's details open on it, on the event's own tab: the one
+   * it names, else its provider's first (also when the graph was left on that commit with another tab open).
+   */
   const showInGraph = (event: DashboardEvent) => {
     if (event.app !== opts.repoPath()) opts.switchTo(event.app);
-    setPendingGraphJump({ sha: event.sha, view: event.source, ...(event.tab ? { tab: event.tab } : {}) });
+    const tab = event.tab ?? state.providers.set.detailTab(event.source)?.id;
+    setPendingGraphJump({ sha: event.sha, view: event.source, ...(tab ? { tab } : {}) });
   };
   createEffect(() => {
     const jump = pendingGraphJump();
