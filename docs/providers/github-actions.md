@@ -93,11 +93,12 @@ tip gets one; a commit with two open pull requests (one branch into `main` and i
 
 Such a commit has a **Pull requests** tab after **Actions**, labelled with how many
 (`Pull requests (2)`), as Stashes is; other commits don't show it. It lists each
-pull request with its title, its branch and the one it would merge into, its author,
-`draft` for a draft, and when it was last updated. `o` opens it on GitHub; Reload
-commit reads the runs and the pull requests again.
+pull request on one short row: its number, title and when it was last updated, a draft
+muted. `o` opens it on GitHub; Reload commit reads the runs and the pull requests again.
 
-Enter opens a pull request on the files it changed, as a tree like **Files**, each with
+Enter opens a pull request: a muted line with its branch, the one it would merge into,
+its author and `draft` for a draft (`dev → main · @ana-lima`), then the files it changed,
+as a tree like **Files**, each with
 its status and `+`/`-` lines: what its branch changed since it left the target branch
 (Git's merge base of the two), as GitHub's **Files changed** shows it, not what the
 target did since. Git reads them, so both branches' commits must be fetched: the target
@@ -106,8 +107,9 @@ fetches them. Enter on a file opens the diff dialog on that change
 (`3447db9..bf08113` in its title), and `←`/`→` move between the pull request's files.
 Files open from the graph's details; the Dashboard's details list them only.
 
-While the tab is open, the graph previews the selected pull request's merge (the one under
-the cursor, on it or its files, else the first): a muted line from its branch's commit
+While the tab is open, the graph previews the merge of the pull request the mouse is over,
+else the one the details' cursor is on (it or its files); none on Reload commit or while
+the keyboard is in the graph: a muted line from its branch's commit
 to the one its target branch points at, with `◀` at the target, as the merge would join
 them.
 

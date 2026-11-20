@@ -355,7 +355,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
 
                 <box height={1} />
                 <text fg={t().accent} wrapMode="none">
-                  <strong>Commit Date</strong>
+                  <strong>Commit date</strong>
                 </text>
                 <CopyableRow
                   view={rowsView}

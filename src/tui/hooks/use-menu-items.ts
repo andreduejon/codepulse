@@ -332,7 +332,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
     const result: SettingItem[] = [];
 
     // ── Checked-out branch (always shown) ──────────────────────────
-    result.push({ kind: "header", label: "Checked Out" });
+    result.push({ kind: "header", label: "Checked out" });
     result.push({
       kind: "badge",
       name: currentBranch || "(unknown)",

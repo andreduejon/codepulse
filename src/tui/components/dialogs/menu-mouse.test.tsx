@@ -296,7 +296,7 @@ test("menu row hover never selects; clicks share copy, action, dialog, toggle, c
     await m.click("GitHub", MouseButtons.LEFT, 1);
     expect(m.github().enabled).toBe(false);
     await m.click("Branches");
-    for (const label of ["Checked Out", "main", "Clear filter"]) {
+    for (const label of ["Checked out", "main", "Clear filter"]) {
       await m.click(label);
       expect(m.branch).not.toHaveBeenCalled();
       expect(m.close).not.toHaveBeenCalled();

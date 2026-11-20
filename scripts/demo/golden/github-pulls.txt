@@ -1,6 +1,6 @@
 === shot 1: chips (200x45) ===
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-  Graph                         Commit   Description                                                        Status         Last Run                      Actions                       Info
+  Graph                         Commit   Description                                                        Status         Last run                      Actions                       Info
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
     █                           bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request…   2             running            Reload commit
     │                                                                                                                                         total workflow runs                                    2
@@ -47,13 +47,13 @@
 
 === shot 2: pulls (200x45) ===
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-  Graph                         Commit   Description                                                        Status         Last Run               Actions         Pull requests (2)          Info
+  Graph                         Commit   Description                                                        Status         Last run               Actions         Pull requests (2)          Info
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-    █─╮                         bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request    2             running            Reload commit
-    │ │                                                                                                                                       total pull requests                                    2
-    █ │                         e6209dd  feat(api): add a health endpoint                                    1             45m ago            ├─ ▸ PR #124 release: dev into main · dev → mai…  5m ago
-    │ │                                                                                                                                       └─ ▸ PR #125 release: dev into release/1.x        5m ago
-    █◀╯                         3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…   2             28m ago
+    █                           bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request    2             running            Reload commit
+    │                                                                                                                                         total pull requests                                    2
+    █                           e6209dd  feat(api): add a health endpoint                                    1             45m ago            ├─ ▸ PR #124 release: dev into main               5m ago
+    │                                                                                                                                         └─ ▸ PR #125 release: dev into release/1.x        5m ago
+    █                           3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…   2             28m ago
     │
     │ █                         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry…   1             4h ago
     │ │
@@ -94,18 +94,18 @@
 
 === shot 3: files (200x45) ===
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-  Graph                         Commit   Description                                                        Status         Last Run               Actions         Pull requests (2)          Info
+  Graph                         Commit   Description                                                        Status         Last run               Actions         Pull requests (2)          Info
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
     █─╮                         bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request    2             running            Reload commit
     │ │                                                                                                                                       total pull requests                                    2
-    █ │                         e6209dd  feat(api): add a health endpoint                                    1             45m ago            ├─ ▾ PR #124 release: dev into main · dev → main  5m ago
-    │ │                                                                                                                                       │  └─ ▾ src/
-    █◀╯                         3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…   2             28m ago            │     ├─ ▾ api/
-    │                                                                                                                                         │     │  ├─ health.ts                           A +14 -0
-    │ █                         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry…   1             4h ago             │     │  └─ metrics.ts                          A +19 -0
-    │ │                                                                                                                                       │     └─ index.ts                               M  +5 -0
-    █─╯                         64ddc8a  feat(payments): retry failed payments with exponential backoff, …   1             51m ago            └─ ▸ PR #125 release: dev into release/1.x        5m ago
-    │
+    █ │                         e6209dd  feat(api): add a health endpoint                                    1             45m ago            ├─ ▾ PR #124 release: dev into main               5m ago
+    │ │                                                                                                                                       │  │ dev → main · @ana-lima
+    █◀╯                         3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…   2             28m ago            │  └─ ▾ src/
+    │                                                                                                                                         │     ├─ ▾ api/
+    │ █                         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry…   1             4h ago             │     │  ├─ health.ts                           A +14 -0
+    │ │                                                                                                                                       │     │  └─ metrics.ts                          A +19 -0
+    █─╯                         64ddc8a  feat(payments): retry failed payments with exponential backoff, …   1             51m ago            │     └─ index.ts                               M  +5 -0
+    │                                                                                                                                         └─ ▸ PR #125 release: dev into release/1.x        5m ago
     █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······
     │
     █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······
@@ -141,18 +141,18 @@
 
 === shot 4: diff (200x45) ===
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-  Graph                         Commit   Description                                                        Status         Last Run               Actions         Pull requests (2)          Info
+  Graph                         Commit   Description                                                        Status         Last run               Actions         Pull requests (2)          Info
   ──────────────────                                                                                                                                                                ──────────────────
     █─╮                  Diff · [2/3] · 3447db9..bf08113 · src/api/metrics.ts · unified                                                                               esc close
     │ │                                                                                                                                                                                              2
-    █ │                  A · +19                                                                                                                                                    dev → mai…  5m ago
+    █ │                  A · +19                                                                                                                                                                5m ago
     │ │
     █◀╯                  ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-    │                    Lines (none) → 1–19                                                                                                                                                  A +14 -0
-    │ █                     1  + /** Prometheus metrics: request counts and durations by route. */                                                                                            A +19 -0
-    │ │                     2  + const EXPORTER_VERSION = "^15.1.0";                                                                                                                          M  +5 -0
-    █─╯                     3  +                                                                                                                                                    /1.x        5m ago
-    │                       4  + const requests = new Map<string, { count: number; seconds: number }>();
+    │                    Lines (none) → 1–19
+    │ █                     1  + /** Prometheus metrics: request counts and durations by route. */                                                                                            A +14 -0
+    │ │                     2  + const EXPORTER_VERSION = "^15.1.0";                                                                                                                          A +19 -0
+    █─╯                     3  +                                                                                                                                                              M  +5 -0
+    │                       4  + const requests = new Map<string, { count: number; seconds: number }>();                                                                            /1.x        5m ago
     █                       5  +
     │                       6  + export function record(route: string, seconds: number): void {
     █─╮                     7  +   const entry = requests.get(route) ?? { count: 0, seconds: 0 };
@@ -188,18 +188,18 @@
 
 === shot 5: next-file (200x45) ===
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-  Graph                         Commit   Description                                                        Status         Last Run               Actions         Pull requests (2)          Info
+  Graph                         Commit   Description                                                        Status         Last run               Actions         Pull requests (2)          Info
   ──────────────────                                                                                                                                                                ──────────────────
     █─╮                  Diff · [3/3] · 3447db9..bf08113 · src/index.ts · unified                                                                                     esc close
     │ │                                                                                                                                                                                              2
-    █ │                  +5                                                                                                                                                         dev → mai…  5m ago
+    █ │                  +5                                                                                                                                                                     5m ago
     │ │
     █◀╯                  ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-    │                    Lines 1–4 → 1–6                                                                                                                                                      A +14 -0
-    │ █                   1  1    import { serve } from "bun";                                                                                                                                A +19 -0
-    │ │                      2  + import { metrics } from "./api/metrics";                                                                                                                    M  +5 -0
-    █─╯                      3  + import { health } from "./api/health";                                                                                                            /1.x        5m ago
-    │                     2  4    import { cartRoutes } from "./cart/routes";
+    │                    Lines 1–4 → 1–6
+    │ █                   1  1    import { serve } from "bun";                                                                                                                                A +14 -0
+    │ │                      2  + import { metrics } from "./api/metrics";                                                                                                                    A +19 -0
+    █─╯                      3  + import { health } from "./api/health";                                                                                                                      M  +5 -0
+    │                     2  4    import { cartRoutes } from "./cart/routes";                                                                                                       /1.x        5m ago
     █                     3  5
     │                     4  6    const port = Number(process.env.PORT ?? 8080);
     █─╮                  ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -235,18 +235,18 @@
 
 === shot 6: back (200x45) ===
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-  Graph                         Commit   Description                                                        Status         Last Run               Actions         Pull requests (2)          Info
+  Graph                         Commit   Description                                                        Status         Last run               Actions         Pull requests (2)          Info
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
     █─╮                         bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request    2             running            Reload commit
     │ │                                                                                                                                       total pull requests                                    2
-    █ │                         e6209dd  feat(api): add a health endpoint                                    1             45m ago            ├─ ▾ PR #124 release: dev into main · dev → mai…  5m ago
-    │ │                                                                                                                                       │  └─ ▾ src/
-    █◀╯                         3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…   2             28m ago            │     ├─ ▾ api/
-    │                                                                                                                                         │     │  ├─ health.ts                           A +14 -0
-    │ █                         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry…   1             4h ago             │     │  └─ metrics.ts                          A +19 -0
-    │ │                                                                                                                                       │     └─ index.ts                               M  +5 -0
-    █─╯                         64ddc8a  feat(payments): retry failed payments with exponential backoff, …   1             51m ago            └─ ▸ PR #125 release: dev into release/1.x        5m ago
-    │
+    █ │                         e6209dd  feat(api): add a health endpoint                                    1             45m ago            ├─ ▾ PR #124 release: dev into main               5m ago
+    │ │                                                                                                                                       │  │ dev → main · @ana-lima
+    █◀╯                         3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…   2             28m ago            │  └─ ▾ src/
+    │                                                                                                                                         │     ├─ ▾ api/
+    │ █                         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry…   1             4h ago             │     │  ├─ health.ts                           A +14 -0
+    │ │                                                                                                                                       │     │  └─ metrics.ts                          A +19 -0
+    █─╯                         64ddc8a  feat(payments): retry failed payments with exponential backoff, …   1             51m ago            │     └─ index.ts                               M  +5 -0
+    │                                                                                                                                         └─ ▸ PR #125 release: dev into release/1.x        5m ago
     █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······
     │
     █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······

@@ -1,7 +1,7 @@
 /**
  * GitHub's Pull requests tab: the open pull requests whose branch points at the commit (the graph's `PR #123` chips),
- * one row each with its title, its branch and the one it would merge into, and its author. Enter opens one on the files
- * it changed, as GitHub's Files changed shows them (between where its branch left the target's and its head, read by
+ * one row each with its number, title and age. Enter opens one: a muted line with its branch, the one it would merge
+ * into and its author, then the files it changed, as GitHub's Files changed shows them (between where its branch left the target's and its head, read by
  * Git); Enter on a file opens its diff. `o` opens the pull request on GitHub. Only a commit that has one has the tab
  * (as Stashes), so it never shows empty.
  *
@@ -67,7 +67,7 @@ type Loaded = { state: "loading" } | { state: "missing" } | ({ state: "ready" } 
 
 type Row =
   | { kind: "pull"; key: string; pr: GitHubPullRequest; last: boolean; open: boolean }
-  | { kind: "note"; key: string; lead: string; text: string }
+  | { kind: "note"; key: string; lead: string; text: string; last: boolean }
   | { kind: "file"; key: string; pr: GitHubPullRequest; row: FileTreeRow; loaded: PullFiles; collapsed: boolean };
 
 /** The pull requests opened and the folders closed, in one commit. */
@@ -127,18 +127,31 @@ export function PullRequestsTab(props: Readonly<PullRequestsTabProps>) {
       if (!isOpen) return [head];
       const lead = last ? "   " : "│  ";
       const files = loaded().get(versionKey(pr));
-      if (!files || files.state === "loading")
-        return [head, { kind: "note", key: `${head.key}:note`, lead, text: BUSY.readingFiles }];
+      const note = (key: string, text: string, isLast: boolean): Row => ({
+        kind: "note",
+        key: `${head.key}:${key}`,
+        lead,
+        text,
+        last: isLast,
+      });
+      // What the closed row leaves out: its branch, the one it would merge into, its author.
+      const info = (more: boolean) =>
+        note(
+          "info",
+          [`${pr.headRef} → ${pr.baseRef}`, pr.author ? `@${pr.author}` : "", pr.draft ? "draft" : ""]
+            .filter(Boolean)
+            .join(" · "),
+          !more,
+        );
+      if (!files || files.state === "loading") return [head, info(true), note("note", BUSY.readingFiles, true)];
       if (files.state === "missing")
-        return [
-          head,
-          { kind: "note", key: `${head.key}:note`, lead, text: "Its commits aren't fetched here: f fetches them." },
-        ];
+        return [head, info(true), note("note", "Its commits aren't fetched here: f fetches them.", true)];
       const dirs = new Set(
         [...collapsed()].flatMap(key => (key.startsWith(`${pr.number}:`) ? [key.slice(`${pr.number}:`.length)] : [])),
       );
       return [
         head,
+        info(files.files.length > 0),
         ...flattenFileTree(buildFileTree(files.files), dirs).map(
           (row): Row => ({
             kind: "file",
@@ -213,10 +226,12 @@ export function PullRequestsTab(props: Readonly<PullRequestsTabProps>) {
     else props.setDetailCursorAction(props.onOpenDiff ? "view diff" : null);
   });
 
-  // The graph previews one merge: the pull request under the cursor (on it or its files), else the first.
+  // The graph previews the merge of the pull request the mouse is over, else the one the cursor is on (it or its
+  // files); none while neither is (the cursor on Reload commit, the keyboard in the graph).
   createEffect(() => {
-    const row = current();
-    const pr = row && row !== RELOAD && row.kind !== "note" ? row.pr : pulls()[0];
+    const hovered = pulls().find(pr => mouse.hovered() === pullKey(pr));
+    const row = props.detailFocused() ? current() : undefined;
+    const pr = hovered ?? (row && row !== RELOAD && row.kind !== "note" ? row.pr : undefined);
     props.onMergePreview?.(pr ? { head: pr.headSha, base: pr.baseSha, baseRef: pr.baseRef } : null);
   });
   onCleanup(() => props.onMergePreview?.(null));
@@ -253,12 +268,6 @@ export function PullRequestsTab(props: Readonly<PullRequestsTabProps>) {
         <ScrollingLabel
           selectable={!props.mouseEnabled}
           text={`PR #${pr.number} ${pr.title}`}
-          tail={[
-            ` · ${pr.headRef} → ${pr.baseRef}`,
-            pr.author ? ` · @${pr.author}` : "",
-            pr.draft ? " · draft" : "",
-          ].join("")}
-          tailFg={t().foregroundMuted}
           active={cursored(row.key)}
           fg={fg()}
           grow={false}
@@ -292,7 +301,10 @@ export function PullRequestsTab(props: Readonly<PullRequestsTabProps>) {
             <Match when={row.kind === "note" && row}>
               {note => (
                 <text selectable={!props.mouseEnabled} wrapMode="none" fg={t().foregroundMuted}>
-                  <span style={{ fg: t().border }}>{`${note().lead}└─ `}</span>
+                  {/* The info line continues the pull request's branch (│ when its files follow); a message ends it. */}
+                  <span style={{ fg: t().border }}>
+                    {`${note().lead}${note().key.endsWith(":info") ? (note().last ? "  " : "│ ") : "└─ "}`}
+                  </span>
                   {note().text}
                 </text>
               )}

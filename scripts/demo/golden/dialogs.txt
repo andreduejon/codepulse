@@ -59,7 +59,7 @@
     │ │                                                              ──────────────────────────────────────────────────────────────
     █─╯                         64ddc8a  feat(payments): retry f          Repository            Branches            Providers
     │                                                                ──────────────────────────────────────────────────────────────
-    █                           917f7b3  perf(cart): cache price     Checked Out
+    █                           917f7b3  perf(cart): cache price     Checked out
     │                                                                 main
     █─╮                         1bb16fb  Merge pull request #23
     │ │                                                              Showing
@@ -195,7 +195,7 @@
     █                           e6209dd  feat(api): add a health endpoint                                   Demo Dev       50m ago
     │
     █                           3447db9   v0.42.0   main   origi
-    │                                                                Color Theme                                          esc close
+    │                                                                Color theme                                          esc close
     │ █                         6adc455   feature/payments-r…
     │ │                                                              Predefined
     █─╯                         64ddc8a  feat(payments): retry f     OpenCode Original
