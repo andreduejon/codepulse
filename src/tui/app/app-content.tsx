@@ -204,7 +204,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     setGitNotice,
     closeSearch: commandBar.closeSearch,
   });
-  const { dashboard, handleDashboardKey } = dashboardController;
+  const { dashboard, handleDashboardKey, dashboardNavRef } = dashboardController;
 
   const handleReloadAll = async () => {
     reloadRuntimeConfig();
@@ -307,6 +307,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     getProviderLoading: () => state.providerStatus().kind === "loading",
     onSwitchGroupRepo: switchGroupRepo,
     onDashboardKey: handleDashboardKey,
+    dashboardNavRef,
   });
 
   /** Provider data and dialogs for the detail panel and the compact detail dialog. */

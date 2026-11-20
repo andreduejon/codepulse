@@ -452,6 +452,7 @@ export function useDashboardController(opts: {
     dismissDashboardNotice,
     refreshDashboard,
     handleDashboardKey,
+    dashboardNavRef: detailNavRef,
     openFromDashboardDialog,
     dashboardRowOpens,
     setDialogScrollbox: (element: ScrollBoxRenderable) => {

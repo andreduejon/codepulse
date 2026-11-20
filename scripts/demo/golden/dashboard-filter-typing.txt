@@ -1,0 +1,47 @@
+=== shot 1 (160x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   Graph  Commit   Branch                Time   Event
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   │      ────────────────────────────── Today · Mon, Mar 2 ──────────────────────────────────────────────────────────────────────────────────────────────────
+   █      3447db9  main                  09:
+   █      bf08113  dev                   09:     Details                                              esc close
+   █      bf08113  dev                   09:
+   █      bf08113  dev                   09:     ──────────────────────────────────────────────────────────────
+   █      bf08113  dev                   09:          Vulnerabilities          Dependencies           Info
+   █      bf08113  dev                   09:     ──────────────────────────────────────────────────────────────
+   █      3447db9  main                  09:     Show in Snyk
+   █      3447db9  main                  09:     Rescan commit
+   █      64ddc8a  main                  09:     Copy scan as JSON
+   █      3447db9  docs/readme           09:
+   │                                             Group by                                            [severity]
+   █      64ddc8a  main                  08:     mqfs                                                       0/4
+   █      3447db9  main                  08:
+   █      e6209dd  dev                   08:     · CRITICAL                                                 0/1
+   █      e6209dd  dev                   08:     · HIGH                                                     0/3
+   █      64ddc8a  main                  08:     · MEDIUM                                                     0
+   █      3447db9  main                  08:     · LOW                                                        0
+   █      bf08113  dev                   08:
+   █      bf08113  dev                   08:
+   █      64ddc8a  main                  08:
+   █      64ddc8a  main                  08:
+   █      3447db9  main                  08:                                                                        scounts are rounded
+   █      64ddc8a  main                  08:
+   █      64ddc8a  main                  08:
+   │
+   █      3447db9  docs/readme           07:
+   │
+   █      64ddc8a  main                  06:
+   █      69ddc1f  feature/dark-mode     06:
+   █      64ddc8a  main                  06:
+   █      64ddc8a  main                  06:
+   │
+
+  │                                                           ● upgrade  ● override  ● no fix  ! mature exploit
+  │   Dashboard   Git   GitHub   Jenkins   O                                                                        t   GitHub   Jenkins   OpenShift   Snyk
+  │                                                                               s show in Snyk · ↑/↓ navigate
+  │   customer-notification-service   shop                                                                                                        52 events
+  │
+
+                                                                                               tab Git · enter done · esc back · ←/→ switch tab · ↑/↓ navigate
+
+

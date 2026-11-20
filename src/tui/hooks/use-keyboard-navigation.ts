@@ -58,6 +58,8 @@ interface KeyboardNavigationOptions {
   onSwitchGroupRepo?: (direction: 1 | -1) => void;
   /** The dashboard's keys while it shows, instead of the graph's and the details'. */
   onDashboardKey?: (event: KeyEvent) => void;
+  /** The Dashboard's details: a filter typed in them has the keys while the Dashboard shows. */
+  dashboardNavRef?: DetailNavRef;
 }
 
 /**
@@ -112,6 +114,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions) {
     getProviderLoading,
     onSwitchGroupRepo,
     onDashboardKey,
+    dashboardNavRef,
   } = opts;
 
   // Build shared input exit and applied-search clear helpers.
@@ -161,11 +164,16 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions) {
       return;
     }
 
+    // A filter being typed in the details has every key, before the app's own (`q`, `m`, `f`...).
+    const onDashboard = state.activeProviderView() === "dashboard";
+    const filterFocused = onDashboard
+      ? state.detailFor("dashboard").detailFocused() || dialog() === "dashboard-event"
+      : state.detailFocused() || dialog() === "detail";
     if (
       commandBarMode() === "idle" &&
       !searchFocused() &&
-      (state.detailFocused() || dialog() === "detail") &&
-      detailNavRef.handleFilterKey?.(e)
+      filterFocused &&
+      (onDashboard ? dashboardNavRef : detailNavRef)?.handleFilterKey?.(e)
     )
       return;
 

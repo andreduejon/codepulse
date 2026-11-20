@@ -234,6 +234,16 @@ export const GOLDEN_PLAYS: readonly GoldenPlay[] = [
     ],
   },
   {
+    name: "dashboard-filter-typing",
+    covers:
+      "a filter typed in the Dashboard's details keeps every key: m, q, f and s type, not Menu, quit, fetch or Show in",
+    args: [
+      ...COMPACT,
+      "--play",
+      'click:Dashboard wait:"scan" click:"scan" enter wait:"Enter vulnerability filter..." click:"Enter vulnerability filter..." type:mqfs wait:"mqfs" shot',
+    ],
+  },
+  {
     name: "dashboard-compact",
     covers: "the Dashboard's compact dialog and s",
     args: [
