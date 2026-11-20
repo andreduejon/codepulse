@@ -241,7 +241,7 @@
     │                                                                                                                                         total workflow runs                                    2
     █                           e6209dd  feat(api): add a health endpoint                                    1             45m ago            ├─ ▾ Deploy preview #78                       just now ●
     │                                                                                                                                         │  └─ deploy                                           ●
-    █                           3447db9   v0.42.0   main   origin/…   PR #122 ✓   +2  docs: rewrite the R…   2             28m ago            └─ ▸ CI #814                                  just now ●
+    █                           3447db9   v0.42.0   main   origin/ma…   PR #122   +2  docs: rewrite the R…   2             28m ago            └─ ▸ CI #814                                  just now ●
     │
     │ █                         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry…   1             4h ago
     │ │
@@ -251,7 +251,7 @@
     │
     █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······
     │ │
-    │ █                         0166f71   PR #23 ✓  feat(i18n): add French                                  ·······        ·······
+    │ █                         0166f71   PR #23  feat(i18n): add French                                    ·······        ·······
     │ │
     │ █─╮                       5245790  Merge branch 'main' into feature/i18n                              ·······        ·······
     │ │ │
@@ -261,7 +261,7 @@
     │ │ │
     █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                     ·······        ·······
     │ │ │ │
-    │ │ │ █                     9d1b361   PR #9 ✓  fix(search): ignore accents                              ·······        ·······
+    │ │ │ █                     9d1b361   PR #9  fix(search): ignore accents                                ·······        ·······
     │ │ │ │
     │ │ │ █                     cce93f9  feat(search): search as you type                                   ·······        ·······
     │ │ │ │

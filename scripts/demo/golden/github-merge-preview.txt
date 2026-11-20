@@ -6,7 +6,7 @@
     │                                                                                                                                         total pull requests                                    1
     █                           e6209dd  feat(api): add a health endpoint                                    1             45m ago            └─ ▸ PR #123 feat(payments): retry failed pa…  40m ago ◀
     │
-    █                           3447db9   v0.42.0   main   origin/…   PR #122 ✓   +2  docs: rewrite the R…   2             28m ago
+    █                           3447db9   v0.42.0   main   origin/ma…   PR #122   +2  docs: rewrite the R…   2             28m ago
     │
     │ █                         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry    1             4h ago
     │ │
@@ -16,7 +16,7 @@
     │
     █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······
     │ │
-    │ █                         0166f71   PR #23 ✓  feat(i18n): add French                                  ·······        ·······
+    │ █                         0166f71   PR #23  feat(i18n): add French                                    ·······        ·······
     │ │
     │ █─╮                       5245790  Merge branch 'main' into feature/i18n                              ·······        ·······
     │ │ │
@@ -26,7 +26,7 @@
     │ │ │
     █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                     ·······        ·······
     │ │ │ │
-    │ │ │ █                     9d1b361   PR #9 ✓  fix(search): ignore accents                              ·······        ·······
+    │ │ │ █                     9d1b361   PR #9  fix(search): ignore accents                                ·······        ·······
     │ │ │ │
     │ │ │ █                     cce93f9  feat(search): search as you type                                   ·······        ·······
     │ │ │ │
@@ -108,7 +108,7 @@
     │                                                                                                                                         total pull requests                                    1
     █                           e6209dd  feat(api): add a health endpoint                                    1             45m ago            └─ ▸ PR #123 feat(payments): retry failed pa…  40m ago ◀
     │
-    █◀╮                         3447db9   v0.42.0   main   origin/…   PR #122 ✓   +2  docs: rewrite the R…   2             28m ago
+    █◀╮                         3447db9   v0.42.0   main   origin/ma…   PR #122   +2  docs: rewrite the R…   2             28m ago
     │ │
     │ █                         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry    1             4h ago
     │ │
@@ -118,7 +118,7 @@
     │
     █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······
     │ │
-    │ █                         0166f71   PR #23 ✓  feat(i18n): add French                                  ·······        ·······
+    │ █                         0166f71   PR #23  feat(i18n): add French                                    ·······        ·······
     │ │
     │ █─╮                       5245790  Merge branch 'main' into feature/i18n                              ·······        ·······
     │ │ │
@@ -128,7 +128,7 @@
     │ │ │
     █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                     ·······        ·······
     │ │ │ │
-    │ │ │ █                     9d1b361   PR #9 ✓  fix(search): ignore accents                              ·······        ·······
+    │ │ │ █                     9d1b361   PR #9  fix(search): ignore accents                                ·······        ·······
     │ │ │ │
     │ │ │ █                     cce93f9  feat(search): search as you type                                   ·······        ·······
     │ │ │ │
@@ -210,7 +210,7 @@
     │ │                                                                                                                                       total pull requests                                    2
     █ │                         e6209dd  feat(api): add a health endpoint                                    1             45m ago            ├─ ▸ PR #124 release: dev into main             5m ago ◀
     │ │                                                                                                                                       └─ ▸ PR #125 release: dev into release/1.x      5m ago ◀
-    █◀╯                         3447db9   v0.42.0   main   origin/…   PR #122 ✓   +2  docs: rewrite the R…   2             28m ago
+    █◀╯                         3447db9   v0.42.0   main   origin/ma…   PR #122   +2  docs: rewrite the R…   2             28m ago
     │
     │ █                         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry…   1             4h ago
     │ │
@@ -220,7 +220,7 @@
     │
     █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······
     │ │
-    │ █                         0166f71   PR #23 ✓  feat(i18n): add French                                  ·······        ·······
+    │ █                         0166f71   PR #23  feat(i18n): add French                                    ·······        ·······
     │ │
     │ █─╮                       5245790  Merge branch 'main' into feature/i18n                              ·······        ·······
     │ │ │
@@ -230,7 +230,7 @@
     │ │ │
     █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                     ·······        ·······
     │ │ │ │
-    │ │ │ █                     9d1b361   PR #9 ✓  fix(search): ignore accents                              ·······        ·······
+    │ │ │ █                     9d1b361   PR #9  fix(search): ignore accents                                ·······        ·······
     │ │ │ │
     │ │ │ █                     cce93f9  feat(search): search as you type                                   ·······        ·······
     │ │ │ │
@@ -312,7 +312,7 @@
     │                 │                                                                                                                       total pull requests                                    2
     █                 │         e6209dd  feat(api): add a health endpoint                                    1             45m ago            ├─ ▸ PR #124 release: dev into main             5m ago ◀
     │                 │                                                                                                                       └─ ▾ PR #125 release: dev into release/1.x      5m ago ◀
-    █                 │         3447db9   v0.42.0   main   origin/…   PR #122 ✓   +2  docs: rewrite the R…   2             28m ago               ├─ dev → release/1.x
+    █                 │         3447db9   v0.42.0   main   origin/ma…   PR #122   +2  docs: rewrite the R…   2             28m ago               ├─ dev → release/1.x
     │                 │                                                                                                                          ├─ @ana-lima
     │ █               │         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry…   1             4h ago                ├─ ▾ data/
     │ │               │                                                                                                                          │  ├─ ▾ prices/
@@ -322,7 +322,7 @@
     │                 │                                                                                                                          │  └─ products.csv                         A +6001 -0
     █─╮               │         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······               ├─ ▾ deploy/
     │ │               │                                                                                                                          │  ├─ deploy.sh                            A   +13 -0
-    │ █               │         0166f71   PR #23 ✓  feat(i18n): add French                                  ·······        ·······               │  └─ README.txt                           A    +2 -0
+    │ █               │         0166f71   PR #23  feat(i18n): add French                                    ·······        ·······               │  └─ README.txt                           A    +2 -0
     │ │               │                                                                                                                          ├─ ▾ docs/adr/
     │ █─╮             │         5245790  Merge branch 'main' into feature/i18n                              ·······        ·······               │  ├─ 0003-upgrade-lodash.md               A   +20 -0
     │ │ │             │                                                                                                                          │  ├─ 0004-upgrade-axios.md                A   +20 -0
@@ -332,7 +332,7 @@
     │ │ │             │                                                                                                                          │  ├─ ▾ a11y/
     █─┼─┼─╮           │         fe7db4d  Merge pull request #9 from demo/feature/search                     ·······        ·······               │  │  └─ announcer.ts                      A   +16 -0
     │ │ │ │           │                                                                                                                          │  ├─ ▾ api/
-    │ │ │ █           │         9d1b361   PR #9 ✓  fix(search): ignore accents                              ·······        ·······               │  │  ├─ health.ts                         A   +14 -0
+    │ │ │ █           │         9d1b361   PR #9  fix(search): ignore accents                                ·······        ·······               │  │  ├─ health.ts                         A   +14 -0
     │ │ │ │           │                                                                                                                          │  │  └─ metrics.ts                        A   +19 -0
     │ │ │ █           │         cce93f9  feat(search): search as you type                                   ·······        ·······               │  ├─ ▾ cart/
     │ │ │ │           │                                                                                                                          │  │  ├─ badge.ts                          M    +7 -0
@@ -414,7 +414,7 @@
     │               │                                                                                                                         total pull requests                                    1
     █               │           e6209dd  feat(api): add a health endpoint                                    1             45m ago            └─ ▸ PR #119 feat(theme): dark mode             2h ago ◀
     │               │
-    █               │           3447db9   v0.42.0   main   origin/…   PR #122 ✓   +2  docs: rewrite the R…   2             28m ago
+    █               │           3447db9   v0.42.0   main   origin/ma…   PR #122   +2  docs: rewrite the R…   2             28m ago
     │               │
     │ █             │           6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry…   1             4h ago
     │ │             │
@@ -424,7 +424,7 @@
     │               │
     █─╮             │           1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······
     │ │             │
-    │ █             │           0166f71   PR #23 ✓  feat(i18n): add French                                  ·······        ·······
+    │ █             │           0166f71   PR #23  feat(i18n): add French                                    ·······        ·······
     │ │             │
     │ █─╮           │           5245790  Merge branch 'main' into feature/i18n                              ·······        ·······
     │ │ │           │
@@ -434,7 +434,7 @@
     │ │ │           │
     █─┼─┼─╮         │           fe7db4d  Merge pull request #9 from demo/feature/search                     ·······        ·······
     │ │ │ │         │
-    │ │ │ █         │           9d1b361   PR #9 ✓  fix(search): ignore accents                              ·······        ·······
+    │ │ │ █         │           9d1b361   PR #9  fix(search): ignore accents                                ·······        ·······
     │ │ │ │         │
     │ │ │ █         │           cce93f9  feat(search): search as you type                                   ·······        ·······
     │ │ │ │         │
@@ -516,7 +516,7 @@
     │                                                                                                                                         total pull requests                                    1
     █                           e6209dd  feat(api): add a health endpoint                                    1             45m ago            └─ ▾ PR #127 feat(metrics): sales dashboard     3d ago ◀
     │                                                                                                                                            ├─ feature/metrics-dashboard → staging
-    █                           3447db9   v0.42.0   main   origin/…   PR #122 ✓   +2  docs: rewrite the R…   2             28m ago               ├─ @demo-dev
+    █                           3447db9   v0.42.0   main   origin/ma…   PR #122   +2  docs: rewrite the R…   2             28m ago               ├─ @demo-dev
     │                                                                                                                                            └─ Its commits aren't fetched here: f fetches them.
     │ █                         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry…   1             4h ago
     │ │
@@ -526,7 +526,7 @@
     │
     █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······
     │ │
-    │ █                         0166f71   PR #23 ✓  feat(i18n): add French                                  ·······        ·······
+    │ █                         0166f71   PR #23  feat(i18n): add French                                    ·······        ·······
     │ │
     │ █─╮                       5245790  Merge branch 'main' into feature/i18n                              ·······        ·······
     │ │ │
@@ -536,7 +536,7 @@
     │ │ │
     █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                     ·······        ·······
     │ │ │ │
-    │ │ │ █                     9d1b361   PR #9 ✓  fix(search): ignore accents                              ·······        ·······
+    │ │ │ █                     9d1b361   PR #9  fix(search): ignore accents                                ·······        ·······
     │ │ │ │
     │ │ │ █                     cce93f9  feat(search): search as you type                                   ·······        ·······
     │ │ │ │

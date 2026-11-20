@@ -48,10 +48,8 @@ export const githubModule = providerModule({
         ...CI_GRAPH_COLUMNS,
         refs: sha => [
           ...github.pullRequestsAt(sha).map(pr => ({ name: `PR #${pr.number}`, muted: pr.draft, whole: true })),
-          // Merged or closed recently: muted, with its mark, so the Pull requests tab's other rows are found too.
-          ...github
-            .closedPullRequestsAt(sha)
-            .map(pr => ({ name: `PR #${pr.number} ${pullMark(pr.state).icon}`, muted: true, whole: true })),
+          // Merged or closed recently: muted, so the Pull requests tab's other rows are found too (the tab says which).
+          ...github.closedPullRequestsAt(sha).map(pr => ({ name: `PR #${pr.number}`, muted: true, whole: true })),
         ],
       },
     };

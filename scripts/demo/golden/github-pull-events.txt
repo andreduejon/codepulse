@@ -312,7 +312,7 @@
     │                                                                                                                                                                                 total pull requests                                    2
     █                           e6209dd  feat(api): add a health endpoint                                                                            1             45m ago            ├─ ▸ PR #124 release: dev into main             5m ago ◀
     │                                                                                                                                                                                 └─ ▸ PR #125 release: dev into release/1.x      5m ago ◀
-    █                           3447db9   v0.42.0   main   origin/main   origin/HEAD   stash (1)   PR #122 ✓  docs: rewrite the README for the ne…   2             28m ago
+    █                           3447db9   v0.42.0   main   origin/main   origin/HEAD   stash (1)   PR #122  docs: rewrite the README for the new …   2             28m ago
     │
     │ █                         6adc455   feature/payments-retry-with-a…   origin/feature/payments-retry…   PR #123  wip(payments): retry policy …   1             4h ago
     │ │
@@ -322,7 +322,7 @@
     │
     █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                                                              ·······        ·······
     │ │
-    │ █                         0166f71   PR #23 ✓  feat(i18n): add French                                                                          ·······        ·······
+    │ █                         0166f71   PR #23  feat(i18n): add French                                                                            ·······        ·······
     │ │
     │ █─╮                       5245790  Merge branch 'main' into feature/i18n                                                                      ·······        ·······
     │ │ │
@@ -332,7 +332,7 @@
     │ │ │
     █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                                                             ·······        ·······
     │ │ │ │
-    │ │ │ █                     9d1b361   PR #9 ✓  fix(search): ignore accents                                                                      ·······        ·······
+    │ │ │ █                     9d1b361   PR #9  fix(search): ignore accents                                                                        ·······        ·······
     │ │ │ │
     │ │ │ █                     cce93f9  feat(search): search as you type                                                                           ·······        ·······
     │ │ │ │
