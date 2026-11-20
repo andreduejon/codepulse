@@ -55,6 +55,7 @@ export function useDataLoader({
   onFastForward,
 }: UseDataLoaderOptions): UseDataLoaderResult {
   const initialRepoPath = repoPath();
+  let initialBranchShown = false;
   const service = createGitDataService({
     git,
     repoPath,
@@ -73,8 +74,12 @@ export function useDataLoader({
     actions.setFetching(false);
     untrack(() => {
       const stickyHash = state.selectedCommit()?.hash;
-      // The configured branch is the graph's branch view, so paging, refreshes and path filters keep to it too.
-      if (path === initialRepoPath && initialBranch) actions.setViewingBranch(initialBranch);
+      // The configured branch is the graph's branch view, so paging, refreshes and path filters keep to it too. At
+      // startup: a switch to a repository sets its own (repo-session.ts).
+      if (path === initialRepoPath && initialBranch && !initialBranchShown) {
+        initialBranchShown = true;
+        actions.setViewingBranch(initialBranch);
+      }
       void loadData(undefined, stickyHash);
     });
     // Load initial fetch time
