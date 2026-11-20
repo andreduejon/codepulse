@@ -206,8 +206,8 @@ export function createGitHubService(ports: GitHubServicePorts) {
 
   /**
    * The open pull requests and the ones merged or closed most recently, read with each fetch of the window (two
-   * requests side by side). A list that fails keeps its last one and only goes to Debug: the runs say what is wrong with
-   * the token or the host.
+   * requests side by side). A list that fails keeps its last one and only goes to Debug (the API port says why, once):
+   * the runs say what is wrong with the token or the host.
    */
   async function fetchPullRequests(signal?: AbortSignal): Promise<void> {
     const epoch = lifecycle().getEpoch();
@@ -221,7 +221,6 @@ export function createGitHubService(ports: GitHubServicePorts) {
       ports.api.fetchClosedPullRequests(repo, token, signal).catch(() => null),
     ]);
     if (signal?.aborted || !lifecycle().isCurrent(epoch, repoPath)) return;
-    for (const result of [open, closed]) if (result?.error) debugError("GitHub", `Pull requests: ${result.error}`);
     if (open && !open.error) {
       pullRequests = open.data;
       pullsRead = true;

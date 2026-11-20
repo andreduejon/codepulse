@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from "bun:test";
 import {
   fetchCIDataForSHAs,
+  fetchClosedPullRequests,
   fetchJobAnnotations,
   fetchJobLog,
   fetchOpenPullRequests,
@@ -1249,6 +1250,18 @@ describe("fetchOpenPullRequests", () => {
         closedAt: null,
       },
       expect.objectContaining({ number: 7, draft: true, author: "" }),
+    ]);
+  });
+
+  it("a 404 goes to Debug once, naming the list and what it usually means", async () => {
+    clearDebugEvents();
+    mockFetch(mock(async () => new Response(null, { status: 404 })));
+    expect((await fetchClosedPullRequests(TEST_REPO, TEST_TOKEN)).error).toBe(GITHUB_BANNER.fetchFailed);
+    const messages = getDebugEvents()
+      .filter(event => event.source === "GitHub" && event.status === "error")
+      .map(event => event.message);
+    expect(messages).toEqual([
+      "Closed pull requests HTTP 404: the token can't see the repository, or lacks Pull requests: Read",
     ]);
   });
 

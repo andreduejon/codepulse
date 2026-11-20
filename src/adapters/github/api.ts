@@ -1,4 +1,4 @@
-import { bannerOrFallback, debugError } from "../../core/banner";
+import { bannerOrFallback, debugError, isBanner } from "../../core/banner";
 import { GITHUB_BANNER } from "../../core/github/banner";
 import type {
   GitHubAnnotation,
@@ -683,10 +683,14 @@ export function mapApiPullRequest(raw: unknown): GitHubPullRequest | null {
   };
 }
 
-/** Pull requests by a list query, up to `maxPages` pages; on a failure, its banner and what was read before it. */
+/**
+ * Pull requests by a list query, up to `maxPages` pages; on a failure, its banner and what was read before it. Each
+ * failure goes to Debug once, naming the list (`what`).
+ */
 async function fetchPullRequestPages(
   repo: GitHubRepo,
   token: string,
+  what: string,
   query: string,
   maxPages: number,
   signal?: AbortSignal,
@@ -700,26 +704,36 @@ async function fetchPullRequestPages(
       if (!res.ok)
         return {
           data: pulls,
-          error: debugGitHubHttp(res, "fetch", `Pull requests HTTP ${res.status}`),
+          error: debugGitHubHttp(
+            res,
+            "fetch",
+            // GitHub answers 404 for a private repository the token can't see, as for one that doesn't exist.
+            `${what} HTTP ${res.status}${res.status === 404 ? ": the token can't see the repository, or lacks Pull requests: Read" : ""}`,
+          ),
           ...httpFailure(res),
         };
       const json = (await res.json()) as unknown;
-      if (!Array.isArray(json)) return { data: pulls, error: GITHUB_BANNER.fetchFailed };
+      if (!Array.isArray(json)) {
+        debugError("GitHub", `${what}: not a list`);
+        return { data: pulls, error: GITHUB_BANNER.fetchFailed };
+      }
       pulls.push(...json.flatMap(raw => mapApiPullRequest(raw) ?? []));
       url = nextGithubLink(res.headers.get("link"), origin);
     }
-    if (url && maxPages > 1) debugError("GitHub", `Pull requests truncated after ${maxPages} pages`);
+    if (url && maxPages > 1) debugError("GitHub", `${what} truncated after ${maxPages} pages`);
     return { data: pulls, error: null };
   } catch (err) {
     if (signal?.aborted) throw err;
-    return { data: pulls, error: bannerOrFallback(err, GITHUB_BANNER.fetchFailed, "GitHub") };
+    const message = err instanceof Error ? err.message : String(err);
+    debugError("GitHub", `${what}: ${message}`);
+    return { data: pulls, error: isBanner(message) ? message : GITHUB_BANNER.fetchFailed };
   }
 }
 
 /** The repository's open pull requests, newest first. */
 export const fetchOpenPullRequests = (repo: GitHubRepo, token: string, signal?: AbortSignal) =>
-  fetchPullRequestPages(repo, token, "state=open", MAX_PULL_PAGES, signal);
+  fetchPullRequestPages(repo, token, "Open pull requests", "state=open", MAX_PULL_PAGES, signal);
 
 /** The 100 pull requests merged or closed most recently (by their last update): what the Dashboard's window shows. */
 export const fetchClosedPullRequests = (repo: GitHubRepo, token: string, signal?: AbortSignal) =>
-  fetchPullRequestPages(repo, token, "state=closed&sort=updated&direction=desc", 1, signal);
+  fetchPullRequestPages(repo, token, "Closed pull requests", "state=closed&sort=updated&direction=desc", 1, signal);
