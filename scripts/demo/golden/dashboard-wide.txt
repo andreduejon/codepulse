@@ -277,6 +277,6 @@
   │   customer-notification-service   shop   shop-web                                                                 main   86 commits
   │
 
-                                                                     tab Jenkins · enter reload · esc back · ←/→ switch tab · ↑/↓ navigate       ✓ passed  ● running  ✗ failed  – skipped  ○ cancelled
+                                                          tab Jenkins · enter collapse · o open · esc back · ←/→ switch tab · ↑/↓ navigate       ✓ passed  ● running  ✗ failed  – skipped  ○ cancelled
 
 

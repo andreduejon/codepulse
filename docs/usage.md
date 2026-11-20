@@ -98,8 +98,8 @@ build's Git ref), else the branch the commit was made on.
 - While the Dashboard is shown, each provider fetches and auto refreshes as on its own tab. `f` and `:reload` fetch
   every provider. A failed fetch or scan shows in the message box: several share one box, with a line each. A provider
   that is turned off has no events there, also none it cached before.
-- Each provider has a badge in its color where the graph's modes are. A click on it, or `:hide NAME` and
-  `:show NAME`, hides or shows that provider's events, and the count reads `26 / 30 events`. `:show` shows them all.
+- Each provider has a badge in its color where the graph's modes are. A click on it, or `:hide <provider>` and
+  `:show <provider>` (`git`, `github`, `jenkins`, `openshift`, `snyk`), hides or shows that provider's events, and the count reads `26 / 30 events`. `:show` shows them all.
   The names are `git`, `github`, `jenkins`, `openshift` and `snyk`.
 - A scan shows its total and every severity in order (`1 critical · 3 high · 0 medium · 0 low`), each count in its
   severity's color. A partial scan ends in Snyk's `?`.
@@ -125,7 +125,7 @@ Theme controls and custom configuration are in the [theme guide](themes.md).
 | `:debug` | Toggle debug dialog |
 | `:fetch` | Fetch Git and the open provider |
 | `:help` | Open help dialog |
-| `:hide NAME` | Hide a provider's events on the dashboard |
+| `:hide <provider>` | Hide a provider's events on the dashboard |
 | `:menu` | Open menu dialog |
 | `:path` | Switch to path mode |
 | `:pull` | Fetch and fast-forward |
@@ -134,7 +134,7 @@ Theme controls and custom configuration are in the [theme guide](themes.md).
 | `:reload` | Reload repository data from disk |
 | `:repo` | Open menu dialog on Repository tab |
 | `:search` | Switch to search mode |
-| `:show [NAME]` | Show a provider's events on the dashboard, or all |
+| `:show <provider>` | Show a provider's events on the dashboard. Without a provider, all of them |
 | `:switch` | Open repository switcher |
 | `:theme` | Open theme dialog |
 

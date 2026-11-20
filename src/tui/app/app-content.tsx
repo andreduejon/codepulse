@@ -183,8 +183,16 @@ export function AppContent(props: Readonly<AppContentProps>) {
   } = session;
 
   // ── Dashboard ─────────────────────────────────────────────────────────────
-  /** One for both layouts and both views: a resize keeps open folders, runs and namespaces. */
+  /** One for both layouts: a resize keeps open folders, runs and namespaces. */
   const detailMemory = createDetailMemory();
+  /**
+   * The graph's details have their own, new for each "Show in" from the Dashboard: the jump lands on the event's row
+   * again, even when it was shown there before and the cursor moved since.
+   */
+  const graphDetailMemory = createMemo(() => {
+    state.graphDetailTarget();
+    return createDetailMemory();
+  });
   const dashboardController = useDashboardController({
     state,
     actions,
@@ -312,7 +320,9 @@ export function AppContent(props: Readonly<AppContentProps>) {
 
   /** Provider data and dialogs for the detail panel and the compact detail dialog. */
   const providerDetailProps = {
-    memory: detailMemory,
+    get memory() {
+      return graphDetailMemory();
+    },
     providers: providers.details,
     get tabNotice() {
       return tabNotice();

@@ -101,6 +101,19 @@ export const GOLDEN_PLAYS: readonly GoldenPlay[] = [
     ],
   },
   {
+    name: "github-show-in-again",
+    covers: "Show in the same event a second time, after the cursor moved: back on its row (colors name the cursor's)",
+    args: [
+      ...WIDE,
+      "--colors",
+      "--play",
+      [
+        'click:Dashboard wait:"PR #125 opened" click:"PR #125 opened" enter wait:"total pull requests" up up shot:moved',
+        'click:Dashboard wait:"PR #125 opened" click:"PR #125 opened" enter wait:"total pull requests" shot:again',
+      ].join("\n"),
+    ],
+  },
+  {
     name: "github-show-in",
     covers:
       "Show in GitHub back on the commit and view the graph was left on: the event's tab, not the one left open " +

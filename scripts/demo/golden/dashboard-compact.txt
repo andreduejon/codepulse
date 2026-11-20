@@ -42,7 +42,7 @@
   │   customer-notification-service   shop                                                                                                        52 events
   │
 
-                                                                                  tab Git · enter view log · o open · esc back · ←/→ switch tab · ↑/↓ navigate
+                                                                                  tab Git · enter collapse · o open · esc back · ←/→ switch tab · ↑/↓ navigate
 
 
 === shot 2: closed (160x45) ===
@@ -105,14 +105,14 @@
     │ █                         6adc455   fe     ──────────────────────────────────────────────────────────────     s): retry…   1             4h ago
     │ │                                          Reload commit
     █─╯                         64ddc8a  fea     total workflow runs                                          2     ct long e…   1             51m ago
-    │                                            ├─ ▾ Deploy preview #78                             just now ●
-    █                           917f7b3  per     │  └─ deploy                                                 ●                 ·······        ·······
-    │                                            └─ ▾ CI #814                                        just now ●
-    █─╮                         1bb16fb  Mer        └─ test                                                   ●                 ·······        ·······
-    │ │                                                ├─ Set up job                                          ✓
-    │ █                         0166f71   PR           ├─ Checkout                                            ✓                 ·······        ·······
-    │ │                                                ├─ Install dependencies                                ●
-    │ █─╮                       5245790  Mer           └─ Run tests                                           ●                 ·······        ·······
+    │                                            ├─ ▸ Deploy preview #78                             just now ●
+    █                           917f7b3  per     └─ ▾ CI #814                                        just now ●                 ·······        ·······
+    │                                               └─ test                                                   ●
+    █─╮                         1bb16fb  Mer           ├─ Set up job                                          ✓                 ·······        ·······
+    │ │                                                ├─ Checkout                                            ✓
+    │ █                         0166f71   PR           ├─ Install dependencies                                ●                 ·······        ·······
+    │ │                                                └─ Run tests                                           ●
+    │ █─╮                       5245790  Mer                                                                                    ·······        ·······
     │ │ │
     │ █ │                       484821c  fea                                                                                    ·······        ·······
     │ │ │
@@ -132,10 +132,10 @@
 
   │                                                       ✓ passed  ● running  ✗ failed  – skipped  ○ cancelled
   │   Dashboard   Git   GitHub   Jenkins   O                                                                              normal   search   path   ancestry
-  │                                                                enter reload · ←/→ switch tab · ↑/↓ navigate
+  │                                                     enter collapse · o open · ←/→ switch tab · ↑/↓ navigate
   │   customer-notification-service   shop                                                                                                main   86 commits
   │
 
-                                                                                         tab Jenkins · enter reload · esc back · ←/→ switch tab · ↑/↓ navigate
+                                                                              tab Jenkins · enter collapse · o open · esc back · ←/→ switch tab · ↑/↓ navigate
 
 
