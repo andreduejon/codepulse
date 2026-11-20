@@ -119,6 +119,22 @@ export interface GitHubCommitData {
   runs: GitHubWorkflowRun[];
 }
 
+/** An open pull request, as the graph's chip and the Pull requests tab show it. */
+export interface GitHubPullRequest {
+  number: number;
+  title: string;
+  url: string;
+  draft: boolean;
+  /** Its author's login. */
+  author: string;
+  /** The commit its branch points at now: the one the graph marks. */
+  headSha: string;
+  headRef: string;
+  /** The branch it would merge into. */
+  baseRef: string;
+  updatedAt: string;
+}
+
 /** GitHub repository coordinates, parsed from the remote URL. */
 export interface GitHubRepo {
   owner: string;

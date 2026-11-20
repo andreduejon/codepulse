@@ -182,6 +182,64 @@ const GATEWAY_FAILURE: TestFailure = {
   ms: 30012.4,
 };
 
+/** An open pull request of the shop: its branch's tip (by commit key) and when it was last updated. */
+export interface FakePull {
+  number: number;
+  title: string;
+  head: string;
+  headRef: string;
+  baseRef: string;
+  author: string;
+  draft?: boolean;
+  updatedAgoMin: number;
+}
+
+/**
+ * The shop's open pull requests: the payments branch into main, dev into main and into the release branch (two on one
+ * commit), and a draft. The graph marks each branch's tip, its Pull requests tab lists them.
+ */
+export function githubPulls(): FakePull[] {
+  return [
+    {
+      number: 123,
+      title: "feat(payments): retry failed payments with exponential backoff",
+      head: "retry",
+      headRef: FEATURE_BRANCH,
+      baseRef: "main",
+      author: "mei-chen",
+      updatedAgoMin: 40,
+    },
+    {
+      number: 124,
+      title: "release: dev into main",
+      head: "metrics",
+      headRef: "dev",
+      baseRef: "main",
+      author: "ana-lima",
+      updatedAgoMin: 5,
+    },
+    {
+      number: 125,
+      title: "release: dev into release/1.x",
+      head: "metrics",
+      headRef: "dev",
+      baseRef: "release/1.x",
+      author: "ana-lima",
+      updatedAgoMin: 5,
+    },
+    {
+      number: 119,
+      title: "feat(theme): dark mode",
+      head: "dark3",
+      headRef: "feature/dark-mode",
+      baseRef: "dev",
+      author: "lena-fischer",
+      draft: true,
+      updatedAgoMin: 26 * 60,
+    },
+  ];
+}
+
 export function githubRuns(state: DemoState, phase: Phase): FakeRun[] {
   const s = state.shas;
   const w = state.webShas;

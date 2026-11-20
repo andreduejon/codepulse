@@ -23,6 +23,8 @@ interface TabAvailabilityInput {
    * info tab before the request completes.
    */
   providerLoading?: boolean;
+  /** A provider tab's label for a commit: null hides a tab only some commits have (GitHub's Pull requests). */
+  tabLabel?: (tab: string, sha: string) => string | null | undefined;
 }
 
 /** Returns the initial detail tab for normal (non-jump) navigation. */
@@ -62,8 +64,10 @@ export function getAvailableTabs(input: TabAvailabilityInput): DetailTab[] {
   const tabs: DetailTab[] = [];
 
   if (activeProviderView && providers.isProvider(activeProviderView)) {
-    // Its own tab, and the ones it adds (Snyk's Dependencies).
-    for (const tab of providers.tabsOf(activeProviderView)) tabs.push(tab.id);
+    // Its own tab, and the ones it adds (Snyk's Dependencies) that this commit has.
+    providers.tabsOf(activeProviderView).forEach((tab, index) => {
+      if (index === 0 || input.tabLabel?.(tab.id, commit?.hash ?? "") !== null) tabs.push(tab.id);
+    });
   } else if (commitDetail?.files.length) {
     tabs.push("files");
   }

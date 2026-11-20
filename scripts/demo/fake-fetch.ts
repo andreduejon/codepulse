@@ -18,6 +18,7 @@ import {
   type FakeRun,
   FIXED_NOW,
   followLine,
+  githubPulls,
   githubRuns,
   githubTimes,
   JENKINS_ROOT,
@@ -295,6 +296,21 @@ function github(url: URL, method: string, body: string): Response {
     const run = repoRuns.find(item => item.id === Number(runJobs[1]));
     return run ? json({ total_count: run.jobs.length, jobs: run.jobs.map(restJob) }) : notFound();
   }
+  if (path === "/pulls")
+    return json(
+      repo !== "shop" || isEmpty("github")
+        ? []
+        : githubPulls().map(pull => ({
+            number: pull.number,
+            title: pull.title,
+            html_url: `https://github.com/demo/${repo}/pull/${pull.number}`,
+            draft: pull.draft === true,
+            user: { login: pull.author },
+            head: { sha: state.shas[pull.head], ref: pull.headRef },
+            base: { ref: pull.baseRef },
+            updated_at: new Date(started - pull.updatedAgoMin * 60_000).toISOString(),
+          })),
+    );
   const allJobs = repoRuns.flatMap(run => run.jobs);
   const annotations = path.match(/^\/check-runs\/(\d+)\/annotations$/);
   if (annotations) return json(allJobs.find(job => job.id === Number(annotations[1]))?.annotations ?? []);

@@ -28,6 +28,8 @@ interface UseDetailLoaderOptions {
    * how the Files tab is disabled when a commit has no changed files.
    */
   getCommitData?: (sha: string) => unknown;
+  /** A provider tab's label for a commit: null hides a tab only some commits have (GitHub's Pull requests). */
+  tabLabel?: (tab: string, sha: string) => string | null | undefined;
   /**
    * Returns true while the initial CI fetch is in-flight.  Passed to
    * getAvailableTabs so the Actions tab is not switched away from prematurely
@@ -58,6 +60,7 @@ export function useDetailLoader({
   getIsJumpNavigation,
   detailNavRef,
   getCommitData,
+  tabLabel,
   getProviderLoading,
 }: UseDetailLoaderOptions): void {
   const details = createCommitDetailService({
@@ -118,6 +121,7 @@ export function useDetailLoader({
         stashByParent: state.stashByParent(),
         activeProviderView: provider,
         getCommitData,
+        tabLabel,
       });
       if (!available.includes(tab)) {
         setGraphDetail.setDetailActiveTab(getDefaultDetailTab(commit, provider, state.providers.set));
@@ -159,6 +163,7 @@ export function useDetailLoader({
       activeProviderView: state.activeProviderView(),
       getCommitData,
       providerLoading: getProviderLoading?.(),
+      tabLabel,
     });
     if (available.length > 0) {
       setGraphDetail.setDetailActiveTab(available[0]);

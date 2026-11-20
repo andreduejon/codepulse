@@ -138,7 +138,7 @@ export const OPENSHIFT_GRAPH_COLUMNS: ProviderGraphColumns = {
     );
   },
   // By name only: whether it is ready, rolling out or failing shows in the counts and the details.
-  refs: badge => badge?.namespaces?.map(marker => marker.namespace) ?? [],
+  refs: (_sha, badge) => badge?.namespaces?.map(marker => ({ name: marker.namespace })) ?? [],
   // Namespaces that run a commit the graph does not show (older than the loaded history, or filtered out), named at
   // the end of the graph since they have no row to carry the badge.
   unseen: (shown, badges) => {

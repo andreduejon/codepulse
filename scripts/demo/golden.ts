@@ -56,6 +56,15 @@ export const GOLDEN_PLAYS: readonly GoldenPlay[] = [
     ],
   },
   {
+    name: "github-pulls",
+    covers: "GitHub's PR chips on the commits open pull requests' branches point at, and a commit's Pull requests tab",
+    args: [
+      ...WIDE,
+      "--play",
+      'click:GitHub wait:"PR #124" shot:chips click:bf08113 click:"Pull requests" wait:"total pull requests" shot:pulls',
+    ],
+  },
+  {
     name: "providers",
     covers: "each provider tab with its details, OpenShift's Events tab, a CI log, an OpenShift resource log, Snyk",
     args: [

@@ -152,7 +152,12 @@ export function useDashboardController(opts: {
   /** The selected event's tabs: its provider's own (Snyk's two), then Info, its commit as the graph shows it. */
   const dashboardTabsFor = (event: DashboardEvent | null): DashboardDetailTab[] => {
     if (!event) return [];
-    return [...state.providers.set.tabsOf(event.source), { id: "info", label: "Info" }];
+    // A tab only some commits have (GitHub's Pull requests) when this one has it, with its label for it.
+    const own = state.providers.set.tabsOf(event.source).flatMap(tab => {
+      const label = providers.details.label(tab.id, event.sha);
+      return label === null ? [] : [{ ...tab, label: label ?? tab.label }];
+    });
+    return [...own, { id: "info", label: "Info" }];
   };
   /** The tab an event opens on: the one it names (an OpenShift warning: Events), else its provider's first. */
   const firstTabOf = (event: DashboardEvent | null): DetailTab | null => {

@@ -86,6 +86,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
         activeProviderView: providerView,
         getCommitData: providerSource()?.getCommitData,
         providerLoading: providerSource()?.status?.kind === "loading",
+        tabLabel: props.providers?.label,
       }),
     );
     if (isUncommitted) {
@@ -127,12 +128,17 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
               disabled: cd ? !available.has("files") : false,
             },
           ]),
-      // The tabs its provider adds after its own (Snyk's Dependencies), when the commit has something for them.
+      // The tabs its provider adds after its own (Snyk's Dependencies), when the commit has something for them, with
+      // their label for it (`Pull requests (2)`).
       ...state.providers.set
         .tabsOf(providerView)
         .slice(1)
         .filter(added => available.has(added.id))
-        .map(added => ({ ...added, disabled: false })),
+        .map(added => ({
+          ...added,
+          label: props.providers?.label(added.id, commitHash) ?? added.label,
+          disabled: false,
+        })),
       ...(available.has("stashes")
         ? [
             {

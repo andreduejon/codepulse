@@ -242,6 +242,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     onFastForward: showFastForward,
     navRef: detailNavRef,
     commitData: providers.activeCommitData,
+    tabLabel: providers.details.label,
     beforeSelect: hash => {
       reanchorIfOutsideChain(hash);
       commandBar.leave();
@@ -302,6 +303,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     onSearchExecute: applySearch,
     onClearAncestry: clearAnchor,
     getCommitData: providers.activeCommitData,
+    tabLabel: providers.details.label,
     getProviderLoading: () => state.providerStatus().kind === "loading",
     onSwitchGroupRepo: switchGroupRepo,
     onDashboardKey: handleDashboardKey,

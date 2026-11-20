@@ -3,6 +3,7 @@ import {
   fetchCIDataForSHAs,
   fetchJobAnnotations,
   fetchJobLog,
+  fetchOpenPullRequests,
   fetchRunJobs,
   getGitHubToken,
   isGitHubJobsFieldSchemaError,
@@ -1190,5 +1191,69 @@ describe("fetchJobAnnotations", () => {
     expect(urls).toHaveLength(2);
     expect(annotations).toHaveLength(101);
     expect(annotations?.at(-1)).toEqual({ level: "failure", path: "b.ts", line: 9, message: "boom" });
+  });
+});
+
+// ── fetchOpenPullRequests ─────────────────────────────────────────────────
+
+describe("fetchOpenPullRequests", () => {
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  const apiPull = (overrides: Record<string, unknown> = {}) => ({
+    number: 123,
+    title: "feat: retry",
+    html_url: "https://github.com/owner/repo/pull/123",
+    draft: false,
+    user: { login: "mei" },
+    head: { sha: "A".repeat(40), ref: "feature/retry" },
+    base: { ref: "main" },
+    updated_at: "2026-03-02T09:00:00Z",
+    ...overrides,
+  });
+
+  it("reads every page of open pull requests, and leaves out one it cannot read", async () => {
+    const urls: string[] = [];
+    mockFetch(
+      mock(async (input: RequestInfo | URL) => {
+        urls.push(String(input));
+        if (urls.length === 1)
+          return new Response(
+            JSON.stringify([apiPull(), apiPull({ number: "x" }), apiPull({ head: { sha: "nope" } })]),
+            {
+              status: 200,
+              headers: { link: '<https://api.github.com/repos/owner/repo/pulls?state=open&page=2>; rel="next"' },
+            },
+          );
+        return new Response(JSON.stringify([apiPull({ number: 7, draft: true, user: null })]), { status: 200 });
+      }),
+    );
+    const { data, error } = await fetchOpenPullRequests(TEST_REPO, TEST_TOKEN);
+    expect(error).toBeNull();
+    expect(urls[0]).toContain("/pulls?state=open&per_page=100");
+    expect(data).toEqual([
+      {
+        number: 123,
+        title: "feat: retry",
+        url: "https://github.com/owner/repo/pull/123",
+        draft: false,
+        author: "mei",
+        headSha: "a".repeat(40),
+        headRef: "feature/retry",
+        baseRef: "main",
+        updatedAt: "2026-03-02T09:00:00Z",
+      },
+      expect.objectContaining({ number: 7, draft: true, author: "" }),
+    ]);
+  });
+
+  it("says why a list failed, an expired token as such", async () => {
+    mockFetch(mock(async () => new Response(null, { status: 401 })));
+    expect(await fetchOpenPullRequests(TEST_REPO, TEST_TOKEN)).toEqual({
+      data: [],
+      error: GITHUB_BANNER.tokenExpired,
+      failure: "auth",
+    });
   });
 });

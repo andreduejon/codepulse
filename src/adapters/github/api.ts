@@ -5,7 +5,9 @@ import type {
   GitHubApiJob,
   GitHubJob,
   GitHubJobFetchResult,
+  GitHubPullRequest,
   GitHubRepo,
+  GitHubResult,
   GitHubStep,
   GitHubWorkflowRun,
   GraphQLFetchResult,
@@ -640,5 +642,67 @@ export async function fetchJobLog(
   } catch (err) {
     if (signal?.aborted) throw err;
     throw new Error(bannerOrFallback(err, GITHUB_BANNER.logFailed, "GitHub"));
+  }
+}
+
+/** The most pages of open pull requests read (100 each). */
+const MAX_PULL_PAGES = 5;
+
+/** One pull request as the API lists it, or null when a field codepulse needs is missing or of another type. */
+export function mapApiPullRequest(raw: unknown): GitHubPullRequest | null {
+  const item = raw as Record<string, unknown> | null;
+  const head = item?.head as Record<string, unknown> | undefined;
+  const base = item?.base as Record<string, unknown> | undefined;
+  const user = item?.user as Record<string, unknown> | undefined;
+  const text = (value: unknown) => (typeof value === "string" ? value : null);
+  const number = item?.number;
+  const title = text(item?.title);
+  const url = text(item?.html_url);
+  const headSha = text(head?.sha);
+  const headRef = text(head?.ref);
+  const baseRef = text(base?.ref);
+  if (typeof number !== "number" || title === null || url === null || headRef === null || baseRef === null) return null;
+  if (!headSha || !/^[0-9a-f]{40}$/i.test(headSha)) return null;
+  return {
+    number,
+    title,
+    url,
+    draft: item?.draft === true,
+    author: text(user?.login) ?? "",
+    headSha: headSha.toLowerCase(),
+    headRef,
+    baseRef,
+    updatedAt: text(item?.updated_at) ?? "",
+  };
+}
+
+/** The repository's open pull requests, newest first; on a failure, its banner and what was read before it. */
+export async function fetchOpenPullRequests(
+  repo: GitHubRepo,
+  token: string,
+  signal?: AbortSignal,
+): Promise<GitHubResult<GitHubPullRequest[]>> {
+  const origin = apiBase(repo);
+  let url: string | null = `${origin}/pulls?state=open&per_page=100`;
+  const pulls: GitHubPullRequest[] = [];
+  try {
+    for (let page = 0; page < MAX_PULL_PAGES && url; page++) {
+      const res = await fetchWithRetry(url, { headers: createHeaders(token), signal });
+      if (!res.ok)
+        return {
+          data: pulls,
+          error: debugGitHubHttp(res, "fetch", `Pull requests HTTP ${res.status}`),
+          ...httpFailure(res),
+        };
+      const json = (await res.json()) as unknown;
+      if (!Array.isArray(json)) return { data: pulls, error: GITHUB_BANNER.fetchFailed };
+      pulls.push(...json.flatMap(raw => mapApiPullRequest(raw) ?? []));
+      url = nextGithubLink(res.headers.get("link"), origin);
+    }
+    if (url) debugError("GitHub", `Open pull requests truncated after ${MAX_PULL_PAGES} pages`);
+    return { data: pulls, error: null };
+  } catch (err) {
+    if (signal?.aborted) throw err;
+    return { data: pulls, error: bannerOrFallback(err, GITHUB_BANNER.fetchFailed, "GitHub") };
   }
 }

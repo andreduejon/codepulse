@@ -16,7 +16,9 @@ import type {
   GitHubJob,
   GitHubJobFetchResult,
   GitHubProviderConfig,
+  GitHubPullRequest,
   GitHubRepo,
+  GitHubResult,
   GitHubWorkflowRun,
   GraphQLFetchResult,
 } from "./types";
@@ -40,6 +42,12 @@ export interface GitHubApiPort {
     signal?: AbortSignal,
   ) => Promise<GitHubAnnotation[] | null>;
   fetchJobLog: (repo: GitHubRepo, token: string, jobId: number, signal?: AbortSignal) => Promise<string>;
+  /** The repository's open pull requests. */
+  fetchOpenPullRequests: (
+    repo: GitHubRepo,
+    token: string,
+    signal?: AbortSignal,
+  ) => Promise<GitHubResult<GitHubPullRequest[]>>;
 }
 
 /** The cache: finished runs and their jobs per commit, and job logs. */
@@ -109,6 +117,10 @@ export function createGitHubService(ports: GitHubServicePorts) {
   const queriedSHAs = new Set<string>();
   /** After a 401: no automatic requests until a Reload. */
   let authFrozen = false;
+  /** The open pull requests, as the last list read them: kept when a list fails. */
+  let pullRequests: GitHubPullRequest[] = [];
+  /** Whether a list was read for this repository: the first fetch reads one, refreshes and Reloads read it again. */
+  let pullsRead = false;
   /** Skip unsupported WorkflowRun.jobs after the first retry. */
   let jobsUnsupported = false;
 
@@ -183,6 +195,28 @@ export function createGitHubService(ports: GitHubServicePorts) {
     publishBadges();
     await persistTerminalRuns(repoPath, shas, epoch);
     return { firstError, failure: failed?.failure, failedSHAs };
+  }
+
+  /**
+   * The open pull requests, read with each fetch of the window. One that fails keeps the last list and only goes to
+   * Debug: the runs say what is wrong with the token or the host.
+   */
+  async function fetchPullRequests(signal?: AbortSignal): Promise<void> {
+    const epoch = lifecycle().getEpoch();
+    const repoPath = app.repoPath();
+    const repo = ports.repo();
+    const token = ports.token(ports.config().tokenEnvVar);
+    if (!repo || !token) return;
+    // Aborted with the fetch it runs beside: nothing to say.
+    const result = await ports.api.fetchOpenPullRequests(repo, token, signal).catch(() => null);
+    if (!result || signal?.aborted || !lifecycle().isCurrent(epoch, repoPath)) return;
+    if (result.error) {
+      debugError("GitHub", `Pull requests: ${result.error}`);
+      return;
+    }
+    pullRequests = result.data;
+    pullsRead = true;
+    ports.onDataChange();
   }
 
   /**
@@ -274,6 +308,9 @@ export function createGitHubService(ports: GitHubServicePorts) {
     // An explicit retry asks again for every target, also when a fetch it waited behind just marked them queried.
     const unqueried = retry ? allSHAs : allSHAs.filter(sha => !queriedSHAs.has(sha));
     lifecycle().noteFetchStarted();
+    // The pull requests on the first fetch and on a Reload (a refresh reads them again too), beside the runs: they
+    // never hold up what the runs say.
+    if (!pullsRead || retry) void fetchPullRequests(signal);
     if (unqueried.length === 0) return;
     if (showStatus) app.setStatus(providerLoading());
     try {
@@ -308,6 +345,7 @@ export function createGitHubService(ports: GitHubServicePorts) {
     const shas = [...new Set([...runningSHAs, ...collectTopSHAs(app.graphRows(), ports.config().fetchDepth)])];
     if (shas.length === 0) return;
     try {
+      void fetchPullRequests(signal);
       const { firstError, failure } = await fetchForSHAs(shas, signal);
       if (signal?.aborted || !lifecycle().isCurrent(epoch, repoPath)) return;
       rememberAuthError(failure);
@@ -329,6 +367,8 @@ export function createGitHubService(ports: GitHubServicePorts) {
     jobsCache.clear();
     jobsRunVersion.clear();
     queriedSHAs.clear();
+    pullRequests = [];
+    pullsRead = false;
     authFrozen = false;
     jobsUnsupported = false;
     ports.onDataChange();
@@ -457,6 +497,9 @@ export function createGitHubService(ports: GitHubServicePorts) {
   return {
     /** A commit's runs, or null before any were read. Not reactive: the adapter makes it so. */
     getCommitData: (sha: string) => commitDataCache.get(sha) ?? null,
+    /** The open pull requests whose branch points at this commit, by number. Not reactive: the adapter makes it so. */
+    pullRequestsAt: (sha: string): GitHubPullRequest[] =>
+      pullRequests.filter(pr => pr.headSha.toLowerCase() === sha.toLowerCase()).sort((a, b) => a.number - b.number),
     /** Every run held for the open repository. Not reactive: the adapter makes it so. */
     heldEntries: () => [...commitDataCache.values()],
     queriedSHAs,

@@ -17,6 +17,7 @@ import type {
   GitHubCommitData,
   GitHubJobFetchResult,
   GitHubProviderConfig,
+  GitHubPullRequest,
   GitHubWorkflowRun,
 } from "../../../core/github/types";
 import { DEFAULT_GITHUB_CONFIG } from "../../../core/github/types";
@@ -33,6 +34,8 @@ export interface UseGitHubCIResult {
    * from here (the cache keeps only what ended). Reactive.
    */
   heldEntries: () => GitHubCommitData[];
+  /** The open pull requests whose branch points at this commit, by number. Reactive. */
+  pullRequestsAt: (sha: string) => GitHubPullRequest[];
   /**
    * Fetch jobs for a run on demand and cache them.
    * Returns the jobs once fetched (or from cache).
@@ -164,6 +167,10 @@ export function useGitHubCI(opts: {
     heldEntries: () => {
       dataVersion();
       return service.heldEntries();
+    },
+    pullRequestsAt: (sha: string) => {
+      dataVersion();
+      return service.pullRequestsAt(sha);
     },
     fetchJobsForRun: service.fetchJobsForRun,
     fetchJobLogForJob: service.fetchJobLogForJob,

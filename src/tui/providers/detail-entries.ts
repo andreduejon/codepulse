@@ -17,6 +17,8 @@ export interface ProviderDetails {
   legend: (tab: string, sha: string) => readonly LegendItem[] | null;
   /** A provider view's source: its data for a commit and its status. */
   source: (view: string) => ProviderDetailSource<unknown> | undefined;
+  /** A tab's label for a commit: null when the commit hasn't it (it is hidden), undefined for its provider's label. */
+  label: (tab: string, sha: string) => string | null | undefined;
 }
 
 /** No provider tabs: a detail view rendered without the app's providers (a component's own test). */
@@ -25,6 +27,7 @@ export const NO_PROVIDER_DETAILS: ProviderDetails = {
   render: () => null,
   legend: () => null,
   source: () => undefined,
+  label: () => undefined,
 };
 
 /** The provider tabs of these modules, each reading its provider's source (by provider view). */
@@ -49,5 +52,9 @@ export function providerDetails(
       return found?.entry ? found.entry.legend(found.source, sha) : null;
     },
     source: view => sources[view] as ProviderDetailSource<unknown> | undefined,
+    label: (tab, sha) => {
+      const found = find(tab);
+      return found?.entry ? found.entry.label(found.source, sha) : undefined;
+    },
   };
 }

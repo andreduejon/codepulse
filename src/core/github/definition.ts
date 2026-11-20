@@ -14,7 +14,7 @@ import { definedFields, type SettingsSection } from "../settings/provider-sectio
 import { GITHUB_BANNER } from "./banner";
 import { githubEvents } from "./events";
 import { normalizeGitHubHost } from "./host";
-import { GITHUB_ID } from "./id";
+import { GITHUB_ID, GITHUB_PULLS_TAB } from "./id";
 import type { GitHubAdapters } from "./service";
 import { DEFAULT_GITHUB_CONFIG } from "./types";
 
@@ -37,6 +37,8 @@ export const githubProvider: ProviderDefinition<GitHubAdapters, GitHubSettings> 
   displayName: "GitHub",
   detailLabel: "Actions",
   category: "ci",
+  // Only on a commit a pull request's branch points at, like Stashes: its label then counts them.
+  moreTabs: [{ id: GITHUB_PULLS_TAB, label: "Pull requests" }],
   messages: GITHUB_BANNER,
   storedEvents: async (adapters, app) =>
     githubEvents(app, await adapters.cache(DEFAULT_PROVIDER_CACHE_LIMIT).peekAll(app)),

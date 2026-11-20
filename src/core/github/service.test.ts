@@ -10,7 +10,7 @@ import type { ProviderStatus } from "../provider-status";
 import { GITHUB_BANNER } from "./banner";
 import type { GitHubCacheEntry } from "./merge";
 import { createGitHubService, type GitHubApiPort, type GitHubCachePort } from "./service";
-import type { GitHubJob, GitHubRepo, GitHubWorkflowRun } from "./types";
+import type { GitHubJob, GitHubPullRequest, GitHubRepo, GitHubWorkflowRun } from "./types";
 import { DEFAULT_GITHUB_CONFIG } from "./types";
 
 const SHA = "a".repeat(40);
@@ -69,6 +69,12 @@ function harness() {
     fetchRunJobs: mock(async () => ({ jobs: [job], error: null })),
     fetchJobAnnotations: mock(async () => []),
     fetchJobLog: mock(async () => "log"),
+    fetchOpenPullRequests: mock(
+      async (): Promise<{ data: GitHubPullRequest[]; error: string | null; failure?: ProviderFailure }> => ({
+        data: [],
+        error: null,
+      }),
+    ),
   };
   let lifecycle!: FetchLifecycle;
   const service = createGitHubService({
@@ -156,4 +162,45 @@ test("a finished run's jobs are read from GitHub once, then kept", async () => {
   expect(second.jobs.map(j => j.id)).toEqual([70]);
   expect(h.api.fetchRunJobs).toHaveBeenCalledTimes(1);
   expect(h.saved.get(SHA)?.jobs?.["7"]?.map(j => j.id)).toEqual([70]);
+});
+
+const pull = (overrides: Partial<GitHubPullRequest> = {}): GitHubPullRequest => ({
+  number: 123,
+  title: "feat(payments): retry failed payments",
+  url: "https://github.com/o/r/pull/123",
+  draft: false,
+  author: "demo-dev",
+  headSha: SHA,
+  headRef: "feature/payments-retry",
+  baseRef: "main",
+  updatedAt: "2026-03-02T09:00:00Z",
+  ...overrides,
+});
+
+test("each fetch reads the open pull requests: a commit has those whose branch points at it, by number", async () => {
+  const h = harness();
+  h.api.fetchOpenPullRequests.mockImplementation(async () => ({
+    data: [pull({ number: 130, headSha: SHA.toUpperCase() }), pull(), pull({ number: 99, headSha: "b".repeat(40) })],
+    error: null,
+  }));
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  expect(h.service.pullRequestsAt(SHA).map(pr => pr.number)).toEqual([123, 130]);
+  expect(h.service.pullRequestsAt("b".repeat(40)).map(pr => pr.number)).toEqual([99]);
+  // A refresh reads them again: one merged meanwhile is gone.
+  h.api.fetchOpenPullRequests.mockImplementation(async () => ({ data: [pull()], error: null }));
+  await h.lifecycle.fetchRefresh(undefined, true, true);
+  expect(h.service.pullRequestsAt(SHA).map(pr => pr.number)).toEqual([123]);
+});
+
+test("a pull request list that fails keeps the last one and leaves the runs alone", async () => {
+  const h = harness();
+  h.api.fetchOpenPullRequests.mockImplementation(async () => ({ data: [pull()], error: null }));
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  h.api.fetchOpenPullRequests.mockImplementation(async () => ({ data: [], error: GITHUB_BANNER.fetchFailed }));
+  await h.lifecycle.fetchRefresh(undefined, true, true);
+  expect(h.service.pullRequestsAt(SHA).map(pr => pr.number)).toEqual([123]);
+  expect(h.app.status.kind).toBe("idle");
+  // Another repository starts without them.
+  h.lifecycle.resetCaches();
+  expect(h.service.pullRequestsAt(SHA)).toEqual([]);
 });

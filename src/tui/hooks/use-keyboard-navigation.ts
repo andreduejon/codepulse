@@ -51,6 +51,8 @@ interface KeyboardNavigationOptions {
   onClearAncestry: () => void;
   /** CI data getter — forwarded to handleDetailKey for tab availability checks. */
   getCommitData?: (sha: string) => unknown;
+  /** A provider tab's label for a commit: null hides a tab only some commits have (GitHub's Pull requests). */
+  tabLabel?: (tab: string, sha: string) => string | null | undefined;
   /** Returns true while the initial CI fetch is in-flight. */
   getProviderLoading?: () => boolean;
   onSwitchGroupRepo?: (direction: 1 | -1) => void;
@@ -106,6 +108,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions) {
     onSearchExecute,
     onClearAncestry,
     getCommitData,
+    tabLabel,
     getProviderLoading,
     onSwitchGroupRepo,
     onDashboardKey,
@@ -252,6 +255,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions) {
         getDetailScrollboxRef,
         detailNavRef,
         getCommitData,
+        tabLabel,
         getProviderLoading,
       })
     )

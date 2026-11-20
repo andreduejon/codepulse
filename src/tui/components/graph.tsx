@@ -378,8 +378,8 @@ function GraphLine(
   const visibleRefs = createMemo((): RowBadge[] => {
     const allRefs = commit().refs;
     const refs: RowBadge[] = [...allRefs].sort((a, b) => (REF_SORT_ORDER[a.type] ?? 9) - (REF_SORT_ORDER[b.type] ?? 9));
-    const names = providerColumns()?.refs?.(badgeOf(state.graphBadges(), commit().hash)) ?? [];
-    return [...refs, ...names.map(name => ({ name, isCurrent: false, namespace: true }))];
+    const names = providerColumns()?.refs?.(commit().hash, badgeOf(state.graphBadges(), commit().hash)) ?? [];
+    return [...refs, ...names.map(({ name, muted }) => ({ name, isCurrent: false, namespace: true, muted }))];
   });
 
   // Effective text color for the commit subject (primary column).
@@ -493,7 +493,7 @@ function GraphLine(
                     color={
                       ri.namespace ? providerColors(t(), state.activeProviderView(), providerModules).bg : laneColor()
                     }
-                    dimmed={ri.type === "stash" || ri.type === "uncommitted" || isDimmed()}
+                    dimmed={ri.type === "stash" || ri.type === "uncommitted" || !!ri.muted || isDimmed()}
                     maxLength={refMaxLength()}
                     noShrink
                   />
@@ -576,7 +576,7 @@ function GraphLine(
 
 /** Sort order for ref badges: tags first, then branches, remotes, HEAD last. */
 /** A badge before the subject: a Git ref, or (OpenShift view) a namespace that runs the commit. */
-type RowBadge = { name: string; type?: RefInfo["type"]; isCurrent: boolean; namespace?: boolean };
+type RowBadge = { name: string; type?: RefInfo["type"]; isCurrent: boolean; namespace?: boolean; muted?: boolean };
 
 const REF_SORT_ORDER: Record<string, number> = { tag: 0, branch: 1, remote: 2, stash: 3, uncommitted: 4, head: 5 };
 

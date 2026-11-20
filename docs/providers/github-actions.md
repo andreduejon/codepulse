@@ -84,6 +84,23 @@ per failed job) and cached with the job. Enter opens the job log with the messag
 searched, so the first hit is where it happened and `n` / `N` find repeats; `o`
 opens the job page.
 
+## Pull requests
+
+GitHub's view marks each commit an open pull request's branch points at with a chip
+after its refs, in GitHub's colour: `PR #123`, muted for a draft. Only the branch's
+tip gets one; a commit with two open pull requests (one branch into `main` and into
+`release/1.x`) gets two.
+
+Such a commit has a **Pull requests** tab after **Actions**, labelled with how many
+(`Pull requests (2)`), as Stashes is; other commits don't show it. It lists each
+pull request with its title, its branch and the one it would merge into, its author,
+`draft` for a draft, and when it was last updated. `o` opens it on GitHub; Reload
+commit reads the runs and the pull requests again.
+
+The open pull requests are one request (`pulls?state=open`, up to 500) on the first
+fetch, on each refresh and on a Reload. One that fails keeps the last list and is
+only recorded in the Debug dialog.
+
 ## Errors and limits
 
 Expired credentials stop live requests until a valid token is available.
@@ -99,4 +116,5 @@ diagnostics.
 
 Token needs repository metadata and Actions read access for private repos.
 Annotations also need Checks read access (a fine-grained token's **Checks: Read**);
-without it a failed job simply shows no annotations.
+without it a failed job simply shows no annotations. Pull requests need **Pull
+requests: Read**; without it no commit shows a chip or the tab.
