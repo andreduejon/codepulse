@@ -312,65 +312,65 @@
     │                 │                                                                                                                       total pull requests                                    2
     █                 │         e6209dd  feat(api): add a health endpoint                                    1             45m ago            ├─ ▸ PR #124 release: dev into main               5m ago
     │                 │                                                                                                                       └─ ▾ PR #125 release: dev into release/1.x        5m ago
-    █                 │         3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…   2             28m ago               ├─ dev → release/1.x · @ana-lima
-    │                 │                                                                                                                          ├─ ▾ data/
-    │ █               │         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry…   1             4h ago                │  ├─ ▾ prices/
-    │ │               │                                                                                                                          │  │  ├─ de.json                           A   +42 -0
-    █─╯               │         64ddc8a  feat(payments): retry failed payments with exponential backoff, …   1             51m ago               │  │  ├─ fr.json                           A   +42 -0
-    │                 │                                                                                                                          │  │  └─ nl.json                           A   +42 -0
-    █                 │         917f7b3  perf(cart): cache price lookups                                    ·······        ·······               │  └─ products.csv                         A +6001 -0
-    │                 │                                                                                                                          ├─ ▾ deploy/
-    █─╮               │         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······               │  ├─ deploy.sh                            A   +13 -0
-    │ │               │                                                                                                                          │  └─ README.txt                           A    +2 -0
-    │ █               │         0166f71  feat(i18n): add French                                             ·······        ·······               ├─ ▾ docs/adr/
-    │ │               │                                                                                                                          │  ├─ 0003-upgrade-lodash.md               A   +20 -0
-    │ █─╮             │         5245790  Merge branch 'main' into feature/i18n                              ·······        ·······               │  ├─ 0004-upgrade-axios.md                A   +20 -0
-    │ │ │             │                                                                                                                          │  ├─ 0005-upgrade-jest.md                 A   +21 -0
-    │ █ │             │         484821c  feat(i18n): add German                                             ·······        ·······               │  └─ 0006-upgrade-typescript.md           A   +20 -0
-    │ │ │             │                                                                                                                          ├─ ▾ src/
-    │ █ │             │         3ad11a2  feat(i18n): extract the checkout strings                           ·······        ·······               │  ├─ ▾ a11y/
-    │ │ │             │                                                                                                                          │  │  └─ announcer.ts                      A   +16 -0
-    █─┼─┼─╮           │         fe7db4d  Merge pull request #9 from demo/feature/search                     ·······        ·······               │  ├─ ▾ api/
-    │ │ │ │           │                                                                                                                          │  │  ├─ health.ts                         A   +14 -0
-    │ │ │ █           │         9d1b361  fix(search): ignore accents                                        ·······        ·······               │  │  └─ metrics.ts                        A   +19 -0
-    │ │ │ │           │                                                                                                                          │  ├─ ▾ cart/
-    │ │ │ █           │         cce93f9  feat(search): search as you type                                   ·······        ·······               │  │  ├─ badge.ts                          M    +7 -0
-    │ │ │ │           │                                                                                                                          │  │  ├─ cart.ts                           M    +4 -1
-    │ │ │ █─╮         │         ae57e03  Merge branch 'main' into feature/search                            ·······        ·······               │  │  ├─ CartButton.tsx                    M    +9 -3
-    │ │ │ │ │         │                                                                                                                          │  │  └─ price-cache.ts                    A   +17 -0
-    │ │ │ █ │         │         a89a18f  feat(search): highlight matching words                             ·······        ·······               │  ├─ ▾ checkout/
-    │ │ │ │ │         │                                                                                                                          │  │  ├─ api.test.ts                       A   +16 -0
-    │ │ │ █ │         │         52defc5  feat(search): rank results by popularity                           ·······        ·······               │  │  ├─ api.ts                            A   +20 -0
-    │ │ │ │ │         │                                                                                                                          │  │  ├─ CheckoutPage.tsx                  A   +25 -0
-    │ │ │ █ │         │         9cc5545  feat(search): index product names                                  ·······        ·······               │  │  ├─ errors.ts                         A   +11 -0
-    │ │ │ │ │         │                                                                                                                          │  │  └─ OrderSummary.tsx                  A   +30 -0
-    █─┼─┼─┼─┼─╮       │         179f8b7  Merge pull request #20 from demo/feature/a11y                      ·······        ·······               │  ├─ ▾ i18n/
-    │ │ │ │ │ │       │                                                                                                                          │  │  ├─ de.json                           A   +17 -0
-    │ │ │ │ │ █       │         cac0f32  fix(a11y): announce cart updates                                   ·······        ·······               │  │  ├─ en.json                           A   +17 -0
-    │ │ │ │ │ │       │                                                                                                                          │  │  ├─ fr.json                           A   +17 -0
-    │ │ │ │ │ █       │         ef3bff7  fix(a11y): label the cart buttons                                  ·······        ·······               │  │  └─ index.ts                          A   +11 -0
-    │ │ │ │ │ │       │                                                                                                                          │  ├─ ▾ inventory/
-    ├─┼─╯ │ │ │       │                                                                                                                          │  │  └─ reservations.ts                   A   +33 -0
-    █─┼─╮ │ │ │       │         0d02d96  Merge pull request #22 from demo/chore/eslint-9                    ·······        ·······               │  ├─ ▾ payments/
-    │ │ │ │ │ │       │                                                                                                                          │  │  ├─ gateway-client-...le-name.test.ts A  +170 -0
-    │ │ █ │ │ │       │         337db73  chore(lint): move to ESLint 9                                      ·······        ·······               │  │  ├─ gateway.ts                        M    +2 -2
-    │ │ │ │ │ │       │                                                                                                                          │  │  ├─ retry.test.ts                     A   +47 -0
-    █─┼─┼─┼─┼─┼─╮     │         bd35bdd  Merge pull request #21 from demo/bugfix/cart-badge                 ·······        ·······               │  │  └─ retry.ts                          A   +34 -0
-    │ │ │ │ │ │ │     │                                                                                                                          │  ├─ ▾ pricing/
-    │ │ │ │ │ │ █     │         8912f9e  fix(cart): update the badge after removing an item                 ·······        ·······               │  │  ├─ currency.ts                       A    +7 -0
-    │ │ │ │ │ │ │     │                                                                                                                          │  │  └─ price-lists.ts                    A   +14 -0
-    │ │ │ │ │ │ │ █   │         f2a62b2   gh-pages   origin/gh-pages  docs: publish the 1.4.2 release not…  ·······        ·······               │  ├─ ▾ search/
-    │ │ │ │ │ │ │ │   │                                                                                                                          │  │  ├─ highlight.ts                      A   +12 -0
-    │ │ │ │ │ │ │ █   │         4f0f657  docs: document the cart API                                        ·······        ·······               │  │  ├─ index.test.ts                     A   +21 -0
-    │ │ │ │ │ │ │ │   │                                                                                                                          │  │  ├─ index.ts                          A   +45 -0
-    │ │ │ │ │ │ │ █   │         c480ba6  docs: add the getting started page                                 ·······        ·······               │  │  └─ ranking.ts                        A   +11 -0
-    │ │ │ │ │ │ │ │   │                                                                                                                          │  └─ index.ts                             M    +5 -0
-    │ │ │ │ │ │ │ █   │         693b2b9  docs: start the documentation site                                 ·······        ·······               ├─ .eslintrc.json                          D    +0 -9
-    │ │ │ │ │ │ │     │                                                                                                                          ├─ eslint.config.js                        A    +8 -0
-    │ │ │ │ │ │ │   █ │         69ddc1f   feature/dark-mode   PR #119  wip(theme): contrast tweaks          ·······        ·······               ├─ package-lock.json                       M    +9 -2
-    │ │ │ │ │ │ │   │ │                                                                                                                          ├─ package.json                            M    +5 -1
-    │ │ │ │ │ │ │   █ │         ef040ee  feat(theme): follow the system setting                             ·······        ·······               └─ README.md                               M   +35 -2
-    │ │ │ │ │ │ │   │ │
+    █                 │         3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…   2             28m ago               ├─ dev → release/1.x
+    │                 │                                                                                                                          ├─ @ana-lima
+    │ █               │         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry…   1             4h ago                ├─ ▾ data/
+    │ │               │                                                                                                                          │  ├─ ▾ prices/
+    █─╯               │         64ddc8a  feat(payments): retry failed payments with exponential backoff, …   1             51m ago               │  │  ├─ de.json                           A   +42 -0
+    │                 │                                                                                                                          │  │  ├─ fr.json                           A   +42 -0
+    █                 │         917f7b3  perf(cart): cache price lookups                                    ·······        ·······               │  │  └─ nl.json                           A   +42 -0
+    │                 │                                                                                                                          │  └─ products.csv                         A +6001 -0
+    █─╮               │         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······               ├─ ▾ deploy/
+    │ │               │                                                                                                                          │  ├─ deploy.sh                            A   +13 -0
+    │ █               │         0166f71  feat(i18n): add French                                             ·······        ·······               │  └─ README.txt                           A    +2 -0
+    │ │               │                                                                                                                          ├─ ▾ docs/adr/
+    │ █─╮             │         5245790  Merge branch 'main' into feature/i18n                              ·······        ·······               │  ├─ 0003-upgrade-lodash.md               A   +20 -0
+    │ │ │             │                                                                                                                          │  ├─ 0004-upgrade-axios.md                A   +20 -0
+    │ █ │             │         484821c  feat(i18n): add German                                             ·······        ·······               │  ├─ 0005-upgrade-jest.md                 A   +21 -0
+    │ │ │             │                                                                                                                          │  └─ 0006-upgrade-typescript.md           A   +20 -0
+    │ █ │             │         3ad11a2  feat(i18n): extract the checkout strings                           ·······        ·······               ├─ ▾ src/
+    │ │ │             │                                                                                                                          │  ├─ ▾ a11y/
+    █─┼─┼─╮           │         fe7db4d  Merge pull request #9 from demo/feature/search                     ·······        ·······               │  │  └─ announcer.ts                      A   +16 -0
+    │ │ │ │           │                                                                                                                          │  ├─ ▾ api/
+    │ │ │ █           │         9d1b361  fix(search): ignore accents                                        ·······        ·······               │  │  ├─ health.ts                         A   +14 -0
+    │ │ │ │           │                                                                                                                          │  │  └─ metrics.ts                        A   +19 -0
+    │ │ │ █           │         cce93f9  feat(search): search as you type                                   ·······        ·······               │  ├─ ▾ cart/
+    │ │ │ │           │                                                                                                                          │  │  ├─ badge.ts                          M    +7 -0
+    │ │ │ █─╮         │         ae57e03  Merge branch 'main' into feature/search                            ·······        ·······               │  │  ├─ cart.ts                           M    +4 -1
+    │ │ │ │ │         │                                                                                                                          │  │  ├─ CartButton.tsx                    M    +9 -3
+    │ │ │ █ │         │         a89a18f  feat(search): highlight matching words                             ·······        ·······               │  │  └─ price-cache.ts                    A   +17 -0
+    │ │ │ │ │         │                                                                                                                          │  ├─ ▾ checkout/
+    │ │ │ █ │         │         52defc5  feat(search): rank results by popularity                           ·······        ·······               │  │  ├─ api.test.ts                       A   +16 -0
+    │ │ │ │ │         │                                                                                                                          │  │  ├─ api.ts                            A   +20 -0
+    │ │ │ █ │         │         9cc5545  feat(search): index product names                                  ·······        ·······               │  │  ├─ CheckoutPage.tsx                  A   +25 -0
+    │ │ │ │ │         │                                                                                                                          │  │  ├─ errors.ts                         A   +11 -0
+    █─┼─┼─┼─┼─╮       │         179f8b7  Merge pull request #20 from demo/feature/a11y                      ·······        ·······               │  │  └─ OrderSummary.tsx                  A   +30 -0
+    │ │ │ │ │ │       │                                                                                                                          │  ├─ ▾ i18n/
+    │ │ │ │ │ █       │         cac0f32  fix(a11y): announce cart updates                                   ·······        ·······               │  │  ├─ de.json                           A   +17 -0
+    │ │ │ │ │ │       │                                                                                                                          │  │  ├─ en.json                           A   +17 -0
+    │ │ │ │ │ █       │         ef3bff7  fix(a11y): label the cart buttons                                  ·······        ·······               │  │  ├─ fr.json                           A   +17 -0
+    │ │ │ │ │ │       │                                                                                                                          │  │  └─ index.ts                          A   +11 -0
+    ├─┼─╯ │ │ │       │                                                                                                                          │  ├─ ▾ inventory/
+    █─┼─╮ │ │ │       │         0d02d96  Merge pull request #22 from demo/chore/eslint-9                    ·······        ·······               │  │  └─ reservations.ts                   A   +33 -0
+    │ │ │ │ │ │       │                                                                                                                          │  ├─ ▾ payments/
+    │ │ █ │ │ │       │         337db73  chore(lint): move to ESLint 9                                      ·······        ·······               │  │  ├─ gateway-client-...le-name.test.ts A  +170 -0
+    │ │ │ │ │ │       │                                                                                                                          │  │  ├─ gateway.ts                        M    +2 -2
+    █─┼─┼─┼─┼─┼─╮     │         bd35bdd  Merge pull request #21 from demo/bugfix/cart-badge                 ·······        ·······               │  │  ├─ retry.test.ts                     A   +47 -0
+    │ │ │ │ │ │ │     │                                                                                                                          │  │  └─ retry.ts                          A   +34 -0
+    │ │ │ │ │ │ █     │         8912f9e  fix(cart): update the badge after removing an item                 ·······        ·······               │  ├─ ▾ pricing/
+    │ │ │ │ │ │ │     │                                                                                                                          │  │  ├─ currency.ts                       A    +7 -0
+    │ │ │ │ │ │ │ █   │         f2a62b2   gh-pages   origin/gh-pages  docs: publish the 1.4.2 release not…  ·······        ·······               │  │  └─ price-lists.ts                    A   +14 -0
+    │ │ │ │ │ │ │ │   │                                                                                                                          │  ├─ ▾ search/
+    │ │ │ │ │ │ │ █   │         4f0f657  docs: document the cart API                                        ·······        ·······               │  │  ├─ highlight.ts                      A   +12 -0
+    │ │ │ │ │ │ │ │   │                                                                                                                          │  │  ├─ index.test.ts                     A   +21 -0
+    │ │ │ │ │ │ │ █   │         c480ba6  docs: add the getting started page                                 ·······        ·······               │  │  ├─ index.ts                          A   +45 -0
+    │ │ │ │ │ │ │ │   │                                                                                                                          │  │  └─ ranking.ts                        A   +11 -0
+    │ │ │ │ │ │ │ █   │         693b2b9  docs: start the documentation site                                 ·······        ·······               │  └─ index.ts                             M    +5 -0
+    │ │ │ │ │ │ │     │                                                                                                                          ├─ .eslintrc.json                          D    +0 -9
+    │ │ │ │ │ │ │   █ │         69ddc1f   feature/dark-mode   PR #119  wip(theme): contrast tweaks          ·······        ·······               ├─ eslint.config.js                        A    +8 -0
+    │ │ │ │ │ │ │   │ │                                                                                                                          ├─ package-lock.json                       M    +9 -2
+    │ │ │ │ │ │ │   █ │         ef040ee  feat(theme): follow the system setting                             ·······        ·······               ├─ package.json                            M    +5 -1
+    │ │ │ │ │ │ │   │ │                                                                                                                          └─ README.md                               M   +35 -2
     │ │ │ │ │ │ │   █ │         a141fb6  feat(theme): dark mode                                             ·······        ·······
     │ │ │ │ │ │ │   │ │
     │ │ │ │ │ │ │ █ │ │         e37842a   origin/feature/metrics-dashbo…   PR #127  feat(metrics): export…  ·······        ·······
@@ -515,9 +515,9 @@
     █                           bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request…   2             running            Reload commit
     │                                                                                                                                         total pull requests                                    1
     █                           e6209dd  feat(api): add a health endpoint                                    1             45m ago            └─ ▾ PR #127 feat(metrics): sales dashboard       3d ago
-    │                                                                                                                                            ├─ feature/metrics-dashboard → staging · @demo-dev
-    █                           3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…   2             28m ago               └─ Its commits aren't fetched here: f fetches them.
-    │
+    │                                                                                                                                            ├─ feature/metrics-dashboard → staging
+    █                           3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…   2             28m ago               ├─ @demo-dev
+    │                                                                                                                                            └─ Its commits aren't fetched here: f fetches them.
     │ █                         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry…   1             4h ago
     │ │
     █─╯                         64ddc8a  feat(payments): retry failed payments with exponential backoff, …   1             51m ago

@@ -99,14 +99,14 @@
     █─╮                         bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request    2             running            Reload commit
     │ │                                                                                                                                       total pull requests                                    2
     █ │                         e6209dd  feat(api): add a health endpoint                                    1             45m ago            ├─ ▾ PR #124 release: dev into main               5m ago
-    │ │                                                                                                                                       │  ├─ dev → main · @ana-lima
-    █◀╯                         3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…   2             28m ago            │  └─ ▾ src/
-    │                                                                                                                                         │     ├─ ▾ api/
-    │ █                         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry…   1             4h ago             │     │  ├─ health.ts                           A +14 -0
-    │ │                                                                                                                                       │     │  └─ metrics.ts                          A +19 -0
-    █─╯                         64ddc8a  feat(payments): retry failed payments with exponential backoff, …   1             51m ago            │     └─ index.ts                               M  +5 -0
-    │                                                                                                                                         └─ ▸ PR #125 release: dev into release/1.x        5m ago
-    █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······
+    │ │                                                                                                                                       │  ├─ dev → main
+    █◀╯                         3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…   2             28m ago            │  ├─ @ana-lima
+    │                                                                                                                                         │  └─ ▾ src/
+    │ █                         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry…   1             4h ago             │     ├─ ▾ api/
+    │ │                                                                                                                                       │     │  ├─ health.ts                           A +14 -0
+    █─╯                         64ddc8a  feat(payments): retry failed payments with exponential backoff, …   1             51m ago            │     │  └─ metrics.ts                          A +19 -0
+    │                                                                                                                                         │     └─ index.ts                               M  +5 -0
+    █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······            └─ ▸ PR #125 release: dev into release/1.x        5m ago
     │
     █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······
     │ │
@@ -149,11 +149,11 @@
     │ │
     █◀╯                  ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
     │                    Lines (none) → 1–19
-    │ █                     1  + /** Prometheus metrics: request counts and durations by route. */                                                                                            A +14 -0
-    │ │                     2  + const EXPORTER_VERSION = "^15.1.0";                                                                                                                          A +19 -0
-    █─╯                     3  +                                                                                                                                                              M  +5 -0
-    │                       4  + const requests = new Map<string, { count: number; seconds: number }>();                                                                            /1.x        5m ago
-    █                       5  +
+    │ █                     1  + /** Prometheus metrics: request counts and durations by route. */
+    │ │                     2  + const EXPORTER_VERSION = "^15.1.0";                                                                                                                          A +14 -0
+    █─╯                     3  +                                                                                                                                                              A +19 -0
+    │                       4  + const requests = new Map<string, { count: number; seconds: number }>();                                                                                      M  +5 -0
+    █                       5  +                                                                                                                                                    /1.x        5m ago
     │                       6  + export function record(route: string, seconds: number): void {
     █─╮                     7  +   const entry = requests.get(route) ?? { count: 0, seconds: 0 };
     │ │                     8  +   entry.count += 1;
@@ -196,11 +196,11 @@
     │ │
     █◀╯                  ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
     │                    Lines 1–4 → 1–6
-    │ █                   1  1    import { serve } from "bun";                                                                                                                                A +14 -0
-    │ │                      2  + import { metrics } from "./api/metrics";                                                                                                                    A +19 -0
-    █─╯                      3  + import { health } from "./api/health";                                                                                                                      M  +5 -0
-    │                     2  4    import { cartRoutes } from "./cart/routes";                                                                                                       /1.x        5m ago
-    █                     3  5
+    │ █                   1  1    import { serve } from "bun";
+    │ │                      2  + import { metrics } from "./api/metrics";                                                                                                                    A +14 -0
+    █─╯                      3  + import { health } from "./api/health";                                                                                                                      A +19 -0
+    │                     2  4    import { cartRoutes } from "./cart/routes";                                                                                                                 M  +5 -0
+    █                     3  5                                                                                                                                                      /1.x        5m ago
     │                     4  6    const port = Number(process.env.PORT ?? 8080);
     █─╮                  ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
     │ │                  Lines 7–12 → 9–17 · serve({
@@ -240,14 +240,14 @@
     █─╮                         bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request    2             running            Reload commit
     │ │                                                                                                                                       total pull requests                                    2
     █ │                         e6209dd  feat(api): add a health endpoint                                    1             45m ago            ├─ ▾ PR #124 release: dev into main               5m ago
-    │ │                                                                                                                                       │  ├─ dev → main · @ana-lima
-    █◀╯                         3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…   2             28m ago            │  └─ ▾ src/
-    │                                                                                                                                         │     ├─ ▾ api/
-    │ █                         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry…   1             4h ago             │     │  ├─ health.ts                           A +14 -0
-    │ │                                                                                                                                       │     │  └─ metrics.ts                          A +19 -0
-    █─╯                         64ddc8a  feat(payments): retry failed payments with exponential backoff, …   1             51m ago            │     └─ index.ts                               M  +5 -0
-    │                                                                                                                                         └─ ▸ PR #125 release: dev into release/1.x        5m ago
-    █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······
+    │ │                                                                                                                                       │  ├─ dev → main
+    █◀╯                         3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…   2             28m ago            │  ├─ @ana-lima
+    │                                                                                                                                         │  └─ ▾ src/
+    │ █                         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry…   1             4h ago             │     ├─ ▾ api/
+    │ │                                                                                                                                       │     │  ├─ health.ts                           A +14 -0
+    █─╯                         64ddc8a  feat(payments): retry failed payments with exponential backoff, …   1             51m ago            │     │  └─ metrics.ts                          A +19 -0
+    │                                                                                                                                         │     └─ index.ts                               M  +5 -0
+    █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······            └─ ▸ PR #125 release: dev into release/1.x        5m ago
     │
     █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······
     │ │

@@ -1,7 +1,7 @@
 /**
  * GitHub's Pull requests tab: the open pull requests whose branch points at the commit (the graph's `PR #123` chips),
- * one row each with its number, title and age. Enter opens one: a muted line with its branch, the one it would merge
- * into and its author, then the files it changed, as GitHub's Files changed shows them (between where its branch left the target's and its head, read by
+ * one row each with its number, title and age. Enter opens one: muted leaves with its branch and the one it would
+ * merge into, its author and whether it is a draft, then the files it changed, as GitHub's Files changed shows them (between where its branch left the target's and its head, read by
  * Git); Enter on a file opens its diff. `o` opens the pull request on GitHub. Only a commit that has one has the tab
  * (as Stashes), so it never shows empty.
  *
@@ -134,24 +134,24 @@ export function PullRequestsTab(props: Readonly<PullRequestsTabProps>) {
         text,
         last: isLast,
       });
-      // What the closed row leaves out: its branch, the one it would merge into, its author.
+      // What the closed row leaves out, a leaf each (branch names run long): its branch and the one it would merge
+      // into, its author, and that it is a draft.
+      const facts = [
+        `${pr.headRef} → ${pr.baseRef}`,
+        ...(pr.author ? [`@${pr.author}`] : []),
+        ...(pr.draft ? ["draft"] : []),
+      ];
       const info = (more: boolean) =>
-        note(
-          "info",
-          [`${pr.headRef} → ${pr.baseRef}`, pr.author ? `@${pr.author}` : "", pr.draft ? "draft" : ""]
-            .filter(Boolean)
-            .join(" · "),
-          !more,
-        );
-      if (!files || files.state === "loading") return [head, info(true), note("note", BUSY.readingFiles, true)];
+        facts.map((text, index) => note(`info:${index}`, text, !more && index === facts.length - 1));
+      if (!files || files.state === "loading") return [head, ...info(true), note("note", BUSY.readingFiles, true)];
       if (files.state === "missing")
-        return [head, info(true), note("note", "Its commits aren't fetched here: f fetches them.", true)];
+        return [head, ...info(true), note("note", "Its commits aren't fetched here: f fetches them.", true)];
       const dirs = new Set(
         [...collapsed()].flatMap(key => (key.startsWith(`${pr.number}:`) ? [key.slice(`${pr.number}:`.length)] : [])),
       );
       return [
         head,
-        info(files.files.length > 0),
+        ...info(files.files.length > 0),
         ...flattenFileTree(buildFileTree(files.files), dirs).map(
           (row): Row => ({
             kind: "file",

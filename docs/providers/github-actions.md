@@ -96,8 +96,8 @@ Such a commit has a **Pull requests** tab after **Actions**, labelled with how m
 pull request on one short row: its number, title and when it was last updated, a draft
 muted. `o` opens it on GitHub; Reload commit reads the runs and the pull requests again.
 
-Enter opens a pull request: a muted leaf with its branch, the one it would merge into,
-its author and `draft` for a draft (`dev → main · @ana-lima`), then the files it changed,
+Enter opens a pull request: muted leaves with its branch and the one it would merge into
+(`dev → main`), its author (`@ana-lima`) and `draft` for a draft, then the files it changed,
 as a tree like **Files**, each with
 its status and `+`/`-` lines: what its branch changed since it left the target branch
 (Git's merge base of the two), as GitHub's **Files changed** shows it, not what the

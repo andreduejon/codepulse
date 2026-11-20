@@ -142,7 +142,8 @@ test("Enter opens a pull request: its branch, target and author, then its files 
     expect(loadFiles).toHaveBeenCalledTimes(1);
     expect(lines()).toEqual([
       "├─ ▾ PR #124 release: dev into main 5m ago",
-      "│ ├─ dev → main · @ana-lima",
+      "│ ├─ dev → main",
+      "│ ├─ @ana-lima",
       "│ ├─ ▾ src/api/",
       "│ │ └─ metrics.ts A +40 -0",
       "│ └─ README.md M +2 -1",
@@ -161,8 +162,9 @@ test("Enter opens a pull request: its branch, target and author, then its files 
     });
     // Git hasn't the other one's commits.
     await enterOn(5);
-    expect(lines().slice(-2)).toEqual([
-      "├─ dev → release/1.x · @ana-lima",
+    expect(lines().slice(-3)).toEqual([
+      "├─ dev → release/1.x",
+      "├─ @ana-lima",
       "└─ Its commits aren't fetched here: f fetches them.",
     ]);
   } finally {
