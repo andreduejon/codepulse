@@ -106,6 +106,21 @@ fetches them. Enter on a file opens the diff dialog on that change
 (`3447db9..bf08113` in its title), and `←`/`→` move between the pull request's files.
 Files open from the graph's details; the Dashboard's details list them only.
 
+While the tab is open, the graph previews the selected pull request's merge (the one under
+the cursor, on it or its files, else the first): a muted dotted line from its branch's
+commit to the one its target branch points at, as the merge would join them.
+
+```
+█┄┄┄╮   3447db9  main  docs: rewrite the README
+│   ┆
+│ █┄╯   6adc455  feature/payments-retry  wip(payments): retry policy types
+```
+
+It runs in the first column right of both that no line uses between them, so the
+graph's lanes don't move; only when every column is taken does the graph get one
+more. It shows when the graph has both commits loaded (the target as GitHub names it,
+else `origin/<target>`); it goes when the tab closes.
+
 The open pull requests are one request (`pulls?state=open`, up to 500) on the first
 fetch, on each refresh and on a Reload. One that fails keeps the last list and is
 only recorded in the Debug dialog.

@@ -2,6 +2,7 @@ import { For, Show } from "solid-js";
 import type { DiffTarget } from "../../core/git/types";
 import type { ProviderDetailView } from "../../core/provider-model";
 import { type DetailTab, type ProviderStatus, useAppState } from "../context/state";
+import type { MergePreview } from "../graph/merge-preview";
 import { NO_PROVIDER_DETAILS, type ProviderDetails } from "../providers/detail-entries";
 import type { DetailEntryContext } from "../providers/shared/detail-entry";
 import type { DetailMemory } from "./detail-memory";
@@ -27,6 +28,8 @@ export function ProviderTab(
     targetColor?: string;
     /** Opens the diff dialog on a file the tab lists (a pull request's). */
     onOpenDiff?: (target: DiffTarget) => void;
+    /** Previews a merge in the graph beside it (a pull request's). */
+    onMergePreview?: (preview: MergePreview | null) => void;
   }>,
 ) {
   const { state, actions } = useAppState();
@@ -70,6 +73,9 @@ export function ProviderTab(
     get onOpenDiff() {
       return props.onOpenDiff;
     },
+    get onMergePreview() {
+      return props.onMergePreview;
+    },
   };
   return <>{props.providers.render(props.tab, context)}</>;
 }
@@ -83,7 +89,7 @@ export function ProviderDetailTabs(
     memory: DetailMemory;
   }>,
 ) {
-  const { state } = useAppState();
+  const { state, actions } = useAppState();
   const details = () => props.view.providers ?? NO_PROVIDER_DETAILS;
   return (
     <For each={details().tabs()}>
@@ -99,6 +105,7 @@ export function ProviderDetailTabs(
             contentWidth={props.view.contentWidth}
             memory={props.memory}
             onOpenDiff={props.view.onOpenDiff}
+            onMergePreview={actions.setMergePreview}
           />
         </Show>
       )}

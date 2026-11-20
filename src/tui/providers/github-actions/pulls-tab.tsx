@@ -9,12 +9,13 @@
  * mounts (AGENTS.md rule 5).
  */
 
-import { createEffect, createMemo, createSignal, For, Match, Switch, untrack } from "solid-js";
+import { createEffect, createMemo, createSignal, For, Match, onCleanup, Switch, untrack } from "solid-js";
 import type { DiffTarget, FileChange } from "../../../core/git/types";
 import type { GitHubPullRequest } from "../../../core/github/types";
 import type { DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
 import { FileTreeEntry } from "../../components/file-tree-entry";
+import type { MergePreview } from "../../graph/merge-preview";
 import { useT } from "../../hooks/use-t";
 import { BUSY } from "../../utils/busy-text";
 import { formatRelativeDate } from "../../utils/date";
@@ -37,6 +38,8 @@ export interface PullRequestsTabProps {
   loadFiles?: (pr: GitHubPullRequest) => Promise<PullFiles | null>;
   /** Opens a file's diff; without it the files don't open (the Dashboard's details). */
   onOpenDiff?: (target: DiffTarget) => void;
+  /** Previews the selected pull request's merge in the graph beside the tab; null clears it. */
+  onMergePreview?: (preview: MergePreview | null) => void;
   /** Read the commit again (`Reload commit`): its runs and the open pull requests. */
   fetchCommitData?: (sha: string, force?: boolean) => Promise<void>;
   /** Why it cannot load; null when it can. */
@@ -209,6 +212,14 @@ export function PullRequestsTab(props: Readonly<PullRequestsTabProps>) {
     else if (row.kind === "file" && row.row.isDir) props.setDetailCursorAction(row.collapsed ? "expand" : "collapse");
     else props.setDetailCursorAction(props.onOpenDiff ? "view diff" : null);
   });
+
+  // The graph previews one merge: the pull request under the cursor (on it or its files), else the first.
+  createEffect(() => {
+    const row = current();
+    const pr = row && row !== RELOAD && row.kind !== "note" ? row.pr : pulls()[0];
+    props.onMergePreview?.(pr ? { head: pr.headSha, base: pr.baseSha, baseRef: pr.baseRef } : null);
+  });
+  onCleanup(() => props.onMergePreview?.(null));
 
   /** The stat columns' widths: as wide as the widest count of the pull request's files. */
   const statWidths = (files: readonly FileChange[]) => ({

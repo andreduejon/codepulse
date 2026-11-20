@@ -68,6 +68,7 @@ export const githubPullsDetail = detailEntry<GitHubDetailSource>({
         pullRequestsAt={sha => props.source.pullRequestsAt?.(sha) ?? []}
         loadFiles={loadFiles}
         onOpenDiff={props.context.onOpenDiff}
+        onMergePreview={props.context.onMergePreview}
         fetchCommitData={props.source.fetchCommitData}
         unavailableReason={props.context.unavailable("github-actions", props.source.status)}
         loading={props.source.status?.kind === "loading"}

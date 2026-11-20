@@ -10,6 +10,7 @@ import type { ProviderDetailView } from "../../../core/provider-model";
 import type { DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
 import type { ProviderStatus } from "../../context/state";
+import type { MergePreview } from "../../graph/merge-preview";
 import type { LegendItem } from "./detail-legend";
 import type { RowShortcut } from "./open-row";
 
@@ -49,6 +50,8 @@ export interface DetailEntryContext {
   readonly targetColor?: string;
   /** Opens the diff dialog on a file (GitHub's pull request's); without it a tab's files don't open. */
   readonly onOpenDiff?: (target: DiffTarget) => void;
+  /** Previews a merge in the graph beside the details (a pull request's); null clears it. Not on the Dashboard. */
+  readonly onMergePreview?: (preview: MergePreview | null) => void;
 }
 
 /** A provider's detail tab: what it renders from its provider's source, and the legend below it. */

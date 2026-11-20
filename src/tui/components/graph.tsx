@@ -21,6 +21,7 @@ import {
 import { useProviderModules } from "../context/provider-modules";
 import { useAppState } from "../context/state";
 import { dimGraphChars } from "../graph/dim";
+import { type GraphLinePart, withMergePreview } from "../graph/merge-preview";
 import {
   type GraphChar,
   getColorForColumn,
@@ -104,7 +105,7 @@ export function ColumnHeader() {
   const providerColumns = useGraphColumns();
   const dimensions = useTerminalDimensions();
 
-  const { graphWidth } = useGraphDimensions(() => state.maxGraphColumns());
+  const { graphWidth } = useGraphDimensions(() => state.maxGraphColumns() + (state.mergePreviewSpan()?.extra ? 1 : 0));
   const columnWidths = () =>
     budgetedColumnWidths(providerColumns(), state.graphBadges(), dimensions().width, graphWidth());
 
@@ -247,7 +248,10 @@ function GraphLine(
   const commit = () => props.row.commit;
   const padCols = () => state.maxGraphColumns();
 
-  const { viewportActive, graphWidth } = useGraphDimensions(() => state.maxGraphColumns());
+  // A previewed merge's line takes one more column only when every column is taken (never to scroll sideways for).
+  const { viewportActive, graphWidth } = useGraphDimensions(
+    () => state.maxGraphColumns() + (state.mergePreviewSpan()?.extra ? 1 : 0),
+  );
 
   const renderOpts = () => {
     return {
@@ -325,8 +329,13 @@ function GraphLine(
     ];
   };
 
-  const graphContent = () => graphCharsToContent(frameRow(fullGraphChars(), props.row.nodeColumn));
-  const connectorContent = () => graphCharsToContent(frameRow(fullConnectorChars(), null));
+  /** A line with the previewed merge drawn on it, when it runs here. */
+  const withPreview = (chars: GraphChar[], part: GraphLinePart) =>
+    withMergePreview(chars, state.mergePreviewSpan(), props.index, part, t().foregroundMuted);
+  // Drawn on the full-width line, before it is fitted to a sideways-scrolled viewport.
+  const graphContent = () =>
+    graphCharsToContent(frameRow(withPreview(fullGraphChars(), "commit"), props.row.nodeColumn));
+  const connectorContent = () => graphCharsToContent(frameRow(withPreview(fullConnectorChars(), "below"), null));
 
   // Check if the commit row has merge/branch connectors (horizontals, corners, tees).
   // If so, the commit row carries connection info and can't be replaced by a fan-out row.
@@ -359,7 +368,7 @@ function GraphLine(
   // frameRow is passed as a callback to keep buildFanOutDisplay pure.
   const fanOutDisplay = () =>
     buildFanOutDisplay(fullFanOutChars(), canMergeFanOut(), graphContent(), (chars, isCommitRow) =>
-      frameRow(chars, isCommitRow ? props.row.nodeColumn : null),
+      frameRow(withPreview(chars, isCommitRow ? "commit" : "above"), isCommitRow ? props.row.nodeColumn : null),
     );
 
   const fanOutAboveContents = () => fanOutDisplay().fanOutAboveContents;
