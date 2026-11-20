@@ -89,7 +89,9 @@ export const githubPullsDetail = detailEntry<GitHubDetailSource>({
       const version = `${repo}\0${pr.number}\0${pr.headSha}\0${pr.baseSha}\0${pr.baseRef}`;
       if (found || fetchedPulls.has(version) || reads.signal.aborted) return found;
       onFetch();
-      if (await git.fetchPullRequest(repo, pr.number, pr.baseRef, reads.signal)) fetchedPulls.add(version);
+      // Its head as GitHub keeps it for every pull request (a fork's too), and its target branch.
+      const refs = [`refs/pull/${pr.number}/head`, ...(pr.baseRef ? [`refs/heads/${pr.baseRef}`] : [])];
+      if (await git.fetchRemoteRefs(repo, refs, reads.signal)) fetchedPulls.add(version);
       return reads.signal.aborted ? null : readFiles(repo, pr);
     };
     return (

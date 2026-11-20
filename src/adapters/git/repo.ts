@@ -361,28 +361,26 @@ export async function fetchRemote(repoPath: string): Promise<{ ok: boolean; erro
 }
 
 /**
- * Fetches one GitHub pull request's commits from the remote GitHub is read from (origin, else the first remote): its
- * head (`refs/pull/N/head`, which GitHub keeps for a fork's too) and its target branch, into that remote's branch. No
- * local branch moves. True when both arrived (only the head when the target's name isn't a branch name).
+ * Fetches some refs of the repository's remote (origin, else the first, as its URL is read): a branch
+ * (`refs/heads/x`) into that remote's branch, any other ref (a host's own, like a pull request's) as its commits only.
+ * No local branch moves. A name that isn't a valid ref is left out; true when every other one arrived.
  */
-export async function fetchPullRequest(
+export async function fetchRemoteRefs(
   repoPath: string,
-  number: number,
-  baseRef: string,
+  refs: readonly string[],
   signal?: AbortSignal,
 ): Promise<boolean> {
-  if (!Number.isSafeInteger(number) || number <= 0) return false;
   const remotes = await getRemoteNames(repoPath, signal);
   const remote = remotes.has("origin") ? "origin" : [...remotes][0];
   if (!remote) return false;
-  const specs = [`refs/pull/${number}/head`];
-  // The target's name is GitHub's: only a valid branch name goes into a refspec.
-  if (baseRef && (await runGit(repoPath, ["check-ref-format", `refs/heads/${baseRef}`], signal)).exitCode === 0)
-    specs.push(`+refs/heads/${baseRef}:refs/remotes/${remote}/${baseRef}`);
   let fetched = true;
-  // One at a time: one that is gone (a deleted target) doesn't keep the other out.
-  for (const spec of specs) {
+  // One at a time: one that is gone (a deleted branch) doesn't keep the others out.
+  for (const ref of refs) {
     if (signal?.aborted) return false;
+    // The names come from outside (a host's API): only a valid ref goes into a refspec.
+    if ((await runGit(repoPath, ["check-ref-format", ref], signal)).exitCode !== 0) continue;
+    const branch = ref.startsWith("refs/heads/") ? ref.slice("refs/heads/".length) : null;
+    const spec = branch ? `+${ref}:refs/remotes/${remote}/${branch}` : ref;
     const { exitCode, stderr } = await runGit(repoPath, ["fetch", "--no-tags", remote, spec], signal);
     if (exitCode === 0) continue;
     fetched = false;

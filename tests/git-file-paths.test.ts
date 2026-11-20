@@ -3,7 +3,7 @@ import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { fetchPullRequest, getCommitDetail, runGit } from "../src/adapters/git/repo";
+import { fetchRemoteRefs, getCommitDetail, runGit } from "../src/adapters/git/repo";
 import { getFileBlame, getFileContent, getFileDiff } from "../src/adapters/git/repo-diff";
 import { getRangeFiles, getStagedFiles, getStashFiles, getUntrackedFiles } from "../src/adapters/git/repo-status";
 
@@ -215,7 +215,7 @@ test("a stash's untracked files (git stash -u) are listed as added, and their di
   }
 });
 
-test("a pull request's commits are fetched alone: its head from refs/pull/N/head and its target branch", async () => {
+test("some refs of the remote are fetched alone: a host's own ref (a pull request's head) and a branch into the remote's", async () => {
   const root = await mkdtemp(join(tmpdir(), "codepulse-git-fetch-pull-"));
   const remote = join(root, "remote.git");
   const work = join(root, "work");
@@ -248,15 +248,15 @@ test("a pull request's commits are fetched alone: its head from refs/pull/N/head
     await git(work, "push", "-q", pathToFileURL(remote).href, "HEAD:refs/pull/7/head");
 
     expect(await getRangeFiles(clone, "origin/staging", head)).toBeNull();
-    expect(await fetchPullRequest(clone, 7, "staging")).toBe(true);
+    expect(await fetchRemoteRefs(clone, ["refs/pull/7/head", "refs/heads/staging"])).toBe(true);
     expect(paths((await getRangeFiles(clone, "origin/staging", head))?.files ?? [])).toEqual(["A f.txt"]);
     // No local branch moved or appeared.
     expect(await git(clone, "branch", "--format=%(refname:short)")).toBe("main");
-    // A name that isn't a branch name never reaches the refspec; the head still arrives.
-    expect(await fetchPullRequest(clone, 7, "bad..name")).toBe(true);
+    // A name that isn't a valid ref never reaches the refspec; the other still arrives.
+    expect(await fetchRemoteRefs(clone, ["refs/pull/7/head", "refs/heads/bad..name"])).toBe(true);
     // Only one of the two arriving is not fetched: the next read tries again.
-    expect(await fetchPullRequest(clone, 8, "staging")).toBe(false);
-    expect(await fetchPullRequest(clone, 7, "gone")).toBe(false);
+    expect(await fetchRemoteRefs(clone, ["refs/pull/8/head", "refs/heads/staging"])).toBe(false);
+    expect(await fetchRemoteRefs(clone, ["refs/pull/7/head", "refs/heads/gone"])).toBe(false);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

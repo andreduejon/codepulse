@@ -59,7 +59,7 @@ export async function getRangeFiles(
   head: string,
   signal?: AbortSignal,
 ): Promise<{ mergeBase: string; files: FileChange[] } | null> {
-  // Names from GitHub: one that starts with `-` would be read as an option.
+  // Names from outside (a host's API): one that starts with `-` would be read as an option.
   if (base.startsWith("-") || head.startsWith("-")) return null;
   const found = await runGit(repoPath, ["merge-base", base, head], signal);
   const mergeBase = found.stdout.trim();
