@@ -238,7 +238,9 @@ test("a pull request's commits are fetched alone: its head from refs/pull/N/head
     expect(await git(clone, "branch", "--format=%(refname:short)")).toBe("main");
     // A name that isn't a branch name never reaches the refspec; the head still arrives.
     expect(await fetchPullRequest(clone, 7, "bad..name")).toBe(true);
-    expect(await fetchPullRequest(clone, 8, "gone")).toBe(false);
+    // Only one of the two arriving is not fetched: the next read tries again.
+    expect(await fetchPullRequest(clone, 8, "staging")).toBe(false);
+    expect(await fetchPullRequest(clone, 7, "gone")).toBe(false);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

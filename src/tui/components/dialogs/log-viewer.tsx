@@ -58,6 +58,26 @@ export interface LogViewerNavigation {
   go: (direction: -1 | 1) => void;
 }
 
+/**
+ * The rows a line takes wrapped by character at `width` columns: a wide character (two columns) that doesn't fit at a
+ * row's end starts the next one.
+ */
+export function wrappedRows(text: string, width: number): number {
+  // Plain ASCII (most logs): one column a character, the length alone says it.
+  if (/^[\x20-\x7e]*$/.test(text)) return Math.max(1, Math.ceil(text.length / width));
+  let rows = 1;
+  let used = 0;
+  for (const char of text) {
+    const columns = cellWidth(char);
+    if (used + columns > width) {
+      rows++;
+      used = 0;
+    }
+    used += columns;
+  }
+  return rows;
+}
+
 interface LogViewerProps {
   /** Title segments, fitted to the dialog's width (context drops first, the primary segment shrinks last). */
   title: () => TitleSegmentInput[];
@@ -102,9 +122,7 @@ export function LogViewer(props: Readonly<LogViewerProps>) {
     heights: () => {
       if (!wrapEnabled()) return props.lines().map(() => 1);
       const width = Math.max(1, textWidth());
-      return props
-        .lines()
-        .map(line => Math.max(1, Math.ceil(cellWidth(line.kind === "group" ? `▸ ${line.text}` : line.text) / width)));
+      return props.lines().map(line => wrappedRows(line.kind === "group" ? `▸ ${line.text}` : line.text, width));
     },
     screenHeight: () => dimensions().height,
   });

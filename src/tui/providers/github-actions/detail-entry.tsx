@@ -1,3 +1,4 @@
+import { onCleanup } from "solid-js";
 import type {
   GitHubCommitData,
   GitHubJob,
@@ -52,7 +53,7 @@ export const githubDetail = detailEntry<GitHubDetailSource>({
 const hasPulls = (source: GitHubDetailSource, sha: string) =>
   (source.pullRequestsAt?.(sha).length ?? 0) + (source.closedPullRequestsAt?.(sha).length ?? 0) > 0;
 
-/** The pull request versions fetched already: one whose commits are still missing after it isn't fetched again. */
+/** The pull request versions fetched wholly: one whose commits are still missing after that isn't fetched again. */
 const fetchedPulls = new Set<string>();
 
 /** The Pull requests tab: only on a commit a pull request's branch points (or pointed, merged or closed) at. */
@@ -65,24 +66,31 @@ export const githubPullsDetail = detailEntry<GitHubDetailSource>({
      * Its files as Git has them: from where its branch left the target's. The target as GitHub names it, else the commit
      * its branch points at in the graph (on any remote, as the merge preview finds it), else the local branch.
      */
-    const readFiles = async (pr: GitHubPullRequest) => {
+    // Reads and fetches stop with the tab (another commit, another repository): none lands in the wrong one.
+    const reads = new AbortController();
+    onCleanup(() => reads.abort());
+    const readFiles = async (repo: string, pr: GitHubPullRequest) => {
       const rows = state.graphRows();
       const target = rows[targetRowIndex(rows, { base: pr.baseSha, baseRef: pr.baseRef })]?.commit.hash;
       for (const base of [...new Set([pr.baseSha, target ?? "", pr.baseRef])].filter(Boolean)) {
-        const found = await git.getRangeFiles(state.repoPath(), base, pr.headSha);
+        if (reads.signal.aborted) return null;
+        const found = await git.getRangeFiles(repo, base, pr.headSha, reads.signal);
         if (found) return found;
       }
       return null;
     };
-    /** When Git hasn't its commits: they are fetched (this pull request's alone), once per version, then read again. */
+    /**
+     * When Git hasn't its commits: they are fetched (this pull request's alone), then read again. Once both arrived they
+     * aren't fetched again for this version; a fetch that failed, wholly or in part, is tried again with the next read.
+     */
     const loadFiles = async (pr: GitHubPullRequest, onFetch: () => void) => {
-      const found = await readFiles(pr);
-      const version = `${state.repoPath()}\0${pr.number}\0${pr.headSha}\0${pr.baseSha}\0${pr.baseRef}`;
-      if (found || fetchedPulls.has(version)) return found;
+      const repo = state.repoPath();
+      const found = await readFiles(repo, pr);
+      const version = `${repo}\0${pr.number}\0${pr.headSha}\0${pr.baseSha}\0${pr.baseRef}`;
+      if (found || fetchedPulls.has(version) || reads.signal.aborted) return found;
       onFetch();
-      // A failed fetch (offline) tries again with the next read: a Reload commit or a refresh.
-      if (await git.fetchPullRequest(state.repoPath(), pr.number, pr.baseRef)) fetchedPulls.add(version);
-      return readFiles(pr);
+      if (await git.fetchPullRequest(repo, pr.number, pr.baseRef, reads.signal)) fetchedPulls.add(version);
+      return reads.signal.aborted ? null : readFiles(repo, pr);
     };
     return (
       <PullRequestsTab

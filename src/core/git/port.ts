@@ -93,7 +93,7 @@ export interface GitPort extends DashboardGit {
     base?: string,
   ) => Promise<BlameLine[]>;
   fetchRemote: (repoPath: string) => Promise<{ ok: boolean; error?: string }>;
-  /** Fetches a GitHub pull request's head and target branch only (its files need both); true when either arrived. */
+  /** Fetches a GitHub pull request's head and target branch only (its files need both); true when both arrived. */
   fetchPullRequest: (repoPath: string, number: number, baseRef: string, signal?: AbortSignal) => Promise<boolean>;
   /** Moves the local branches their remote branches are ahead of, where Git can without a merge. */
   fastForwardBranches: (repoPath: string) => Promise<FastForwardResult>;

@@ -363,7 +363,7 @@ export async function fetchRemote(repoPath: string): Promise<{ ok: boolean; erro
 /**
  * Fetches one GitHub pull request's commits from the remote GitHub is read from (origin, else the first remote): its
  * head (`refs/pull/N/head`, which GitHub keeps for a fork's too) and its target branch, into that remote's branch. No
- * local branch moves. True when either arrived.
+ * local branch moves. True when both arrived (only the head when the target's name isn't a branch name).
  */
 export async function fetchPullRequest(
   repoPath: string,
@@ -379,12 +379,14 @@ export async function fetchPullRequest(
   // The target's name is GitHub's: only a valid branch name goes into a refspec.
   if (baseRef && (await runGit(repoPath, ["check-ref-format", `refs/heads/${baseRef}`], signal)).exitCode === 0)
     specs.push(`+refs/heads/${baseRef}:refs/remotes/${remote}/${baseRef}`);
-  let fetched = false;
+  let fetched = true;
   // One at a time: one that is gone (a deleted target) doesn't keep the other out.
   for (const spec of specs) {
+    if (signal?.aborted) return false;
     const { exitCode, stderr } = await runGit(repoPath, ["fetch", "--no-tags", remote, spec], signal);
-    if (exitCode === 0) fetched = true;
-    else if (stderr.trim()) debugError("Git", stderr.trim());
+    if (exitCode === 0) continue;
+    fetched = false;
+    if (stderr.trim()) debugError("Git", stderr.trim());
   }
   return fetched;
 }

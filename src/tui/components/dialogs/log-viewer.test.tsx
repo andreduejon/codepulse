@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import type { Renderable } from "@opentui/core";
 import { testRender } from "@opentui/solid";
 import { createThemeState, ThemeContext } from "../../context/theme";
-import { LogViewer } from "./log-viewer";
+import { LogViewer, wrappedRows } from "./log-viewer";
 
 const count = (node: Renderable): number => 1 + node.getChildren().reduce((sum, child) => sum + count(child), 0);
 
@@ -39,4 +39,13 @@ test("a wrapped log mounts only the lines near the screen, each as tall as its w
   } finally {
     setup.renderer.destroy();
   }
+});
+
+test("a wrapped line's rows: a wide character that doesn't fit at a row's end starts the next row", () => {
+  expect(wrappedRows("", 10)).toBe(1);
+  expect(wrappedRows("a".repeat(20), 10)).toBe(2);
+  expect(wrappedRows("a".repeat(21), 10)).toBe(3);
+  // One two-column character a row at three columns: three rows, where six columns alone would say two.
+  expect(wrappedRows("界界界", 3)).toBe(3);
+  expect(wrappedRows(`${"a".repeat(9)}界`, 10)).toBe(2);
 });
