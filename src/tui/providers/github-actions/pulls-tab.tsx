@@ -9,7 +9,7 @@
  * mounts (AGENTS.md rule 5).
  */
 
-import { createEffect, createMemo, createSignal, For, Match, onCleanup, Switch, untrack } from "solid-js";
+import { createEffect, createMemo, createSignal, For, Match, on, onCleanup, Switch, untrack } from "solid-js";
 import type { DiffTarget, FileChange } from "../../../core/git/types";
 import type { GitHubPullRequest } from "../../../core/github/types";
 import type { DetailMemory } from "../../components/detail-memory";
@@ -226,10 +226,14 @@ export function PullRequestsTab(props: Readonly<PullRequestsTabProps>) {
     else props.setDetailCursorAction(props.onOpenDiff ? "view diff" : null);
   });
 
-  // The graph previews the merge of the pull request the mouse is over, else the one the cursor is on (it or its
-  // files); none while neither is (the cursor on Reload commit, the keyboard in the graph).
+  // The graph previews the merge of the pull request the mouse is over or the cursor is on (it or its files), whichever
+  // moved last: the mouse stays over a row after a click while the keys move on. None while neither is on one (the
+  // cursor on Reload commit, the keyboard in the graph).
+  const [byMouse, setByMouse] = createSignal(false);
+  createEffect(on(mouse.hovered, () => setByMouse(true), { defer: true }));
+  createEffect(on(props.detailCursorIndex, () => setByMouse(false), { defer: true }));
   createEffect(() => {
-    const hovered = pulls().find(pr => mouse.hovered() === pullKey(pr));
+    const hovered = byMouse() ? pulls().find(pr => mouse.hovered() === pullKey(pr)) : undefined;
     const row = props.detailFocused() ? current() : undefined;
     const pr = hovered ?? (row && row !== RELOAD && row.kind !== "note" ? row.pr : undefined);
     props.onMergePreview?.(pr ? { head: pr.headSha, base: pr.baseSha, baseRef: pr.baseRef } : null);
@@ -301,10 +305,8 @@ export function PullRequestsTab(props: Readonly<PullRequestsTabProps>) {
             <Match when={row.kind === "note" && row}>
               {note => (
                 <text selectable={!props.mouseEnabled} wrapMode="none" fg={t().foregroundMuted}>
-                  {/* The info line continues the pull request's branch (│ when its files follow); a message ends it. */}
-                  <span style={{ fg: t().border }}>
-                    {`${note().lead}${note().key.endsWith(":info") ? (note().last ? "  " : "│ ") : "└─ "}`}
-                  </span>
+                  {/* A leaf of the pull request, like its files: its branch and author, or why its files aren't there. */}
+                  <span style={{ fg: t().border }}>{`${note().lead}${note().last ? "└─ " : "├─ "}`}</span>
                   {note().text}
                 </text>
               )}

@@ -312,7 +312,7 @@
     │                 │                                                                                                                       total pull requests                                    2
     █                 │         e6209dd  feat(api): add a health endpoint                                    1             45m ago            ├─ ▸ PR #124 release: dev into main               5m ago
     │                 │                                                                                                                       └─ ▾ PR #125 release: dev into release/1.x        5m ago
-    █                 │         3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…   2             28m ago               │ dev → release/1.x · @ana-lima
+    █                 │         3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…   2             28m ago               ├─ dev → release/1.x · @ana-lima
     │                 │                                                                                                                          ├─ ▾ data/
     │ █               │         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry…   1             4h ago                │  ├─ ▾ prices/
     │ │               │                                                                                                                          │  │  ├─ de.json                           A   +42 -0
@@ -515,7 +515,7 @@
     █                           bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request…   2             running            Reload commit
     │                                                                                                                                         total pull requests                                    1
     █                           e6209dd  feat(api): add a health endpoint                                    1             45m ago            └─ ▾ PR #127 feat(metrics): sales dashboard       3d ago
-    │                                                                                                                                            │ feature/metrics-dashboard → staging · @demo-dev
+    │                                                                                                                                            ├─ feature/metrics-dashboard → staging · @demo-dev
     █                           3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…   2             28m ago               └─ Its commits aren't fetched here: f fetches them.
     │
     │ █                         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry…   1             4h ago
