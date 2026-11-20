@@ -388,7 +388,10 @@ function GraphLine(
     const allRefs = commit().refs;
     const refs: RowBadge[] = [...allRefs].sort((a, b) => (REF_SORT_ORDER[a.type] ?? 9) - (REF_SORT_ORDER[b.type] ?? 9));
     const names = providerColumns()?.refs?.(commit().hash, badgeOf(state.graphBadges(), commit().hash)) ?? [];
-    return [...refs, ...names.map(({ name, muted }) => ({ name, isCurrent: false, namespace: true, muted }))];
+    return [
+      ...refs,
+      ...names.map(({ name, muted, whole }) => ({ name, isCurrent: false, namespace: true, muted, whole })),
+    ];
   });
 
   // Effective text color for the commit subject (primary column).
@@ -442,7 +445,8 @@ function GraphLine(
       // Each shown badge: its name (cut at `cap`) + 2, one gap between badges and one after them. Short names
       // (`dev`) take only their own width, so they are not folded into `+N` for the room a long name would need.
       const needed = (cap: number) =>
-        kept.reduce((sum, ref) => sum + Math.min(cellWidth(ref.name), cap) + 3, 0) + overflow;
+        kept.reduce((sum, ref) => sum + (ref.whole ? cellWidth(ref.name) : Math.min(cellWidth(ref.name), cap)) + 3, 0) +
+        overflow;
       for (let cap = 30; cap >= 8; cap--) {
         if (needed(cap) <= room) return { shown: kept, hidden, maxLength: cap };
       }
@@ -503,7 +507,7 @@ function GraphLine(
                       ri.namespace ? providerColors(t(), state.activeProviderView(), providerModules).bg : laneColor()
                     }
                     dimmed={ri.type === "stash" || ri.type === "uncommitted" || !!ri.muted || isDimmed()}
-                    maxLength={refMaxLength()}
+                    maxLength={ri.whole ? cellWidth(ri.name) : refMaxLength()}
                     noShrink
                   />
                 )}
@@ -585,7 +589,15 @@ function GraphLine(
 
 /** Sort order for ref badges: tags first, then branches, remotes, HEAD last. */
 /** A badge before the subject: a Git ref, or (OpenShift view) a namespace that runs the commit. */
-type RowBadge = { name: string; type?: RefInfo["type"]; isCurrent: boolean; namespace?: boolean; muted?: boolean };
+type RowBadge = {
+  name: string;
+  type?: RefInfo["type"];
+  isCurrent: boolean;
+  namespace?: boolean;
+  muted?: boolean;
+  /** Never shortened (a pull request's number): it goes into `+N` instead. */
+  whole?: boolean;
+};
 
 const REF_SORT_ORDER: Record<string, number> = { tag: 0, branch: 1, remote: 2, stash: 3, uncommitted: 4, head: 5 };
 

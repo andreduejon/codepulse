@@ -89,7 +89,9 @@ opens the job page.
 GitHub's view marks each commit an open pull request's branch points at with a chip
 after its refs, in GitHub's colour: `PR #123`, muted for a draft. Only the branch's
 tip gets one; a commit with two open pull requests (one branch into `main` and into
-`release/1.x`) gets two.
+`release/1.x`) gets two. On a tight row the chips come right after the checked-out
+branch; a chip is never shortened (a cut number would read as another), so one that
+doesn't fit goes into the muted `+N` with the refs that don't.
 
 Such a commit has a **Pull requests** tab after **Actions**, as Stashes is; other commits
 don't show it. It lists each

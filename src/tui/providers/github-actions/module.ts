@@ -39,7 +39,7 @@ export const githubModule = providerModule({
       // muted: its number only, the rest is in the Pull requests tab.
       graphColumns: {
         ...CI_GRAPH_COLUMNS,
-        refs: sha => github.pullRequestsAt(sha).map(pr => ({ name: `PR #${pr.number}`, muted: pr.draft })),
+        refs: sha => github.pullRequestsAt(sha).map(pr => ({ name: `PR #${pr.number}`, muted: pr.draft, whole: true })),
       },
     };
   },
