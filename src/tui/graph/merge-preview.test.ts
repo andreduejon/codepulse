@@ -59,6 +59,17 @@ describe("merge preview", () => {
     expect(mergePreviewSpan(headLeft, preview, 4, 12)).toMatchObject({ column: 2, direct: null });
   });
 
+  test("the target's branch on a remote not called origin, or only a local one, is found too", () => {
+    const preview = { head: "head", base: "gone", baseRef: "release/1.x" };
+    const upstream = [row("tip", 0, [{ type: "remote", name: "upstream/release/1.x" }]), row("head", 1)];
+    expect(mergePreviewSpan(upstream, preview, 4, 12)?.top).toBe(0);
+    // A remote branch that only ends in the name is another branch.
+    const other = [row("tip", 0, [{ type: "remote", name: "origin/hotfix/release/1.x" }]), row("head", 1)];
+    expect(mergePreviewSpan(other, preview, 4, 12)).toBeNull();
+    const local = [row("tip", 0, [{ type: "branch", name: "release/1.x" }]), row("head", 1)];
+    expect(mergePreviewSpan(local, preview, 4, 12)?.top).toBe(0);
+  });
+
   test("no line when an end is missing, both are one commit, or the graph has no column left", () => {
     expect(mergePreviewSpan(ROWS, { head: "gone", base: "main", baseRef: "main" }, 2, 12)).toBeNull();
     expect(mergePreviewSpan(ROWS, { head: "main", base: "main", baseRef: "main" }, 2, 12)).toBeNull();

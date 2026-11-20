@@ -8,6 +8,7 @@ import type {
 import { scopedMemory } from "../../components/detail-memory";
 import { useGit } from "../../context/git";
 import { useAppState } from "../../context/state";
+import { targetRowIndex } from "../../graph/merge-preview";
 import { detailEntry, type ProviderDetailSource } from "../shared/detail-entry";
 import { ActionsDetailTab } from "./detail-tab";
 import { GITHUB_LEGEND, PULLS_LEGEND } from "./legend";
@@ -57,9 +58,14 @@ export const githubPullsDetail = detailEntry<GitHubDetailSource>({
     // Rendered inside the details, below the app's providers: Git and the open repository are there.
     const git = useGit();
     const { state } = useAppState();
-    /** Its files as Git has them: from where its branch left the target's (the target as GitHub said, else fetched). */
+    /**
+     * Its files as Git has them: from where its branch left the target's. The target as GitHub names it, else the commit
+     * its branch points at in the graph (on any remote, as the merge preview finds it), else the local branch.
+     */
     const loadFiles = async (pr: GitHubPullRequest) => {
-      for (const base of [pr.baseSha, `origin/${pr.baseRef}`, pr.baseRef].filter(Boolean)) {
+      const rows = state.graphRows();
+      const target = rows[targetRowIndex(rows, { base: pr.baseSha, baseRef: pr.baseRef })]?.commit.hash;
+      for (const base of [...new Set([pr.baseSha, target ?? "", pr.baseRef])].filter(Boolean)) {
         const found = await git.getRangeFiles(state.repoPath(), base, pr.headSha);
         if (found) return found;
       }

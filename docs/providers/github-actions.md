@@ -109,7 +109,8 @@ as a tree like **Files**, each with
 its status and `+`/`-` lines: what its branch changed since it left the target branch
 (Git's merge base of the two), as GitHub's **Files changed** shows it, not what the
 target did since. Git reads them, so both branches' commits must be fetched: the target
-as GitHub names it, else `origin/<target>`. When they aren't, the row says so and `f`
+as GitHub names it, else its branch on a remote (`origin/<target>` first, any other
+remote's name works too), else the local branch. When they aren't, the row says so and `f`
 fetches them; the next Reload commit or refresh reads them again. Enter on a file opens the diff dialog on that change
 (`3447db9..bf08113` in its title), and `←`/`→` move between the pull request's files.
 Files open from the graph's details and from the Dashboard's; closing the diff comes back to them.
@@ -131,7 +132,7 @@ bottom. The line comes straight into the branch's commit along its column when n
 uses that column between the two (a branch tip has nothing above it); otherwise it runs
 in the first column right of both that no line uses between them. Either way the graph's
 lanes don't move; only when every column is taken does the graph get one more. Where it crosses a lane, the lane shows `┼` in its own colour. It shows when the graph has both commits loaded (the target as GitHub names it,
-else `origin/<target>`); it goes when the tab closes.
+else its branch on a remote or the local one); it goes when the tab closes.
 
 The open pull requests are one request (`pulls?state=open`, up to 500), and the ones merged
 or closed most recently another (`pulls?state=closed`, the 100 last updated), side by side

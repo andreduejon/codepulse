@@ -39,14 +39,22 @@ const isFree = (row: GraphRow, column: number) =>
   !row.connectors.some(connector => drawsAt(connector, column)) &&
   !(row.fanOutRows ?? []).some(line => line.some(connector => drawsAt(connector, column)));
 
-/** The target's row: the commit GitHub names, else the one its branch (remote first) points at. */
-function baseIndex(rows: readonly GraphRow[], preview: MergePreview): number {
+/**
+ * The target's row: the commit GitHub names, else the one its branch points at: a remote's (`origin/main`, whatever the
+ * remote is called; origin first), else the local one.
+ */
+export function targetRowIndex(rows: readonly GraphRow[], preview: Omit<MergePreview, "head">): number {
   const byHash = rows.findIndex(row => row.commit.hash.toLowerCase() === preview.base.toLowerCase());
   if (byHash >= 0 || !preview.baseRef) return byHash;
-  const byRef = (type: string, name: string) =>
-    rows.findIndex(row => row.commit.refs.some(ref => ref.type === type && ref.name === name));
-  const remote = byRef("remote", `origin/${preview.baseRef}`);
-  return remote >= 0 ? remote : byRef("branch", preview.baseRef);
+  const byRef = (matches: (ref: { type: string; name: string }) => boolean) =>
+    rows.findIndex(row => row.commit.refs.some(matches));
+  // A remote's name has no `/`; the branch's may (`release/1.x`).
+  const onRemote = (ref: { type: string; name: string }) =>
+    ref.type === "remote" && ref.name.slice(ref.name.indexOf("/") + 1) === preview.baseRef;
+  const origin = byRef(ref => onRemote(ref) && ref.name.startsWith("origin/"));
+  if (origin >= 0) return origin;
+  const remote = byRef(onRemote);
+  return remote >= 0 ? remote : byRef(ref => ref.type === "branch" && ref.name === preview.baseRef);
 }
 
 /**
@@ -61,7 +69,7 @@ export function mergePreviewSpan(
 ): MergePreviewSpan | null {
   if (!preview) return null;
   const head = rows.findIndex(row => row.commit.hash.toLowerCase() === preview.head.toLowerCase());
-  const base = baseIndex(rows, preview);
+  const base = targetRowIndex(rows, preview);
   if (head < 0 || base < 0 || head === base) return null;
   const top = Math.min(head, base);
   const bottom = Math.max(head, base);
