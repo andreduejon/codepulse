@@ -133,8 +133,10 @@ export function dashboardRows(events: readonly DashboardEvent[], options: Dashbo
   const offset = options.utcOffset ?? localOffset;
   const knots = new Map<string, { key: string; app: string; bucket: number; events: DashboardEvent[] }>();
   for (const event of [...events].sort((a, b) => b.time - a.time)) {
-    const bucket = Math.floor((event.time + offset(event.time)) / options.knotMs);
-    const key = `${event.app}\u0000${bucket}`;
+    const utcOffset = offset(event.time);
+    const bucket = Math.floor((event.time + utcOffset) / options.knotMs);
+    // The offset too: the hour the clock repeats when daylight saving ends holds two knots, not one around another.
+    const key = `${event.app}\u0000${bucket}\u0000${utcOffset}`;
     let knot = knots.get(key);
     if (!knot) {
       knot = { key, app: event.app, bucket, events: [] };
