@@ -402,8 +402,16 @@ test("a working tree Git can't read shows the history and says so, instead of lo
   await writeFile(join(root, "file.txt"), "changed\n");
   // A broken index: git log still works, git status doesn't.
   await writeFile(join(root, ".git", "index"), "not an index");
-  const { state } = mount(root, 10);
+  const { state, loader } = mount(root, 10);
   await until(() => !state.loading() && state.commits().length > 0, "history");
   expect(subjects(state.commits())).toContain("c1");
   expect(state.error()).toBe(BANNER.git.statusFailed);
+  // Readable again: a quiet refresh with the same history clears it, and a broken one says so again.
+  await rm(join(root, ".git", "index"));
+  await runGit(root, ["reset", "-q"]);
+  loader.loadData(undefined, undefined, true);
+  await until(() => state.error() === null, "the error cleared");
+  await writeFile(join(root, ".git", "index"), "not an index");
+  loader.loadData(undefined, undefined, true);
+  await until(() => state.error() === BANNER.git.statusFailed, "the error again");
 });

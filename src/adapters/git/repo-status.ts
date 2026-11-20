@@ -2,6 +2,9 @@ import { parseDiffTreeOutput, parseStatusPorcelain, type WorkingTreeStatus } fro
 import type { FileChange, UncommittedDetail } from "../../core/git/types";
 import { runGit } from "./repo-git";
 
+/** Git saying a revision doesn't exist (a stash's third parent without -u), not that it couldn't read one. */
+export const NO_REVISION = /unknown revision|bad revision|ambiguous argument/i;
+
 /** A read's output; a failed one (not cancelled) is an error, not a clean working tree. */
 function succeeded(result: { stdout: string; exitCode: number; stderr: string }, signal?: AbortSignal): string {
   if (result.exitCode !== 0 && !signal?.aborted)
@@ -42,10 +45,10 @@ export async function getStashFiles(repoPath: string, stashHash: string, signal?
       signal,
     ),
   ]);
-  // The untracked part is optional (a stash without -u has no third parent); the tracked one must read.
+  // The untracked part is optional (a stash without -u has no third parent); a failure beside that is one.
   return [
     ...parseDiffTreeOutput(succeeded(tracked, signal)),
-    ...(untracked.exitCode === 0 ? parseDiffTreeOutput(untracked.stdout) : []),
+    ...(NO_REVISION.test(untracked.stderr) ? [] : parseDiffTreeOutput(succeeded(untracked, signal))),
   ];
 }
 

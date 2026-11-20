@@ -37,6 +37,8 @@ export interface GitDataState {
   maxCount: () => number;
   fetching: () => boolean;
   hasMore: () => boolean;
+  /** The error shown: a working tree readable again clears its own. */
+  error: () => string | null;
 }
 
 /** What the loader changes in the app's state. */
@@ -178,6 +180,9 @@ export function createGitDataService(ports: GitDataPorts) {
           if (!same([...state.tagDetails()], [...tagDetails])) actions.setTagDetails(tagDetails);
           if (!same([...state.stashByParent()], [...stashByParent])) actions.setStashByParent(stashByParent);
           if (wtStatus) actions.noteWorkingTreeRead();
+          // The working tree's read says how it went here too: failed, or readable again.
+          if (statusError) actions.setError(bannerOrFallback(statusError, BANNER.git.statusFailed, "Git"));
+          else if (state.error() === BANNER.git.statusFailed) actions.setError(null);
         });
         return;
       }

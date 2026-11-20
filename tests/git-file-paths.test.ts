@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -199,6 +199,17 @@ test("a stash's untracked files (git stash -u) are listed as added, and their di
     expect(paths(await getStashFiles(root, stash))).toEqual(["A untracked.txt"]);
     expect((await getFileDiff(root, stash, "untracked.txt", "stash")).hunks).toHaveLength(1);
     expect((await getFileContent(root, stash, "untracked.txt", "stash")).lines).toHaveLength(1);
+
+    // A stash without -u has no third parent: no error.
+    await writeFile(join(root, "tracked.txt"), "two\n");
+    await git("stash", "push");
+    const plain = await git("rev-parse", "stash@{0}");
+    expect(paths(await getStashFiles(root, plain))).toEqual(["M tracked.txt"]);
+
+    // The third parent's tree unreadable: an error, not an empty stash.
+    const tree = await git("rev-parse", `${stash}^3^{tree}`);
+    await rm(join(root, ".git", "objects", tree.slice(0, 2), tree.slice(2)), { force: true });
+    await expect(getStashFiles(root, stash)).rejects.toThrow();
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -250,3 +261,20 @@ test("a pull request's commits are fetched alone: its head from refs/pull/N/head
     await rm(root, { recursive: true, force: true });
   }
 });
+
+// Windows has no chmod 000, and root reads anything.
+test.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
+  "an untracked file that can't be read is an error, not a file without changes",
+  async () => {
+    const root = await mkdtemp(join(tmpdir(), "codepulse-git-unreadable-"));
+    try {
+      await runGit(root, ["init", "-q"]);
+      await writeFile(join(root, "secret.txt"), "x\n");
+      await chmod(join(root, "secret.txt"), 0o000);
+      await expect(getFileDiff(root, "", "secret.txt", "untracked")).rejects.toThrow();
+    } finally {
+      await chmod(join(root, "secret.txt"), 0o644).catch(() => {});
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+);

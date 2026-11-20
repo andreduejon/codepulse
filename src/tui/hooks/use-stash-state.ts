@@ -1,5 +1,6 @@
 import type { Accessor } from "solid-js";
 import { createMemo } from "solid-js";
+import { BANNER, bannerOrFallback } from "../../core/banner";
 import type { Commit, FileChange } from "../../core/git/types";
 import { createRememberedSignal, type DetailMemory } from "../components/detail-memory";
 import { computeFileWidths } from "../components/detail-types";
@@ -42,7 +43,7 @@ export interface StashState {
  * memory keeps it while the stashes are not shown (another tab, the other layout).
  */
 export function useStashState(commit: Accessor<Commit | null | undefined>, memory?: DetailMemory): StashState {
-  const { state } = useAppState();
+  const { state, actions } = useAppState();
   const git = useGit();
 
   const stashEntries = createMemo((): Commit[] => {
@@ -84,7 +85,19 @@ export function useStashState(commit: Accessor<Commit | null | undefined>, memor
 
     // Lazy load files if not cached
     if (!stashFileCache().has(stashHash)) {
-      const files = await git.getStashFiles(state.repoPath(), stashHash);
+      let files: FileChange[];
+      try {
+        files = await git.getStashFiles(state.repoPath(), stashHash);
+      } catch (err) {
+        // Said, and closed again: nothing empty is kept for it, so opening it again reads it again.
+        actions.setError(bannerOrFallback(err, BANNER.git.detailFailed, "Git"));
+        setExpandedStashes(prev => {
+          const next = new Set(prev);
+          next.delete(stashHash);
+          return next;
+        });
+        return;
+      }
       setStashFileCache(prev => {
         const m = new Map(prev);
         m.set(stashHash, files);

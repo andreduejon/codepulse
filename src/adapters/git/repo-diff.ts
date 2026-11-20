@@ -8,6 +8,7 @@ import {
 } from "../../core/git/diff";
 import type { BlameLine, DiffSource, FileContent, FileDiff } from "../../core/git/types";
 import { runGit } from "./repo-git";
+import { NO_REVISION } from "./repo-status";
 
 /** Read at most MAX_FILE_BYTES of a working-tree file; null when it does not exist. */
 async function readWorktreeFile(repoPath: string, filePath: string): Promise<FileContent | null> {
@@ -88,7 +89,8 @@ export async function getFileDiff(
       signal,
       MAX_FILE_BYTES,
     );
-    if (untracked.exitCode === 0 || untracked.truncated) result = untracked;
+    // No third parent (a stash without -u): the empty diff stands. Any other failure is said below.
+    if (!NO_REVISION.test(untracked.stderr)) result = untracked;
   }
 
   // A failed read is an error, not a file without changes.
@@ -127,8 +129,10 @@ async function getUntrackedFileDiff(repoPath: string, filePath: string): Promise
       isBinary: false,
       ...(content.truncated ? { truncated: true } : {}),
     };
-  } catch {
-    return { filePath, hunks: [], isBinary: false };
+  } catch (err) {
+    // Gone since it was listed: no changes. Unreadable (permissions): an error, not an empty file.
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return { filePath, hunks: [], isBinary: false };
+    throw err;
   }
 }
 
