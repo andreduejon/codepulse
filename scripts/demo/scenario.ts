@@ -189,7 +189,7 @@ export interface FakePull {
   head: string;
   headRef: string;
   baseRef: string;
-  /** The commit key its base branch points at. */
+  /** The commit key its base branch points at, or a commit this clone hasn't. */
   base: string;
   author: string;
   draft?: boolean;
@@ -197,8 +197,10 @@ export interface FakePull {
 }
 
 /**
- * The shop's open pull requests: the payments branch into main, dev into main and into the release branch (two on one
- * commit), and a draft. The graph marks each branch's tip, its Pull requests tab lists them.
+ * The shop's open pull requests, one for each way the graph previews a merge: the payments branch into main (the
+ * target moved on, one row above), dev into main (the target below, dev is ahead of it) and into the release branch
+ * (two on one commit; a long line that crosses lanes), a draft far right of the lanes, and the metrics dashboard into
+ * a branch this clone never fetched (no line, its files not here).
  */
 export function githubPulls(): FakePull[] {
   return [
@@ -243,8 +245,21 @@ export function githubPulls(): FakePull[] {
       draft: true,
       updatedAgoMin: 26 * 60,
     },
+    {
+      number: 127,
+      title: "feat(metrics): sales dashboard",
+      head: "dash3",
+      headRef: "feature/metrics-dashboard",
+      baseRef: "staging",
+      base: UNFETCHED,
+      author: "demo-dev",
+      updatedAgoMin: 3 * 24 * 60,
+    },
   ];
 }
+
+/** A commit no clone of the demo has: a pull request's target branch that was never fetched. */
+export const UNFETCHED = "0123456789abcdef0123456789abcdef01234567";
 
 export function githubRuns(state: DemoState, phase: Phase): FakeRun[] {
   const s = state.shas;

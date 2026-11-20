@@ -24,6 +24,7 @@ describe("merge preview", () => {
       bottomNode: 1,
       column: 2,
       extra: false,
+      target: "top",
     });
     // GitHub's commit isn't loaded: the branch's.
     expect(mergePreviewSpan(ROWS, { head: "head", base: "gone", baseRef: "main" }, 2, 12)?.top).toBe(0);
@@ -46,16 +47,22 @@ describe("merge preview", () => {
     expect(mergePreviewSpan(ROWS, null, 2, 12)).toBeNull();
   });
 
-  test("each end's line reaches the column over empty cells only; the lines between carry it", () => {
-    const span = { top: 0, bottom: 2, topNode: 0, bottomNode: 1, column: 2, extra: false };
-    expect(text(withMergePreview(chars("█ "), span, 0, "commit", "muted"))).toBe("█┄┄┄╮ ");
-    expect(text(withMergePreview(chars("│ "), span, 0, "below", "muted"))).toBe("│   ┆ ");
-    // A lane it crosses stays.
-    expect(text(withMergePreview(chars("│ │ "), span, 1, "commit", "muted"))).toBe("│ │ ┆ ");
-    // A lane right of it stays too.
-    expect(text(withMergePreview(chars("│ │   │ "), span, 1, "commit", "muted"))).toBe("│ │ ┆ │ ");
-    expect(text(withMergePreview(chars("│ █ "), span, 2, "commit", "muted"))).toBe("│ █┄╯ ");
-    expect(text(withMergePreview(chars("│ ╮ "), span, 2, "above", "muted"))).toBe("│ ╮ ┆ ");
+  test("each end's line reaches the column, the target's with ◀; a lane it crosses is ┼; the lines between carry it", () => {
+    const span = { top: 0, bottom: 2, topNode: 0, bottomNode: 1, column: 2, extra: false, target: "top" as const };
+    expect(text(withMergePreview(chars("█ "), span, 0, "commit", "muted"))).toBe("█◀──╮ ");
+    expect(text(withMergePreview(chars("│ "), span, 0, "below", "muted"))).toBe("│   │ ");
+    // Lanes left and right of it stay.
+    expect(text(withMergePreview(chars("│ │   │ "), span, 1, "commit", "muted"))).toBe("│ │ │ │ ");
+    expect(text(withMergePreview(chars("│ █ "), span, 2, "commit", "muted"))).toBe("│ █─╯ ");
+    expect(text(withMergePreview(chars("│ ╮ "), span, 2, "above", "muted"))).toBe("│ ╮ │ ");
+    // Its own cells muted; a lane it crosses keeps its colour.
+    const crossing = withMergePreview(chars("█ │ "), { ...span, column: 3 }, 0, "commit", "muted");
+    expect(text(crossing)).toBe("█◀┼───╮ ");
+    expect(crossing.slice(0, 4).map(cell => cell.color)).toEqual(["lane", "muted", "lane", "muted"]);
+    // The head's end when the target is below it: no arrow there, the target's has it.
+    const below = { ...span, target: "bottom" as const };
+    expect(text(withMergePreview(chars("█ "), below, 0, "commit", "muted"))).toBe("█───╮ ");
+    expect(text(withMergePreview(chars("│ █ "), below, 2, "commit", "muted"))).toBe("│ █◀╯ ");
     // Outside the span, and the bottom's connector: as they were.
     expect(text(withMergePreview(chars("│ "), span, 2, "below", "muted"))).toBe("│ ");
     expect(text(withMergePreview(chars("│ "), span, 3, "commit", "muted"))).toBe("│ ");

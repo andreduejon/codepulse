@@ -1,6 +1,6 @@
 /**
- * A pull request's merge, before it happens: while its tab is open, a muted dotted line from the commit its branch
- * points at to the one the target branch points at, as the merge would join them. It runs in the first column right of
+ * A pull request's merge, before it happens: while its tab is open, a muted line from the commit its branch points at
+ * to the one the target branch points at, with `◀` at the target, as the merge would join them. It runs in the first column right of
  * both that no line uses between them, drawn over the rows as they are: the graph's own lanes do not move. Only when
  * every column is taken does it get one more, right of the lanes.
  */
@@ -23,6 +23,8 @@ export interface MergePreviewSpan {
   column: number;
   /** Its column is one more than the graph has: the graph is that much wider while it shows. */
   extra: boolean;
+  /** Which end is the target (the arrow's): the top one when the target moved on since the branch left it. */
+  target: "top" | "bottom";
 }
 
 /** Whether no line of the row (its own, its connector, its fan-out lines) uses the column. */
@@ -64,15 +66,16 @@ export function mergePreviewSpan(
   while (column < columns && !between.every(row => isFree(row, column))) column++;
   const extra = column >= columns;
   if (extra && columns + 1 > maxColumns) return null;
-  return { top, bottom, topNode, bottomNode, column, extra };
+  return { top, bottom, topNode, bottomNode, column, extra, target: base < head ? "top" : "bottom" };
 }
 
 /** Which of a commit's graph lines: the fan-out lines above it, its own, the connector below it. */
 export type GraphLinePart = "above" | "commit" | "below";
 
 /**
- * A graph line with the preview drawn on it: `┆` between the ends, and on each end's own line a dotted `┄` from its
- * node to the column (over empty cells only: a lane it crosses stays) ending in `╮` at the top or `╯` at the bottom.
+ * A graph line with the preview drawn on it: `│` between the ends, and on each end's own line `─` from its node to the
+ * column, ending in `╮` at the top or `╯` at the bottom; the target's starts with `◀`. It fills empty cells only: a
+ * lane it crosses shows as `┼` in the lane's colour, anything else stays as it is.
  */
 export function withMergePreview(
   chars: GraphChar[],
@@ -92,9 +95,18 @@ export function withMergePreview(
   while (cells.length < span.column * 2 + 2) cells.push({ char: " ", color });
   const at = span.column * 2;
   if (!through) {
-    const node = index === span.top ? span.topNode : span.bottomNode;
-    for (let cell = node * 2 + 1; cell < at; cell++) if (cells[cell]?.char === " ") cells[cell] = { char: "┄", color };
+    const end = index === span.top ? "top" : "bottom";
+    const node = end === "top" ? span.topNode : span.bottomNode;
+    let arrow = end === span.target;
+    for (let cell = node * 2 + 1; cell < at; cell++) {
+      const current = cells[cell] as GraphChar;
+      if (current.char === "│") cells[cell] = { ...current, char: "┼" };
+      else if (current.char === " ") {
+        cells[cell] = { char: arrow ? "◀" : "─", color };
+        arrow = false;
+      }
+    }
   }
-  cells[at] = { char: through ? "┆" : index === span.top ? "╮" : "╯", color };
+  cells[at] = { char: through ? "│" : index === span.top ? "╮" : "╯", color };
   return cells;
 }

@@ -71,6 +71,24 @@ export const GOLDEN_PLAYS: readonly GoldenPlay[] = [
     ],
   },
   {
+    name: "github-merge-preview",
+    covers:
+      "the graph's preview of the selected pull request's merge, each case: the target one row above, the target " +
+      "below, a long line crossing lanes, a draft right of the lanes, a target the clone hasn't (no line)",
+    args: [
+      "--size",
+      "200x100",
+      "--play",
+      [
+        'click:GitHub wait:"PR #124" click:6adc455 click:"Pull requests" wait:"total pull requests" shot:target-above',
+        'click:bf08113 click:"Pull requests" wait:"PR #124 release" shot:target-below',
+        'click:"PR #125 release" wait:"release/1.x" shot:crossing-lanes',
+        'click:69ddc1f click:"Pull requests" wait:"PR #119" shot:draft',
+        'click:e37842a click:"Pull requests" wait:"PR #127 feat" click:"PR #127 feat" wait:"fetched here" shot:not-fetched',
+      ].join("\n"),
+    ],
+  },
+  {
     name: "providers",
     covers: "each provider tab with its details, OpenShift's Events tab, a CI log, an OpenShift resource log, Snyk",
     args: [

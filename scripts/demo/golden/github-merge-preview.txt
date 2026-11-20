@@ -1,0 +1,510 @@
+=== shot 1: target-above (200x100) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                        Status         Last Run               Actions         Pull requests (1)          Info
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+    █                           bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request…   2             running            Reload commit
+    │                                                                                                                                         total pull requests                                    1
+    █                           e6209dd  feat(api): add a health endpoint                                    1             45m ago            └─ ▸ PR #123 feat(payments): retry failed paym…  40m ago
+    │
+    █◀──╮                       3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…   2             28m ago
+    │   │
+    │ █─╯                       6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry    1             4h ago
+    │ │
+    █─╯                         64ddc8a  feat(payments): retry failed payments with exponential backoff, …   1             51m ago
+    │
+    █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······
+    │
+    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······
+    │ │
+    │ █                         0166f71  feat(i18n): add French                                             ·······        ·······
+    │ │
+    │ █─╮                       5245790  Merge branch 'main' into feature/i18n                              ·······        ·······
+    │ │ │
+    │ █ │                       484821c  feat(i18n): add German                                             ·······        ·······
+    │ │ │
+    │ █ │                       3ad11a2  feat(i18n): extract the checkout strings                           ·······        ·······
+    │ │ │
+    █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                     ·······        ·······
+    │ │ │ │
+    │ │ │ █                     9d1b361  fix(search): ignore accents                                        ·······        ·······
+    │ │ │ │
+    │ │ │ █                     cce93f9  feat(search): search as you type                                   ·······        ·······
+    │ │ │ │
+    │ │ │ █─╮                   ae57e03  Merge branch 'main' into feature/search                            ·······        ·······
+    │ │ │ │ │
+    │ │ │ █ │                   a89a18f  feat(search): highlight matching words                             ·······        ·······
+    │ │ │ │ │
+    │ │ │ █ │                   52defc5  feat(search): rank results by popularity                           ·······        ·······
+    │ │ │ │ │
+    │ │ │ █ │                   9cc5545  feat(search): index product names                                  ·······        ·······
+    │ │ │ │ │
+    █─┼─┼─┼─┼─╮                 179f8b7  Merge pull request #20 from demo/feature/a11y                      ·······        ·······
+    │ │ │ │ │ │
+    │ │ │ │ │ █                 cac0f32  fix(a11y): announce cart updates                                   ·······        ·······
+    │ │ │ │ │ │
+    │ │ │ │ │ █                 ef3bff7  fix(a11y): label the cart buttons                                  ·······        ·······
+    │ │ │ │ │ │
+    ├─┼─╯ │ │ │
+    █─┼─╮ │ │ │                 0d02d96  Merge pull request #22 from demo/chore/eslint-9                    ·······        ·······
+    │ │ │ │ │ │
+    │ │ █ │ │ │                 337db73  chore(lint): move to ESLint 9                                      ·······        ·······
+    │ │ │ │ │ │
+    █─┼─┼─┼─┼─┼─╮               bd35bdd  Merge pull request #21 from demo/bugfix/cart-badge                 ·······        ·······
+    │ │ │ │ │ │ │
+    │ │ │ │ │ │ █               8912f9e  fix(cart): update the badge after removing an item                 ·······        ·······
+    │ │ │ │ │ │ │
+    │ │ │ │ │ │ │ █             f2a62b2   gh-pages   origin/gh-pages  docs: publish the 1.4.2 release not…  ·······        ·······
+    │ │ │ │ │ │ │ │
+    │ │ │ │ │ │ │ █             4f0f657  docs: document the cart API                                        ·······        ·······
+    │ │ │ │ │ │ │ │
+    │ │ │ │ │ │ │ █             c480ba6  docs: add the getting started page                                 ·······        ·······
+    │ │ │ │ │ │ │ │
+    │ │ │ │ │ │ │ █             693b2b9  docs: start the documentation site                                 ·······        ·······
+    │ │ │ │ │ │ │
+    │ │ │ │ │ │ │   █           69ddc1f   feature/dark-mode   PR #119  wip(theme): contrast tweaks          ·······        ·······
+    │ │ │ │ │ │ │   │
+    │ │ │ │ │ │ │   █           ef040ee  feat(theme): follow the system setting                             ·······        ·······
+    │ │ │ │ │ │ │   │
+    │ │ │ │ │ │ │   █           a141fb6  feat(theme): dark mode                                             ·······        ·······
+    │ │ │ │ │ │ │   │
+    │ │ │ │ │ │ │ █ │           e37842a   origin/feature/metrics-dashbo…   PR #127  feat(metrics): export…  ·······        ·······
+    │ │ │ │ │ │ │ │ │
+    │ │ │ │ │ │ │ █ │           a5e9d6b  feat(metrics): weekly totals                                       ·······        ·······
+    │ │ │ │ │ │ │ │ │
+    │ │ │ │ │ │ │ █ │           c639b50  feat(metrics): sales dashboard                                     ·······        ·······
+    │ │ │ │ │ │ │ │ │
+    ├─┼─┼─┼─┼─┼─┼─┼─╯
+    ├─┼─┼─┼─┼─┼─┼─╯
+    ├─┼─┼─┼─┼─┼─╯
+    ├─┼─┼─┼─┼─╯
+    ├─┼─╯ │ │
+    ├─╯   │ │
+    █─╮   │ │                   95f9e6a  Merge branch 'release/1.x'                                         ·······        ·······
+    │ │   │ │
+    │ █   │ │                   c12ac20   v1.4.2   origin/release/1.x  chore(release): 1.4.2                ·······        ·······
+    │ │   │ │
+    │ █   │ │                   d5e3e7e  fix(payments): time out after 30 seconds                           ·······        ·······
+    │ │   │ │
+    │ █   │ │                   15eb851   v1.4.1   release/1.x  chore(release): 1.4.1                       ·······        ·······
+    │ │   │ │
+    │ █─╮ │ │                   b25482f  Merge branch 'hotfix/discount-overflow' into release/1.x           ·······        ·······
+    │ │ │ │ │
+    █ │ │ │ │                   2ca8640  Revert "feat(cart): free shipping over 50"                         ·······        ·······
+
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                           normal   search   path   ancestry
+  │
+  │   customer-notification-service   shop   shop-web                                                                 main   86 commits
+  │
+
+                                                                     tab Jenkins · enter reload · esc back · ←/→ switch tab · ↑/↓ navigate
+
+
+=== shot 2: target-below (200x100) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                        Status         Last Run               Actions         Pull requests (2)          Info
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+    █─╮                         bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request    2             running            Reload commit
+    │ │                                                                                                                                       total pull requests                                    2
+    █ │                         e6209dd  feat(api): add a health endpoint                                    1             45m ago            ├─ ▸ PR #124 release: dev into main · dev → mai…  5m ago
+    │ │                                                                                                                                       └─ ▸ PR #125 release: dev into release/1.x        5m ago
+    █◀╯                         3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…   2             28m ago
+    │
+    │ █                         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry…   1             4h ago
+    │ │
+    █─╯                         64ddc8a  feat(payments): retry failed payments with exponential backoff, …   1             51m ago
+    │
+    █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······
+    │
+    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······
+    │ │
+    │ █                         0166f71  feat(i18n): add French                                             ·······        ·······
+    │ │
+    │ █─╮                       5245790  Merge branch 'main' into feature/i18n                              ·······        ·······
+    │ │ │
+    │ █ │                       484821c  feat(i18n): add German                                             ·······        ·······
+    │ │ │
+    │ █ │                       3ad11a2  feat(i18n): extract the checkout strings                           ·······        ·······
+    │ │ │
+    █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                     ·······        ·······
+    │ │ │ │
+    │ │ │ █                     9d1b361  fix(search): ignore accents                                        ·······        ·······
+    │ │ │ │
+    │ │ │ █                     cce93f9  feat(search): search as you type                                   ·······        ·······
+    │ │ │ │
+    │ │ │ █─╮                   ae57e03  Merge branch 'main' into feature/search                            ·······        ·······
+    │ │ │ │ │
+    │ │ │ █ │                   a89a18f  feat(search): highlight matching words                             ·······        ·······
+    │ │ │ │ │
+    │ │ │ █ │                   52defc5  feat(search): rank results by popularity                           ·······        ·······
+    │ │ │ │ │
+    │ │ │ █ │                   9cc5545  feat(search): index product names                                  ·······        ·······
+    │ │ │ │ │
+    █─┼─┼─┼─┼─╮                 179f8b7  Merge pull request #20 from demo/feature/a11y                      ·······        ·······
+    │ │ │ │ │ │
+    │ │ │ │ │ █                 cac0f32  fix(a11y): announce cart updates                                   ·······        ·······
+    │ │ │ │ │ │
+    │ │ │ │ │ █                 ef3bff7  fix(a11y): label the cart buttons                                  ·······        ·······
+    │ │ │ │ │ │
+    ├─┼─╯ │ │ │
+    █─┼─╮ │ │ │                 0d02d96  Merge pull request #22 from demo/chore/eslint-9                    ·······        ·······
+    │ │ │ │ │ │
+    │ │ █ │ │ │                 337db73  chore(lint): move to ESLint 9                                      ·······        ·······
+    │ │ │ │ │ │
+    █─┼─┼─┼─┼─┼─╮               bd35bdd  Merge pull request #21 from demo/bugfix/cart-badge                 ·······        ·······
+    │ │ │ │ │ │ │
+    │ │ │ │ │ │ █               8912f9e  fix(cart): update the badge after removing an item                 ·······        ·······
+    │ │ │ │ │ │ │
+    │ │ │ │ │ │ │ █             f2a62b2   gh-pages   origin/gh-pages  docs: publish the 1.4.2 release not…  ·······        ·······
+    │ │ │ │ │ │ │ │
+    │ │ │ │ │ │ │ █             4f0f657  docs: document the cart API                                        ·······        ·······
+    │ │ │ │ │ │ │ │
+    │ │ │ │ │ │ │ █             c480ba6  docs: add the getting started page                                 ·······        ·······
+    │ │ │ │ │ │ │ │
+    │ │ │ │ │ │ │ █             693b2b9  docs: start the documentation site                                 ·······        ·······
+    │ │ │ │ │ │ │
+    │ │ │ │ │ │ │   █           69ddc1f   feature/dark-mode   PR #119  wip(theme): contrast tweaks          ·······        ·······
+    │ │ │ │ │ │ │   │
+    │ │ │ │ │ │ │   █           ef040ee  feat(theme): follow the system setting                             ·······        ·······
+    │ │ │ │ │ │ │   │
+    │ │ │ │ │ │ │   █           a141fb6  feat(theme): dark mode                                             ·······        ·······
+    │ │ │ │ │ │ │   │
+    │ │ │ │ │ │ │ █ │           e37842a   origin/feature/metrics-dashbo…   PR #127  feat(metrics): export…  ·······        ·······
+    │ │ │ │ │ │ │ │ │
+    │ │ │ │ │ │ │ █ │           a5e9d6b  feat(metrics): weekly totals                                       ·······        ·······
+    │ │ │ │ │ │ │ │ │
+    │ │ │ │ │ │ │ █ │           c639b50  feat(metrics): sales dashboard                                     ·······        ·······
+    │ │ │ │ │ │ │ │ │
+    ├─┼─┼─┼─┼─┼─┼─┼─╯
+    ├─┼─┼─┼─┼─┼─┼─╯
+    ├─┼─┼─┼─┼─┼─╯
+    ├─┼─┼─┼─┼─╯
+    ├─┼─╯ │ │
+    ├─╯   │ │
+    █─╮   │ │                   95f9e6a  Merge branch 'release/1.x'                                         ·······        ·······
+    │ │   │ │
+    │ █   │ │                   c12ac20   v1.4.2   origin/release/1.x  chore(release): 1.4.2                ·······        ·······
+    │ │   │ │
+    │ █   │ │                   d5e3e7e  fix(payments): time out after 30 seconds                           ·······        ·······
+    │ │   │ │
+    │ █   │ │                   15eb851   v1.4.1   release/1.x  chore(release): 1.4.1                       ·······        ·······
+    │ │   │ │
+    │ █─╮ │ │                   b25482f  Merge branch 'hotfix/discount-overflow' into release/1.x           ·······        ·······
+    │ │ │ │ │
+    █ │ │ │ │                   2ca8640  Revert "feat(cart): free shipping over 50"                         ·······        ·······
+
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                           normal   search   path   ancestry
+  │
+  │   customer-notification-service   shop   shop-web                                                                 main   86 commits
+  │
+
+                                                                     tab Jenkins · enter reload · esc back · ←/→ switch tab · ↑/↓ navigate
+
+
+=== shot 3: crossing-lanes (200x100) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                        Status         Last Run               Actions         Pull requests (2)          Info
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+    █─────────────────╮         bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request    2             running            Reload commit
+    │                 │                                                                                                                       total pull requests                                    2
+    █                 │         e6209dd  feat(api): add a health endpoint                                    1             45m ago            ├─ ▸ PR #124 release: dev into main · dev → mai…  5m ago
+    │                 │                                                                                                                       └─ ▾ PR #125 release: dev into release/1.x · dev  5m ago
+    █                 │         3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…   2             28m ago               ├─ ▾ data/
+    │                 │                                                                                                                          │  ├─ ▾ prices/
+    │ █               │         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry…   1             4h ago                │  │  ├─ de.json                           A   +42 -0
+    │ │               │                                                                                                                          │  │  ├─ fr.json                           A   +42 -0
+    █─╯               │         64ddc8a  feat(payments): retry failed payments with exponential backoff, …   1             51m ago               │  │  └─ nl.json                           A   +42 -0
+    │                 │                                                                                                                          │  └─ products.csv                         A +6001 -0
+    █                 │         917f7b3  perf(cart): cache price lookups                                    ·······        ·······               ├─ ▾ deploy/
+    │                 │                                                                                                                          │  ├─ deploy.sh                            A   +13 -0
+    █─╮               │         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······               │  └─ README.txt                           A    +2 -0
+    │ │               │                                                                                                                          ├─ ▾ docs/adr/
+    │ █               │         0166f71  feat(i18n): add French                                             ·······        ·······               │  ├─ 0003-upgrade-lodash.md               A   +20 -0
+    │ │               │                                                                                                                          │  ├─ 0004-upgrade-axios.md                A   +20 -0
+    │ █─╮             │         5245790  Merge branch 'main' into feature/i18n                              ·······        ·······               │  ├─ 0005-upgrade-jest.md                 A   +21 -0
+    │ │ │             │                                                                                                                          │  └─ 0006-upgrade-typescript.md           A   +20 -0
+    │ █ │             │         484821c  feat(i18n): add German                                             ·······        ·······               ├─ ▾ src/
+    │ │ │             │                                                                                                                          │  ├─ ▾ a11y/
+    │ █ │             │         3ad11a2  feat(i18n): extract the checkout strings                           ·······        ·······               │  │  └─ announcer.ts                      A   +16 -0
+    │ │ │             │                                                                                                                          │  ├─ ▾ api/
+    █─┼─┼─╮           │         fe7db4d  Merge pull request #9 from demo/feature/search                     ·······        ·······               │  │  ├─ health.ts                         A   +14 -0
+    │ │ │ │           │                                                                                                                          │  │  └─ metrics.ts                        A   +19 -0
+    │ │ │ █           │         9d1b361  fix(search): ignore accents                                        ·······        ·······               │  ├─ ▾ cart/
+    │ │ │ │           │                                                                                                                          │  │  ├─ badge.ts                          M    +7 -0
+    │ │ │ █           │         cce93f9  feat(search): search as you type                                   ·······        ·······               │  │  ├─ cart.ts                           M    +4 -1
+    │ │ │ │           │                                                                                                                          │  │  ├─ CartButton.tsx                    M    +9 -3
+    │ │ │ █─╮         │         ae57e03  Merge branch 'main' into feature/search                            ·······        ·······               │  │  └─ price-cache.ts                    A   +17 -0
+    │ │ │ │ │         │                                                                                                                          │  ├─ ▾ checkout/
+    │ │ │ █ │         │         a89a18f  feat(search): highlight matching words                             ·······        ·······               │  │  ├─ api.test.ts                       A   +16 -0
+    │ │ │ │ │         │                                                                                                                          │  │  ├─ api.ts                            A   +20 -0
+    │ │ │ █ │         │         52defc5  feat(search): rank results by popularity                           ·······        ·······               │  │  ├─ CheckoutPage.tsx                  A   +25 -0
+    │ │ │ │ │         │                                                                                                                          │  │  ├─ errors.ts                         A   +11 -0
+    │ │ │ █ │         │         9cc5545  feat(search): index product names                                  ·······        ·······               │  │  └─ OrderSummary.tsx                  A   +30 -0
+    │ │ │ │ │         │                                                                                                                          │  ├─ ▾ i18n/
+    █─┼─┼─┼─┼─╮       │         179f8b7  Merge pull request #20 from demo/feature/a11y                      ·······        ·······               │  │  ├─ de.json                           A   +17 -0
+    │ │ │ │ │ │       │                                                                                                                          │  │  ├─ en.json                           A   +17 -0
+    │ │ │ │ │ █       │         cac0f32  fix(a11y): announce cart updates                                   ·······        ·······               │  │  ├─ fr.json                           A   +17 -0
+    │ │ │ │ │ │       │                                                                                                                          │  │  └─ index.ts                          A   +11 -0
+    │ │ │ │ │ █       │         ef3bff7  fix(a11y): label the cart buttons                                  ·······        ·······               │  ├─ ▾ inventory/
+    │ │ │ │ │ │       │                                                                                                                          │  │  └─ reservations.ts                   A   +33 -0
+    ├─┼─╯ │ │ │       │                                                                                                                          │  ├─ ▾ payments/
+    █─┼─╮ │ │ │       │         0d02d96  Merge pull request #22 from demo/chore/eslint-9                    ·······        ·······               │  │  ├─ gateway-client-...le-name.test.ts A  +170 -0
+    │ │ │ │ │ │       │                                                                                                                          │  │  ├─ gateway.ts                        M    +2 -2
+    │ │ █ │ │ │       │         337db73  chore(lint): move to ESLint 9                                      ·······        ·······               │  │  ├─ retry.test.ts                     A   +47 -0
+    │ │ │ │ │ │       │                                                                                                                          │  │  └─ retry.ts                          A   +34 -0
+    █─┼─┼─┼─┼─┼─╮     │         bd35bdd  Merge pull request #21 from demo/bugfix/cart-badge                 ·······        ·······               │  ├─ ▾ pricing/
+    │ │ │ │ │ │ │     │                                                                                                                          │  │  ├─ currency.ts                       A    +7 -0
+    │ │ │ │ │ │ █     │         8912f9e  fix(cart): update the badge after removing an item                 ·······        ·······               │  │  └─ price-lists.ts                    A   +14 -0
+    │ │ │ │ │ │ │     │                                                                                                                          │  ├─ ▾ search/
+    │ │ │ │ │ │ │ █   │         f2a62b2   gh-pages   origin/gh-pages  docs: publish the 1.4.2 release not…  ·······        ·······               │  │  ├─ highlight.ts                      A   +12 -0
+    │ │ │ │ │ │ │ │   │                                                                                                                          │  │  ├─ index.test.ts                     A   +21 -0
+    │ │ │ │ │ │ │ █   │         4f0f657  docs: document the cart API                                        ·······        ·······               │  │  ├─ index.ts                          A   +45 -0
+    │ │ │ │ │ │ │ │   │                                                                                                                          │  │  └─ ranking.ts                        A   +11 -0
+    │ │ │ │ │ │ │ █   │         c480ba6  docs: add the getting started page                                 ·······        ·······               │  └─ index.ts                             M    +5 -0
+    │ │ │ │ │ │ │ │   │                                                                                                                          ├─ .eslintrc.json                          D    +0 -9
+    │ │ │ │ │ │ │ █   │         693b2b9  docs: start the documentation site                                 ·······        ·······               ├─ eslint.config.js                        A    +8 -0
+    │ │ │ │ │ │ │     │                                                                                                                          ├─ package-lock.json                       M    +9 -2
+    │ │ │ │ │ │ │   █ │         69ddc1f   feature/dark-mode   PR #119  wip(theme): contrast tweaks          ·······        ·······               ├─ package.json                            M    +5 -1
+    │ │ │ │ │ │ │   │ │                                                                                                                          └─ README.md                               M   +35 -2
+    │ │ │ │ │ │ │   █ │         ef040ee  feat(theme): follow the system setting                             ·······        ·······
+    │ │ │ │ │ │ │   │ │
+    │ │ │ │ │ │ │   █ │         a141fb6  feat(theme): dark mode                                             ·······        ·······
+    │ │ │ │ │ │ │   │ │
+    │ │ │ │ │ │ │ █ │ │         e37842a   origin/feature/metrics-dashbo…   PR #127  feat(metrics): export…  ·······        ·······
+    │ │ │ │ │ │ │ │ │ │
+    │ │ │ │ │ │ │ █ │ │         a5e9d6b  feat(metrics): weekly totals                                       ·······        ·······
+    │ │ │ │ │ │ │ │ │ │
+    │ │ │ │ │ │ │ █ │ │         c639b50  feat(metrics): sales dashboard                                     ·······        ·······
+    │ │ │ │ │ │ │ │ │ │
+    ├─┼─┼─┼─┼─┼─┼─┼─╯ │
+    ├─┼─┼─┼─┼─┼─┼─╯   │
+    ├─┼─┼─┼─┼─┼─╯     │
+    ├─┼─┼─┼─┼─╯       │
+    ├─┼─╯ │ │         │
+    ├─╯   │ │         │
+    █─╮   │ │         │         95f9e6a  Merge branch 'release/1.x'                                         ·······        ·······
+    │ │   │ │         │
+    │ █◀──┼─┼─────────╯         c12ac20   v1.4.2   origin/release/1.x  chore(release): 1.4.2                ·······        ·······
+    │ │   │ │
+    │ █   │ │                   d5e3e7e  fix(payments): time out after 30 seconds                           ·······        ·······
+    │ │   │ │
+    │ █   │ │                   15eb851   v1.4.1   release/1.x  chore(release): 1.4.1                       ·······        ·······
+    │ │   │ │
+    │ █─╮ │ │                   b25482f  Merge branch 'hotfix/discount-overflow' into release/1.x           ·······        ·······
+    │ │ │ │ │
+    █ │ │ │ │                   2ca8640  Revert "feat(cart): free shipping over 50"                         ·······        ·······
+
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                           normal   search   path   ancestry
+  │
+  │   customer-notification-service   shop   shop-web                                                                 main   86 commits
+  │
+
+                                                          tab Jenkins · enter collapse · o open · esc back · ←/→ switch tab · ↑/↓ navigate
+
+
+=== shot 4: draft (200x100) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                        Status         Last Run               Actions         Pull requests (1)          Info
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+    █◀────────────────╮         bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request…   2             running            Reload commit
+    │                 │                                                                                                                       total pull requests                                    1
+    █                 │         e6209dd  feat(api): add a health endpoint                                    1             45m ago            └─ ▸ PR #119 feat(theme): dark mode · featur…  Yesterday
+    │                 │
+    █                 │         3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…   2             28m ago
+    │                 │
+    │ █               │         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry…   1             4h ago
+    │ │               │
+    █─╯               │         64ddc8a  feat(payments): retry failed payments with exponential backoff, …   1             51m ago
+    │                 │
+    █                 │         917f7b3  perf(cart): cache price lookups                                    ·······        ·······
+    │                 │
+    █─╮               │         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······
+    │ │               │
+    │ █               │         0166f71  feat(i18n): add French                                             ·······        ·······
+    │ │               │
+    │ █─╮             │         5245790  Merge branch 'main' into feature/i18n                              ·······        ·······
+    │ │ │             │
+    │ █ │             │         484821c  feat(i18n): add German                                             ·······        ·······
+    │ │ │             │
+    │ █ │             │         3ad11a2  feat(i18n): extract the checkout strings                           ·······        ·······
+    │ │ │             │
+    █─┼─┼─╮           │         fe7db4d  Merge pull request #9 from demo/feature/search                     ·······        ·······
+    │ │ │ │           │
+    │ │ │ █           │         9d1b361  fix(search): ignore accents                                        ·······        ·······
+    │ │ │ │           │
+    │ │ │ █           │         cce93f9  feat(search): search as you type                                   ·······        ·······
+    │ │ │ │           │
+    │ │ │ █─╮         │         ae57e03  Merge branch 'main' into feature/search                            ·······        ·······
+    │ │ │ │ │         │
+    │ │ │ █ │         │         a89a18f  feat(search): highlight matching words                             ·······        ·······
+    │ │ │ │ │         │
+    │ │ │ █ │         │         52defc5  feat(search): rank results by popularity                           ·······        ·······
+    │ │ │ │ │         │
+    │ │ │ █ │         │         9cc5545  feat(search): index product names                                  ·······        ·······
+    │ │ │ │ │         │
+    █─┼─┼─┼─┼─╮       │         179f8b7  Merge pull request #20 from demo/feature/a11y                      ·······        ·······
+    │ │ │ │ │ │       │
+    │ │ │ │ │ █       │         cac0f32  fix(a11y): announce cart updates                                   ·······        ·······
+    │ │ │ │ │ │       │
+    │ │ │ │ │ █       │         ef3bff7  fix(a11y): label the cart buttons                                  ·······        ·······
+    │ │ │ │ │ │       │
+    ├─┼─╯ │ │ │       │
+    █─┼─╮ │ │ │       │         0d02d96  Merge pull request #22 from demo/chore/eslint-9                    ·······        ·······
+    │ │ │ │ │ │       │
+    │ │ █ │ │ │       │         337db73  chore(lint): move to ESLint 9                                      ·······        ·······
+    │ │ │ │ │ │       │
+    █─┼─┼─┼─┼─┼─╮     │         bd35bdd  Merge pull request #21 from demo/bugfix/cart-badge                 ·······        ·······
+    │ │ │ │ │ │ │     │
+    │ │ │ │ │ │ █     │         8912f9e  fix(cart): update the badge after removing an item                 ·······        ·······
+    │ │ │ │ │ │ │     │
+    │ │ │ │ │ │ │ █   │         f2a62b2   gh-pages   origin/gh-pages  docs: publish the 1.4.2 release not…  ·······        ·······
+    │ │ │ │ │ │ │ │   │
+    │ │ │ │ │ │ │ █   │         4f0f657  docs: document the cart API                                        ·······        ·······
+    │ │ │ │ │ │ │ │   │
+    │ │ │ │ │ │ │ █   │         c480ba6  docs: add the getting started page                                 ·······        ·······
+    │ │ │ │ │ │ │ │   │
+    │ │ │ │ │ │ │ █   │         693b2b9  docs: start the documentation site                                 ·······        ·······
+    │ │ │ │ │ │ │     │
+    │ │ │ │ │ │ │   █─╯         69ddc1f   feature/dark-mode   PR #119  wip(theme): contrast tweaks          ·······        ·······
+    │ │ │ │ │ │ │   │
+    │ │ │ │ │ │ │   █           ef040ee  feat(theme): follow the system setting                             ·······        ·······
+    │ │ │ │ │ │ │   │
+    │ │ │ │ │ │ │   █           a141fb6  feat(theme): dark mode                                             ·······        ·······
+    │ │ │ │ │ │ │   │
+    │ │ │ │ │ │ │ █ │           e37842a   origin/feature/metrics-dashbo…   PR #127  feat(metrics): export…  ·······        ·······
+    │ │ │ │ │ │ │ │ │
+    │ │ │ │ │ │ │ █ │           a5e9d6b  feat(metrics): weekly totals                                       ·······        ·······
+    │ │ │ │ │ │ │ │ │
+    │ │ │ │ │ │ │ █ │           c639b50  feat(metrics): sales dashboard                                     ·······        ·······
+    │ │ │ │ │ │ │ │ │
+    ├─┼─┼─┼─┼─┼─┼─┼─╯
+    ├─┼─┼─┼─┼─┼─┼─╯
+    ├─┼─┼─┼─┼─┼─╯
+    ├─┼─┼─┼─┼─╯
+    ├─┼─╯ │ │
+    ├─╯   │ │
+    █─╮   │ │                   95f9e6a  Merge branch 'release/1.x'                                         ·······        ·······
+    │ │   │ │
+    │ █   │ │                   c12ac20   v1.4.2   origin/release/1.x  chore(release): 1.4.2                ·······        ·······
+    │ │   │ │
+    │ █   │ │                   d5e3e7e  fix(payments): time out after 30 seconds                           ·······        ·······
+    │ │   │ │
+    │ █   │ │                   15eb851   v1.4.1   release/1.x  chore(release): 1.4.1                       ·······        ·······
+    │ │   │ │
+    │ █─╮ │ │                   b25482f  Merge branch 'hotfix/discount-overflow' into release/1.x           ·······        ·······
+    │ │ │ │ │
+    █ │ │ │ │                   2ca8640  Revert "feat(cart): free shipping over 50"                         ·······        ·······
+
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                           normal   search   path   ancestry
+  │
+  │   customer-notification-service   shop   shop-web                                                                 main   86 commits
+  │
+
+                                                                     tab Jenkins · enter reload · esc back · ←/→ switch tab · ↑/↓ navigate
+
+
+=== shot 5: not-fetched (200x100) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                        Status         Last Run               Actions         Pull requests (1)          Info
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+    █                           bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request…   2             running            Reload commit
+    │                                                                                                                                         total pull requests                                    1
+    █                           e6209dd  feat(api): add a health endpoint                                    1             45m ago            └─ ▾ PR #127 feat(metrics): sales dashboard · fe  3d ago
+    │                                                                                                                                            └─ Its commits aren't fetched here: f fetches them.
+    █                           3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…   2             28m ago
+    │
+    │ █                         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry…   1             4h ago
+    │ │
+    █─╯                         64ddc8a  feat(payments): retry failed payments with exponential backoff, …   1             51m ago
+    │
+    █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······
+    │
+    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······
+    │ │
+    │ █                         0166f71  feat(i18n): add French                                             ·······        ·······
+    │ │
+    │ █─╮                       5245790  Merge branch 'main' into feature/i18n                              ·······        ·······
+    │ │ │
+    │ █ │                       484821c  feat(i18n): add German                                             ·······        ·······
+    │ │ │
+    │ █ │                       3ad11a2  feat(i18n): extract the checkout strings                           ·······        ·······
+    │ │ │
+    █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                     ·······        ·······
+    │ │ │ │
+    │ │ │ █                     9d1b361  fix(search): ignore accents                                        ·······        ·······
+    │ │ │ │
+    │ │ │ █                     cce93f9  feat(search): search as you type                                   ·······        ·······
+    │ │ │ │
+    │ │ │ █─╮                   ae57e03  Merge branch 'main' into feature/search                            ·······        ·······
+    │ │ │ │ │
+    │ │ │ █ │                   a89a18f  feat(search): highlight matching words                             ·······        ·······
+    │ │ │ │ │
+    │ │ │ █ │                   52defc5  feat(search): rank results by popularity                           ·······        ·······
+    │ │ │ │ │
+    │ │ │ █ │                   9cc5545  feat(search): index product names                                  ·······        ·······
+    │ │ │ │ │
+    █─┼─┼─┼─┼─╮                 179f8b7  Merge pull request #20 from demo/feature/a11y                      ·······        ·······
+    │ │ │ │ │ │
+    │ │ │ │ │ █                 cac0f32  fix(a11y): announce cart updates                                   ·······        ·······
+    │ │ │ │ │ │
+    │ │ │ │ │ █                 ef3bff7  fix(a11y): label the cart buttons                                  ·······        ·······
+    │ │ │ │ │ │
+    ├─┼─╯ │ │ │
+    █─┼─╮ │ │ │                 0d02d96  Merge pull request #22 from demo/chore/eslint-9                    ·······        ·······
+    │ │ │ │ │ │
+    │ │ █ │ │ │                 337db73  chore(lint): move to ESLint 9                                      ·······        ·······
+    │ │ │ │ │ │
+    █─┼─┼─┼─┼─┼─╮               bd35bdd  Merge pull request #21 from demo/bugfix/cart-badge                 ·······        ·······
+    │ │ │ │ │ │ │
+    │ │ │ │ │ │ █               8912f9e  fix(cart): update the badge after removing an item                 ·······        ·······
+    │ │ │ │ │ │ │
+    │ │ │ │ │ │ │ █             f2a62b2   gh-pages   origin/gh-pages  docs: publish the 1.4.2 release not…  ·······        ·······
+    │ │ │ │ │ │ │ │
+    │ │ │ │ │ │ │ █             4f0f657  docs: document the cart API                                        ·······        ·······
+    │ │ │ │ │ │ │ │
+    │ │ │ │ │ │ │ █             c480ba6  docs: add the getting started page                                 ·······        ·······
+    │ │ │ │ │ │ │ │
+    │ │ │ │ │ │ │ █             693b2b9  docs: start the documentation site                                 ·······        ·······
+    │ │ │ │ │ │ │
+    │ │ │ │ │ │ │   █           69ddc1f   feature/dark-mode   PR #119  wip(theme): contrast tweaks          ·······        ·······
+    │ │ │ │ │ │ │   │
+    │ │ │ │ │ │ │   █           ef040ee  feat(theme): follow the system setting                             ·······        ·······
+    │ │ │ │ │ │ │   │
+    │ │ │ │ │ │ │   █           a141fb6  feat(theme): dark mode                                             ·······        ·······
+    │ │ │ │ │ │ │   │
+    │ │ │ │ │ │ │ █ │           e37842a   origin/feature/metrics-dashbo…   PR #127  feat(metrics): export   ·······        ·······
+    │ │ │ │ │ │ │ │ │
+    │ │ │ │ │ │ │ █ │           a5e9d6b  feat(metrics): weekly totals                                       ·······        ·······
+    │ │ │ │ │ │ │ │ │
+    │ │ │ │ │ │ │ █ │           c639b50  feat(metrics): sales dashboard                                     ·······        ·······
+    │ │ │ │ │ │ │ │ │
+    ├─┼─┼─┼─┼─┼─┼─┼─╯
+    ├─┼─┼─┼─┼─┼─┼─╯
+    ├─┼─┼─┼─┼─┼─╯
+    ├─┼─┼─┼─┼─╯
+    ├─┼─╯ │ │
+    ├─╯   │ │
+    █─╮   │ │                   95f9e6a  Merge branch 'release/1.x'                                         ·······        ·······
+    │ │   │ │
+    │ █   │ │                   c12ac20   v1.4.2   origin/release/1.x  chore(release): 1.4.2                ·······        ·······
+    │ │   │ │
+    │ █   │ │                   d5e3e7e  fix(payments): time out after 30 seconds                           ·······        ·······
+    │ │   │ │
+    │ █   │ │                   15eb851   v1.4.1   release/1.x  chore(release): 1.4.1                       ·······        ·······
+    │ │   │ │
+    │ █─╮ │ │                   b25482f  Merge branch 'hotfix/discount-overflow' into release/1.x           ·······        ·······
+    │ │ │ │ │
+    █ │ │ │ │                   2ca8640  Revert "feat(cart): free shipping over 50"                         ·······        ·······
+
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                           normal   search   path   ancestry
+  │
+  │   customer-notification-service   shop   shop-web                                                                 main   86 commits
+  │
+
+                                                          tab Jenkins · enter collapse · o open · esc back · ←/→ switch tab · ↑/↓ navigate
+
+
