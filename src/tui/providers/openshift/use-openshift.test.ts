@@ -58,6 +58,8 @@ function mountOpenShift(
     seeds?: OpenShiftCacheEntry[];
     /** Holds the build inventory back until it settles. */
     inventoryGate?: Promise<unknown>;
+    /** The kinds the live list can watch: Pod alone by default. */
+    watchKinds?: string[];
   } = {},
 ) {
   const tokenEnvVar = "CODEPULSE_TEST_OPENSHIFT_TOKEN";
@@ -75,7 +77,7 @@ function mountOpenShift(
     failures: [],
     successfulRequests: 1,
     error: null,
-    resourceVersions: new Map([["ns:Pod", "1"]]),
+    resourceVersions: new Map((options.watchKinds ?? ["Pod"]).map(kind => [`ns:${kind}`, "1"])),
   };
   const cacheList = spyOn(OpenShiftCache.prototype, "list").mockResolvedValue([SHA]);
   const cacheRead = spyOn(OpenShiftCache.prototype, "read").mockResolvedValue(entry);
@@ -650,6 +652,42 @@ describe("OpenShift auth recovery across inventory and live list", () => {
     expect(mounted.state.providerStatusFor("openshift")).toEqual({
       kind: "error",
       message: OPENSHIFT_BANNER.tokenExpired,
+    });
+  });
+
+  test("one of three watches ending ends the others, and the list is read again before they start over", async () => {
+    const mounted = mountOpenShift(false, true, { watchKinds: ["Pod", "Deployment", "DeploymentConfig"] });
+    await Bun.sleep(30);
+    expect(mounted.watches).toHaveLength(3);
+    const lists = mounted.live.mock.calls.length;
+    mounted.watches[0].resolve("end");
+    await Bun.sleep(10);
+    expect(mounted.watches.slice(1).every(watch => watch.signal.aborted)).toBe(true);
+    for (const watch of mounted.watches.slice(1)) watch.resolve("end");
+    await Bun.sleep(1100);
+    expect(mounted.live.mock.calls.length).toBe(lists + 1);
+    expect(mounted.watches).toHaveLength(6);
+  });
+
+  test("one of three watches refused is said at once; the others go on, and it is not asked again", async () => {
+    const mounted = mountOpenShift(false, true, { watchKinds: ["Pod", "Deployment", "DeploymentConfig"] });
+    await Bun.sleep(30);
+    expect(mounted.watches).toHaveLength(3);
+    mounted.watches[1].resolve("forbidden");
+    await Bun.sleep(10);
+    expect(mounted.state.providerStatusFor("openshift")).toEqual({
+      kind: "warning",
+      message: OPENSHIFT_BANNER.watchDenied,
+    });
+    expect([mounted.watches[0], mounted.watches[2]].some(watch => watch.signal.aborted)).toBe(false);
+    // Another one ends: the list is read again, the refused watch stays out and its warning stays.
+    mounted.watches[0].resolve("end");
+    mounted.watches[2].resolve("end");
+    await Bun.sleep(1100);
+    expect(mounted.watches).toHaveLength(5);
+    expect(mounted.state.providerStatusFor("openshift")).toEqual({
+      kind: "warning",
+      message: OPENSHIFT_BANNER.watchDenied,
     });
   });
 

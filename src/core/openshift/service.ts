@@ -646,6 +646,8 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
     if (!token) return;
     const gen = ++watchGen;
     let delayMs = 1000;
+    /** Watches the cluster refused: not asked again this session, and their warning stays. */
+    const denied = new Set<string>();
     ports.onLiveState("loading");
     try {
       while (!signal.aborted && lifecycle().isCurrent(epoch, repoPath)) {
@@ -671,6 +673,7 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
           live.listed = merged;
           applyLive(merged);
           if (listed.error) setLiveStatus("warning", listed.error);
+          else if (denied.size > 0) setLiveStatus("warning", OPENSHIFT_BANNER.watchDenied);
           else clearLiveStatus();
           const child = new AbortController();
           const onAbort = () => child.abort();
@@ -688,27 +691,36 @@ export function createOpenShiftService(ports: OpenShiftServicePorts) {
           };
           const watches = ports.config().namespaces.flatMap(ns =>
             OPENSHIFT_WATCH_KINDS.map(kind => {
-              const resourceVersion = listed.resourceVersions.get(`${ns}:${kind}`);
-              if (!resourceVersion || resourceVersion === "0") return null;
-              return ports.api.watchOpenShiftStream(
-                ports.config().serverUrl,
-                token,
-                openShiftKindPath(ns, kind),
-                resourceVersion,
-                child.signal,
-                onEvent,
-              );
+              const key = `${ns}:${kind}`;
+              const resourceVersion = listed.resourceVersions.get(key);
+              if (!resourceVersion || resourceVersion === "0" || denied.has(key)) return null;
+              // One watch that ends ends the others too: the list is read again and every watch starts from it, so
+              // none stays stale behind ones still open. A refused one is said at once and the others go on.
+              return ports.api
+                .watchOpenShiftStream(
+                  ports.config().serverUrl,
+                  token,
+                  openShiftKindPath(ns, kind),
+                  resourceVersion,
+                  child.signal,
+                  onEvent,
+                )
+                .then(result => {
+                  if (result !== "forbidden") child.abort();
+                  else if (!signal.aborted && lifecycle().isCurrent(epoch, repoPath)) {
+                    denied.add(key);
+                    setLiveStatus("warning", OPENSHIFT_BANNER.watchDenied);
+                  }
+                  return result;
+                });
             }),
           );
-          // An auth failure on one watch ends the others too, so the freeze does not wait on long-lived streams.
-          const running = watches
-            .filter((job): job is NonNullable<typeof job> => job !== null)
-            .map(job =>
-              job.then(result => {
-                if (result === "auth") child.abort();
-                return result;
-              }),
-            );
+          const running = watches.filter((job): job is NonNullable<typeof job> => job !== null);
+          // Every watch refused: nothing would ever end to read the list again.
+          if (running.length === 0 && denied.size > 0) {
+            signal.removeEventListener("abort", onAbort);
+            return;
+          }
           ports.onLiveState(running.length > 0 ? "live" : "idle");
           const results = running.length > 0 ? await Promise.all(running) : [];
           if (!signal.aborted && lifecycle().isCurrent(epoch, repoPath)) ports.onLiveState("loading");

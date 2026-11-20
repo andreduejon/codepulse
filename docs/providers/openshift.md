@@ -117,7 +117,8 @@ in full; they cannot be labeled.
 
 Live inventory lists Deployments, DeploymentConfigs, and Pods in the configured
 namespaces, then watches those kinds (`watch=true` from the list
-`resourceVersion`). A 410 Gone or dropped stream lists again. Leave the
+`resourceVersion`). A 410 Gone or one dropped stream ends the other watches too and
+lists again, so no kind stays stale behind the others. Leave the
 OpenShift view and the Dashboard to stop watches. Matching still prefers labels, then
 annotations, then digest / owner-chain:
 
@@ -307,7 +308,8 @@ Live freshness also needs `watch` on Deployments, DeploymentConfigs, and Pods
 in each configured namespace. OpenShift/`kubernetes` `view` already has
 `get`/`list`/`watch`. A custom ServiceAccount needs the extra `watch` verb on
 those three kinds; Builds and ImageStreamTags stay `list` only. Without watch,
-the last list stays until Reload. A notice under the **Resources** tab reads **Watch
+the last list stays until Reload. One kind refused says so at once; the other kinds
+keep watching, and the refused one is not asked again until Reload. A notice under the **Resources** tab reads **Watch
 denied** with `Resource data might be stale. Reload to refresh.` below. `live` only appears
 while a watch socket is connected.
 
