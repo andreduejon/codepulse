@@ -401,14 +401,17 @@ export function extractWorkload(
   };
 }
 
-export function extractPod(namespace: string, item: unknown): OpenShiftResource {
+/** A Pod: its own commit label or annotation (under `annotationKey`) first, else its image or workload matches it. */
+export function extractPod(namespace: string, item: unknown, annotationKey?: string): OpenShiftResource {
   const statuses = arr(obj(obj(item)?.status)?.containerStatuses);
   const imageRefs = statuses.flatMap(s => [...imageTokens(str(obj(s)?.image)), ...imageTokens(str(obj(s)?.imageID))]);
   const status = podStatus(item);
+  const commitSha = annotationKey ? commitShaFromItem(item, annotationKey) : undefined;
   return {
     ...baseResource("Pod", namespace, item),
     status,
     imageRefs,
+    ...(commitSha ? { commitSha } : {}),
     ...failingRows(status, "Pod", item),
   };
 }
@@ -426,7 +429,7 @@ export function resourceFromWatchObject(object: unknown, annotationKey: string):
   if (!kind || !namespace) return null;
   if (kind === "Deployment" || kind === "DeploymentConfig")
     return extractWorkload(kind, namespace, object, annotationKey);
-  if (kind === "Pod") return extractPod(namespace, object);
+  if (kind === "Pod") return extractPod(namespace, object, annotationKey);
   return null;
 }
 

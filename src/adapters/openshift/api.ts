@@ -328,7 +328,7 @@ function kindRequest(ctx: NsCtx, kind: OpenShiftInventoryKind, query?: string | 
           : kind === "DeploymentConfig"
             ? items => items.map(item => extractWorkload("DeploymentConfig", ns, item, key))
             : kind === "Pod"
-              ? items => items.map(item => extractPod(ns, item))
+              ? items => items.map(item => extractPod(ns, item, key))
               : kind === "ReplicaSet"
                 ? items => items.flatMap(item => extractController("ReplicaSet", ns, item) ?? [])
                 : items => items.flatMap(item => extractController("ReplicationController", ns, item) ?? []);
