@@ -80,17 +80,17 @@ Normal clears highlighting without changing branch perspective.
 ### Dashboard
 
 The Dashboard is the first tab: everything that happened to the open app, newest first. Each event is a knot on the
-app's rope in its provider's color: commits on the main branch, GitHub runs, Jenkins builds, OpenShift builds and
-Snyk scans, with their commit, branch and time. A build that is still running shows as running and turns into how it
-ended. The branch is the one the provider names (a GitHub run's, a Jenkins multibranch job's, an OpenShift build's Git
-ref), else the branch the commit was made on.
+app's rope in its provider's color: commits on the main branch, GitHub runs and pull requests (opened, merged,
+closed), Jenkins builds, OpenShift builds and warnings, and Snyk scans, with their commit, branch and time. A build that is still running shows as running and turns
+into how it ended. The branch is the one the provider names (a GitHub run's, a Jenkins multibranch job's, an OpenShift
+build's Git ref), else the branch the commit was made on.
 
 | Key | Action |
 |-----|--------|
 | `↑` / `↓` or `j` / `k` | Navigate events |
 | `shift ↑` / `shift ↓`, `PgUp` / `PgDn` | Jump 10 events |
 | `g` / `G`, `home` / `end` | First / last event |
-| `enter` | Show the event's commit in its provider's view with its details (wide layout) / open its details (compact layout) |
+| `enter` | Show the event's commit in its provider's view with its details on the event's own tab and row (wide layout) / open its details (compact layout) |
 | `→` / `l` | Give the event's provider tab the keyboard (wide layout); `←` on its first tab gives it back |
 | `o` | Open the run's or build's page in the browser |
 | `r` | Fetch every provider again and read the events |
@@ -98,8 +98,8 @@ ref), else the branch the commit was made on.
 - While the Dashboard is shown, each provider fetches and auto refreshes as on its own tab. `f` and `:reload` fetch
   every provider. A failed fetch or scan shows in the message box: several share one box, with a line each. A provider
   that is turned off has no events there, also none it cached before.
-- Each provider has a badge in its color where the graph's modes are. A click on it, or `:hide NAME` and
-  `:show NAME`, hides or shows that provider's events, and the count reads `26 / 30 events`. `:show` shows them all.
+- Each provider has a badge in its color where the graph's modes are. A click on it, or `:hide <provider>` and
+  `:show <provider>` (`git`, `github`, `jenkins`, `openshift`, `snyk`), hides or shows that provider's events, and the count reads `26 / 30 events`. `:show` shows them all.
   The names are `git`, `github`, `jenkins`, `openshift` and `snyk`.
 - A scan shows its total and every severity in order (`1 critical · 3 high · 0 medium · 0 low`), each count in its
   severity's color. A partial scan ends in Snyk's `?`.
@@ -125,7 +125,7 @@ Theme controls and custom configuration are in the [theme guide](themes.md).
 | `:debug` | Toggle debug dialog |
 | `:fetch` | Fetch Git and the open provider |
 | `:help` | Open help dialog |
-| `:hide NAME` | Hide a provider's events on the dashboard |
+| `:hide <provider>` | Hide a provider's events on the dashboard |
 | `:menu` | Open menu dialog |
 | `:path` | Switch to path mode |
 | `:pull` | Fetch and fast-forward |
@@ -134,7 +134,7 @@ Theme controls and custom configuration are in the [theme guide](themes.md).
 | `:reload` | Reload repository data from disk |
 | `:repo` | Open menu dialog on Repository tab |
 | `:search` | Switch to search mode |
-| `:show [NAME]` | Show a provider's events on the dashboard, or all |
+| `:show <provider>` | Show a provider's events on the dashboard. Without a provider, all of them |
 | `:switch` | Open repository switcher |
 | `:theme` | Open theme dialog |
 

@@ -4,6 +4,112 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-11-21
+
+### Added
+
+- GitHub pull requests. In the GitHub view a `PR #123` chip marks the commit an
+  open pull request's branch points at (muted for a draft, and for one merged or
+  closed recently); a chip is never shortened, a tight row folds it into `+N`.
+  Such a commit has a **Pull requests** tab: each pull request with its age and
+  mark (`◀` open, `✓` merged, `○` closed) and a legend. Enter opens an open one
+  on its branch, target, author and the files it changed since its branch left
+  the target, read by Git as GitHub's Files changed shows them; Enter on a file
+  opens its diff, `←`/`→` move between the files. `o` opens it on GitHub. A pull
+  request whose commits this clone hasn't (pushed since the last fetch, a target
+  never fetched, a fork) fetches them when opened, its own alone.
+- While the Pull requests tab is open, the graph previews the merge of the pull
+  request under the mouse or the cursor: a muted line from its branch's commit
+  to its target's, with `◀` at the target, drawn in a free column so the lanes
+  don't move.
+- The Dashboard shows pull requests opened, merged and closed, each at its time;
+  their details open on the Pull requests tab at their row, and a file's diff
+  opens from there too. Pull requests are read with each fetch (the open ones
+  and those closed within the Dashboard's longest window) and are not saved. The
+  token needs Pull requests: read.
+- OpenShift keeps the Kubernetes warnings about a commit's resources with the
+  commit, so they outlast the cluster's own copy (3 hours by default). The new
+  **Events** tab shows them as a tree by namespace and reason: first in red what
+  a failing resource's status says is wrong, then the warnings in the warning
+  colour, then the Normal events the cluster lists now. One only the cache has
+  says `(cached)`, and a reason whose events are all cached is muted.
+- The graph's OpenShift columns are now **Resources** and **Events**: what the
+  cluster runs of a commit and its events, each count in its colour, with what
+  only the cache has muted at the end. In Resources a resource OpenShift still
+  warns about shows `!`.
+- OpenShift's saved warnings are Dashboard events at the time they were first
+  seen, with a yellow `!`; their details open on the Events tab at their row.
+
+### Changed
+
+- "Show in" from the Dashboard opens the graph's details on the event's own tab
+  (a pull request's Pull requests, a warning's Events, else its provider's
+  first) with the cursor on the event's row.
+- Help writes the Dashboard's filter commands as `:hide <provider>` and `:show
+  <provider>`.
+- Labels use sentence case throughout: Last run, Last scan, Commit date, Checked
+  out, Color theme, Repository selector.
+- Debug names which list failed when a GitHub pull request list can't be read,
+  and says a 404 means the token can't see the repository.
+
+### Fixed
+
+- A finished pod's `Ready False` (`PodCompleted`) is no longer shown as a
+  failure.
+- OpenShift no longer loses a commit's saved builds or warnings when the cache
+  limit drops it while a save is on its way.
+- A failed OpenShift Build without a reason now shows why it failed in Events.
+- A namespace whose event list fails is named under the Events tab, as one the
+  token may not list is.
+- Typing in a filter in the Dashboard's details no longer runs app keys: `m`,
+  `q`, `f` and `s` type instead of opening the Menu, quitting, fetching or
+  showing the event.
+- One OpenShift watch that drops no longer leaves its kind stale while the
+  others stay open: all watches start again from a fresh list. One refused watch
+  is reported at once, and the others keep watching.
+- Wrapping a long log (`w`) no longer mounts every line: a 20,000-line log stays
+  near 110 MB instead of over 1 GB. Wrapped lines break at the width, not
+  between words.
+- A configured branch (`branch` setting or argument) now scopes every page of
+  history and every refresh, not only the first load: the graph opens on that
+  branch's view.
+- File names with a tab, a newline or a quote are listed exactly and their diffs
+  open.
+- A stash made with `git stash -u` lists its untracked files, and they open.
+- A Git read that fails (a missing commit, a broken diff) shows an error instead
+  of "No changes" or an empty file list.
+- A branch or tag name with a comma stays one ref.
+- An OpenShift Pod labelled or annotated with its commit is placed on that
+  commit, listed or watched.
+- Clearing Group or App name in the Menu removes it from the saved settings, so
+  it stays cleared after a restart.
+- A Jenkins build without the Pipeline REST API (or a freestyle build) keeps its
+  Console row and test report. A Jenkins login page is reported as an
+  authentication failure, never shown as a console log.
+- A GitHub 401 while reading a run's jobs stops automatic requests until Reload
+  and says the token expired, as one on the runs does.
+- Snyk ranks a prerelease below its release, so the smallest fixing version is
+  suggested.
+- The Dashboard keeps newest-first order through the hour that repeats when
+  daylight saving ends.
+- A file whose name Git would read as a pattern (`:(top)x`, `*`) opens its diff.
+- A failed `git status` shows the history with an error instead of a clean
+  working tree; a failed file, blame or stash read is an error too.
+- Switching to a repository applies its configured branch, as at startup.
+- An OpenShift watch that fails stops the others before the list is read again,
+  and a terminating Pod is on no commit, also one labelled with its own.
+- A Jenkins authentication failure on a build's stages stops automatic requests
+  until Reload, as one on the builds does.
+- Wrapped log lines with wide characters (CJK), tabs or joined emoji take their
+  real height, so `G` and search land on the right line. While wrapped, the line
+  numbers are as wide as the last line's from the start.
+- A quiet refresh says when `git status` fails and clears that once it reads
+  again. A stash whose files can't be read says so instead of opening empty.
+- Snyk reads a project's package manager for all its vulnerabilities, and a
+  dependency group's highest needed version follows the same version order.
+- "Show in" from the Dashboard lands on the event's row every time, also for an
+  event shown before, and on the run itself rather than its first job.
+
 ## [0.19.0] - 2026-11-18
 
 ### Changed

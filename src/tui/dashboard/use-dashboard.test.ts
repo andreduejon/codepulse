@@ -277,6 +277,90 @@ test("a run going again under the same id (a GitHub re-run) shows as it is now, 
   expect(texts).toEqual(["CI #9 running"]);
 });
 
+test("an event read again at the same time but changed (a warning that repeated) shows as the provider has it", async () => {
+  const saved: DashboardEvent = {
+    id: "/shop:openshift:warning:shop-test/event-backoff",
+    app: "/shop",
+    source: "openshift",
+    time: NOW - 30 * 60_000,
+    status: "unknown",
+    text: "BackOff · pod shop-api in shop-test",
+    sha: "c".repeat(40),
+  };
+  const [live] = createSignal<DashboardEvent[]>([{ ...saved, text: "BackOff · pod shop-api in shop-test · 61 times" }]);
+  const [active] = createSignal(true);
+  const state = createRoot(dispose => {
+    cleanup.push(dispose);
+    return useDashboard({ app: () => SHOP, active, now: () => NOW, live, load: async () => [saved] });
+  });
+  await settle();
+  const texts = state.rows().flatMap(row => (row.kind === "event" ? [row.event.text] : []));
+  expect(texts).toEqual(["BackOff · pod shop-api in shop-test · 61 times"]);
+});
+
+test("an event read again the same but under another commit (a warning's newest copy moved) shows that commit", async () => {
+  const saved: DashboardEvent = {
+    id: "/shop:openshift:warning:shop-test/event-backoff",
+    app: "/shop",
+    source: "openshift",
+    time: NOW - 30 * 60_000,
+    status: "unknown",
+    text: "BackOff · pod shop-api in shop-test",
+    sha: "c".repeat(40),
+  };
+  const [live] = createSignal<DashboardEvent[]>([{ ...saved, sha: "a".repeat(40) }]);
+  const [active] = createSignal(true);
+  const state = createRoot(dispose => {
+    cleanup.push(dispose);
+    return useDashboard({ app: () => SHOP, active, now: () => NOW, live, load: async () => [saved] });
+  });
+  await settle();
+  const shas = state.rows().flatMap(row => (row.kind === "event" ? [row.event.sha] : []));
+  expect(shas).toEqual(["a".repeat(40)]);
+});
+
+test("an event that moved to another commit takes that commit's branch, not the one it had", async () => {
+  const commit = (sha: string, branch: string): DashboardEvent => ({
+    id: `/shop:git:${sha}`,
+    app: "/shop",
+    source: "git",
+    time: NOW - 60 * 60_000,
+    status: null,
+    text: "commit",
+    sha,
+    branch,
+  });
+  const saved: DashboardEvent = {
+    id: "/shop:openshift:warning:shop-test/event-backoff",
+    app: "/shop",
+    source: "openshift",
+    time: NOW - 30 * 60_000,
+    status: "unknown",
+    text: "BackOff · pod shop-api in shop-test",
+    sha: "c".repeat(40),
+    branch: "main",
+  };
+  const moved = { ...saved, sha: "a".repeat(40) };
+  delete (moved as Partial<DashboardEvent>).branch;
+  const [live] = createSignal<DashboardEvent[]>([moved]);
+  const [active] = createSignal(true);
+  const state = createRoot(dispose => {
+    cleanup.push(dispose);
+    return useDashboard({
+      app: () => SHOP,
+      active,
+      now: () => NOW,
+      live,
+      load: async () => [saved, commit("a".repeat(40), "feature/new")],
+    });
+  });
+  await settle();
+  const warning = state
+    .rows()
+    .flatMap(row => (row.kind === "event" && row.event.source === "openshift" ? [row.event] : []));
+  expect(warning.map(event => [event.sha, event.branch])).toEqual([["a".repeat(40), "feature/new"]]);
+});
+
 test("only an app's first read shows as reading: reading it again keeps its events and stays quiet", async () => {
   const [active] = createSignal(true);
   let release: () => void = () => {};

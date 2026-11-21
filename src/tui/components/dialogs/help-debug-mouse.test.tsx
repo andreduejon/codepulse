@@ -46,10 +46,10 @@ test("Help tabs hover and click. Help and Debug support wheel and clickable clos
   try {
     await setup.flush();
     const sections = KEYBINDS.general.filter(row => row.kind === "section").map(row => row.label);
-    expect(sections).toContain("Color Theme");
+    expect(sections).toContain("Color theme");
     expect(sections).not.toContain("Theme inspector");
     expect(sections).not.toContain("Configuration and Windows");
-    const themeStart = KEYBINDS.general.findIndex(row => row.kind === "section" && row.label === "Color Theme");
+    const themeStart = KEYBINDS.general.findIndex(row => row.kind === "section" && row.label === "Color theme");
     const themeEnd = KEYBINDS.general.findIndex(row => row.kind === "section" && row.label === "Help");
     const themeKeys = KEYBINDS.general
       .slice(themeStart + 1, themeEnd)

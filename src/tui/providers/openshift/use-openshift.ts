@@ -30,6 +30,8 @@ export {
   selectOpenShiftCandidateSHAs,
 } from "../../../core/openshift/commit-data";
 
+import type { OpenShiftWarning } from "../../../core/openshift/warnings";
+
 export interface UseOpenShiftResult {
   getCommitData: (sha: string) => OpenShiftCommitData | null;
   /**
@@ -52,6 +54,15 @@ export interface UseOpenShiftResult {
   loadResourceObject: (resource: OpenShiftResource, force?: boolean) => Promise<unknown>;
   /** The events about the resource, always from the API (they change by the minute and are not cached). */
   loadResourceEvents: (resource: OpenShiftResource) => Promise<OpenShiftEvent[]>;
+  /** Whether only the cache has the warning: its namespace's last list didn't. Reactive. */
+  warningIsCached: (warning: OpenShiftWarning) => boolean;
+  /** Whether the commit still has what the warning is about; true until the live list loaded. Reactive. */
+  warningIsPresent: (sha: string, warning: OpenShiftWarning) => boolean;
+  /** Every warning kept about a resource, newest first. Reactive. */
+  warningsAboutResource: (resource: OpenShiftResource) => OpenShiftWarning[];
+  /** The namespaces whose warnings the token may not read. Reactive. */
+  warningsDenied: () => readonly string[];
+  warningsFailed: () => readonly string[];
 }
 
 export function useOpenShift(opts: {
@@ -188,5 +199,25 @@ export function useOpenShift(opts: {
     followLog: service.followLog,
     loadResourceObject: service.loadResourceObject,
     loadResourceEvents: service.loadResourceEvents,
+    warningIsPresent: (sha, warning) => {
+      dataVersion();
+      return service.warningIsPresent(sha, warning);
+    },
+    warningIsCached: warning => {
+      dataVersion();
+      return service.warningIsCached(warning);
+    },
+    warningsAboutResource: resource => {
+      dataVersion();
+      return service.warningsAboutResource(resource);
+    },
+    warningsDenied: () => {
+      dataVersion();
+      return service.warningsDenied();
+    },
+    warningsFailed: () => {
+      dataVersion();
+      return service.warningsFailed();
+    },
   };
 }

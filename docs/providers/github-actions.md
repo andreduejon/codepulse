@@ -84,6 +84,74 @@ per failed job) and cached with the job. Enter opens the job log with the messag
 searched, so the first hit is where it happened and `n` / `N` find repeats; `o`
 opens the job page.
 
+## Pull requests
+
+GitHub's view marks each commit an open pull request's branch points at with a chip
+after its refs, in GitHub's colour: `PR #123`, muted for a draft. One merged or closed
+recently gets a muted chip too (`PR #122`), so its row in the tab is found; the tab's
+marks say whether it was merged or closed. Only the branch's
+tip gets one; a commit with two open pull requests (one branch into `main` and into
+`release/1.x`) gets two. On a tight row the chips come right after the checked-out
+branch; a chip is never shortened (a cut number would read as another), so one that
+doesn't fit goes into the muted `+N` with the refs that don't.
+
+Such a commit has a **Pull requests** tab after **Actions**, as Stashes is; other commits
+don't show it. It lists each open pull request on one short row: its number, title, when
+it was last updated and its mark (`◀`, muted for a draft); then each one merged (`✓`) or
+closed without merging (`○`) recently whose branch pointed at the commit, muted, with when
+it ended. Those have no files and are no cursor stops; the legend below the tab names the
+marks. `o` opens a pull request on GitHub; Reload commit reads the runs and the pull
+requests again.
+
+Enter opens a pull request: muted leaves with its branch and the one it would merge into
+(`dev → main`), its author (`@ana-lima`) and `draft` for a draft, then the files it changed,
+as a tree like **Files**, each with
+its status and `+`/`-` lines: what its branch changed since it left the target branch
+(Git's merge base of the two), as GitHub's **Files changed** shows it, not what the
+target did since. Git reads them, so both branches' commits must be fetched: the target
+as GitHub names it, else its branch on a remote (`origin/<target>` first, any other
+remote's name works too), else the local branch. When Git hasn't them, opening the pull
+request fetches them, this one's alone (`fetching its commits...`): its head from
+`refs/pull/<number>/head`, which GitHub keeps for every pull request, a fork's too, and its
+target branch into the remote's (`origin/staging`). No local branch moves. When that fails
+(offline), the row says so, and Reload commit or the next refresh tries again. Enter on a file opens the diff dialog on that change
+(`3447db9..bf08113` in its title), and `←`/`→` move between the pull request's files.
+Files open from the graph's details and from the Dashboard's; closing the diff comes back to them.
+
+While the tab is open, the graph previews the merge of the pull request the mouse is over,
+else the one the details' cursor is on (it or its files); none on Reload commit or while
+the keyboard is in the graph: a muted line from its branch's commit
+to the one its target branch points at, with `◀` at the target, as the merge would join
+them.
+
+```
+█◀╮   3447db9  main  docs: rewrite the README
+│ │
+│ █   6adc455  feature/payments-retry  wip(payments): retry policy types
+```
+
+When the target is below (it hasn't moved since the branch left it), the arrow is at the
+bottom. The line comes straight into the branch's commit along its column when nothing
+uses that column between the two (a branch tip has nothing above it); otherwise it runs
+in the first column right of both that no line uses between them. Either way the graph's
+lanes don't move; only when every column is taken does the graph get one more. Where it crosses a lane, the lane shows `┼` in its own colour. It shows when the graph has both commits loaded (the target as GitHub names it,
+else its branch on a remote or the local one); it goes when the tab closes.
+
+The open pull requests are one request (`pulls?state=open`, up to 500), and the ones merged
+or closed most recently another (`pulls?state=closed`, sorted by update, read back as far
+as the Dashboard's longest window, 30 days, up to 500), side by side
+on the first fetch, on each refresh and on a Reload. A list that fails keeps its last one
+and is only recorded in the Debug dialog. Neither is saved: after a restart they come back
+with the first fetch.
+
+On the **Dashboard** each pull request is an event when it was opened (`◀ PR #123 opened`,
+muted for a draft), and one when it was merged (`✓ PR #118 merged`) or closed without
+merging (`○ PR #116 closed`), on its branch's commit; each leaves the log when it is older
+than the time window. An event's details open on its row in **Pull requests**, marked in
+the Dashboard's colour; Show in GitHub opens the graph's details on the same tab with the
+cursor on that row. They show for the open app only: the pull requests are held, not
+saved for the other apps of a group.
+
 ## Errors and limits
 
 Expired credentials stop live requests until a valid token is available.
@@ -99,4 +167,5 @@ diagnostics.
 
 Token needs repository metadata and Actions read access for private repos.
 Annotations also need Checks read access (a fine-grained token's **Checks: Read**);
-without it a failed job simply shows no annotations.
+without it a failed job simply shows no annotations. Pull requests need **Pull
+requests: Read**; without it no commit shows a chip or the tab.

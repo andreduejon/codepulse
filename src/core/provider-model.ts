@@ -48,8 +48,13 @@ export interface GraphBadge {
   unknownCount?: number;
   /** Total matched resources. Used by runtime providers. */
   resourceCount?: number;
-  /** Named status-count lanes (e.g. OpenShift `live` / `cache`). */
+  /** Named status-count lanes (OpenShift `live`: what the cluster lists now). */
   lanes?: Record<string, GraphStatusCounts>;
+  /**
+   * A provider's own named counts for its graph columns, only those above zero: the provider names, fills and draws
+   * them (OpenShift's are `OpenShiftBadgeCounts` in core/openshift/resources.ts).
+   */
+  counts?: Readonly<Record<string, number>>;
   /** OpenShift: the namespaces whose workloads run this commit now, shown with the refs in the graph. */
   namespaces?: NamespaceMarker[];
   /** Severity counts used by scan/quality providers. */

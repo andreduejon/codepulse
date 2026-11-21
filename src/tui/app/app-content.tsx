@@ -183,8 +183,16 @@ export function AppContent(props: Readonly<AppContentProps>) {
   } = session;
 
   // ── Dashboard ─────────────────────────────────────────────────────────────
-  /** One for both layouts and both views: a resize keeps open folders, runs and namespaces. */
+  /** One for both layouts: a resize keeps open folders, runs and namespaces. */
   const detailMemory = createDetailMemory();
+  /**
+   * The graph's details have their own, new for each "Show in" from the Dashboard: the jump lands on the event's row
+   * again, even when it was shown there before and the cursor moved since.
+   */
+  const graphDetailMemory = createMemo(() => {
+    state.graphDetailTarget();
+    return createDetailMemory();
+  });
   const dashboardController = useDashboardController({
     state,
     actions,
@@ -195,7 +203,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     settings,
     providers,
     modules: providerModules,
-    dialogs: { dialog, setDialog },
+    dialogs: { dialog, setDialog, openDiff: dialogs.openDiff },
     layoutMode,
     graphNavRef: detailNavRef,
     detailMemory,
@@ -204,7 +212,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     setGitNotice,
     closeSearch: commandBar.closeSearch,
   });
-  const { dashboard, handleDashboardKey } = dashboardController;
+  const { dashboard, handleDashboardKey, dashboardNavRef } = dashboardController;
 
   const handleReloadAll = async () => {
     reloadRuntimeConfig();
@@ -242,6 +250,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     onFastForward: showFastForward,
     navRef: detailNavRef,
     commitData: providers.activeCommitData,
+    tabLabel: providers.details.label,
     beforeSelect: hash => {
       reanchorIfOutsideChain(hash);
       commandBar.leave();
@@ -260,6 +269,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
       openRepoSelector: () => setRepoSelectorVisible(true),
       clearScreenMessage: () => {
         dismissTabNotice();
+        dashboardController.dismissDashboardNotice();
         clearScreenMessage();
       },
       setAnchor,
@@ -301,14 +311,18 @@ export function AppContent(props: Readonly<AppContentProps>) {
     onSearchExecute: applySearch,
     onClearAncestry: clearAnchor,
     getCommitData: providers.activeCommitData,
+    tabLabel: providers.details.label,
     getProviderLoading: () => state.providerStatus().kind === "loading",
     onSwitchGroupRepo: switchGroupRepo,
     onDashboardKey: handleDashboardKey,
+    dashboardNavRef,
   });
 
   /** Provider data and dialogs for the detail panel and the compact detail dialog. */
   const providerDetailProps = {
-    memory: detailMemory,
+    get memory() {
+      return graphDetailMemory();
+    },
     providers: providers.details,
     get tabNotice() {
       return tabNotice();

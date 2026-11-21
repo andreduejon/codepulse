@@ -138,30 +138,6 @@ export function itemKey(item: FlatItem): string {
   return `field:${item.owner}:${item.line.field}:${item.line.copy ?? item.line.text}`;
 }
 
-export function wrapWords(value: string, width: number): string[] {
-  if (value.length <= width) return [value];
-  const lines: string[] = [];
-  let line = "";
-  for (const word of value.split(/\s+/)) {
-    if (!line) {
-      line = word;
-      continue;
-    }
-    if (line.length + 1 + word.length <= width) line += ` ${word}`;
-    else {
-      lines.push(line);
-      line = word;
-    }
-  }
-  if (line) lines.push(line);
-  return lines.flatMap(entry => {
-    if (entry.length <= width) return [entry];
-    const chunks: string[] = [];
-    for (let offset = 0; offset < entry.length; offset += width) chunks.push(entry.slice(offset, offset + width));
-    return chunks;
-  });
-}
-
 function compactDependencyName(value: string): string {
   const separator = value.lastIndexOf(":");
   return separator >= 0 ? value.slice(separator + 1) : value;

@@ -18,6 +18,8 @@ import {
   type FakeRun,
   FIXED_NOW,
   followLine,
+  githubClosedPulls,
+  githubPulls,
   githubRuns,
   githubTimes,
   JENKINS_ROOT,
@@ -295,6 +297,28 @@ function github(url: URL, method: string, body: string): Response {
     const run = repoRuns.find(item => item.id === Number(runJobs[1]));
     return run ? json({ total_count: run.jobs.length, jobs: run.jobs.map(restJob) }) : notFound();
   }
+  if (path === "/pulls") {
+    const ago = (minutes: number) => new Date(started - minutes * 60_000).toISOString();
+    const closed = url.searchParams.get("state") === "closed";
+    return json(
+      repo !== "shop" || isEmpty("github")
+        ? []
+        : (closed ? githubClosedPulls() : githubPulls()).map(pull => ({
+            number: pull.number,
+            state: pull.ended ? "closed" : "open",
+            title: pull.title,
+            html_url: `https://github.com/demo/${repo}/pull/${pull.number}`,
+            draft: pull.draft === true,
+            user: { login: pull.author },
+            head: { sha: state.shas[pull.head], ref: pull.headRef },
+            base: { ref: pull.baseRef, sha: state.shas[pull.base] ?? pull.base },
+            created_at: ago(pull.createdAgoMin),
+            updated_at: ago(pull.updatedAgoMin),
+            closed_at: pull.ended ? ago(pull.ended.agoMin) : null,
+            merged_at: pull.ended?.merged ? ago(pull.ended.agoMin) : null,
+          })),
+    );
+  }
   const allJobs = repoRuns.flatMap(run => run.jobs);
   const annotations = path.match(/^\/check-runs\/(\d+)\/annotations$/);
   if (annotations) return json(allJobs.find(job => job.id === Number(annotations[1]))?.annotations ?? []);
@@ -450,6 +474,25 @@ let followCount = 0;
 /** How many batches of lines a followed log gets in a play before it stops growing. */
 const HEADLESS_FOLLOW_BATCHES = 3;
 
+const withUid = (uid: string | undefined) => (uid ? { uid } : {});
+
+/** The uid of the object an event is about, while the cluster still has it (an event outlives its pod). */
+const uidOf = (ns: string, kind: string, name: string) => {
+  const item = itemsOf(world, ns, kind).find(entry => (entry.metadata as { name?: string } | undefined)?.name === name);
+  const uid = (item?.metadata as { uid?: string } | undefined)?.uid;
+  return uid ? { uid } : {};
+};
+
+/**
+ * An event's uid, the same in the namespace's list and the resource's, as a cluster gives it: its own when the scenario
+ * names one (one per object, for a pod recreated under its name), else one per resource and reason.
+ */
+const eventUid = (key: string, event: Record<string, unknown>) =>
+  (event.metadata as { uid?: string } | undefined)?.uid ?? `${key}/${event.reason}`;
+/** The uid of the object an event is about: the one the scenario names (an earlier pod of that name), else today's. */
+const aboutUid = (event: Record<string, unknown>, ns: string, kind: string, name: string) =>
+  (event.involvedObject as { uid?: string } | undefined)?.uid ?? uidOf(ns, kind, name).uid;
+
 function openshift(url: URL, signal: AbortSignal | null | undefined): Response {
   const match = url.pathname.match(/^\/apis?\/(?:[^/]+\/)?v1\/namespaces\/([^/]+)\/([^/]+)(?:\/([^/]+))?(?:\/(log))?$/);
   if (!match) return notFound();
@@ -457,9 +500,41 @@ function openshift(url: URL, signal: AbortSignal | null | undefined): Response {
   if (plural === "events") {
     if (ns === "shop-prod") return forbidden("events is forbidden");
     const selector = url.searchParams.get("fieldSelector") ?? "";
-    const kind = selector.match(/involvedObject\.kind=([^,]+)/)?.[1];
-    const object = selector.match(/involvedObject\.name=([^,]+)/)?.[1];
-    return json({ kind: "EventList", items: world.events.get(`${ns}/${kind}/${object}`) ?? [] });
+    // The namespace's events (all, or fieldSelector=type=X): each says what it is about, like the cluster's.
+    if (!selector.includes("involvedObject")) {
+      const type = selector.match(/type=([^,]+)/)?.[1];
+      const items = [...world.events.entries()]
+        .filter(([key]) => key.startsWith(`${ns}/`))
+        .flatMap(([key, list]) => {
+          const [, kind, name] = key.split("/");
+          return list
+            .filter(event => !type || event.type === type)
+            .map(event => ({
+              ...event,
+              metadata: { ...(event.metadata as object), uid: eventUid(key, event) },
+              involvedObject: { kind, name, namespace: ns, ...withUid(aboutUid(event, ns, kind, name)) },
+            }));
+        });
+      return json({ kind: "EventList", items });
+    }
+    // --openshift error:events: a resource's own events fail; the namespace's list above still answers.
+    if (errorOf("openshift") === "events") return json({ message: "etcdserver: request timed out" }, 500);
+    const kind = selector.match(/involvedObject\.kind=([^,]+)/)?.[1] ?? "";
+    const object = selector.match(/involvedObject\.name=([^,]+)/)?.[1] ?? "";
+    const key = `${ns}/${kind}/${object}`;
+    // Asked by uid: only that object's events (a gone one's outlive it, as in a cluster), not a newer one's of its name.
+    const uid = selector.match(/involvedObject\.uid=([^,]+)/)?.[1];
+    const items = (world.events.get(key) ?? [])
+      .filter(event => {
+        const about = aboutUid(event, ns, kind, object);
+        return !uid || !about || about === uid;
+      })
+      .map(event => ({
+        ...event,
+        metadata: { ...(event.metadata as object), uid: eventUid(key, event) },
+        involvedObject: { kind, name: object, namespace: ns, ...withUid(aboutUid(event, ns, kind, object)) },
+      }));
+    return json({ kind: "EventList", items });
   }
   const kind = PLURALS[plural];
   if (!kind) return notFound();

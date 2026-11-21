@@ -335,7 +335,7 @@ test("the current hit's number is inverted across the whole column width", async
   }
 });
 
-test("with wrap on, the line number column fits the screen too and settles", async () => {
+test("with wrap on, the line number column is as wide as the last line's from the start, and settles", async () => {
   const d = await renderLog("github-actions", "wrapped");
   try {
     await d.key("w");
@@ -346,8 +346,9 @@ test("with wrap on, the line number column fits the screen too and settles", asy
       const row = rows().find(line => line.includes(label)) ?? "";
       return row.slice(titleX, row.indexOf(label)).trimEnd();
     };
-    // Only the first wrapped lines fit: one digit, though the log has 40 lines.
-    expect(numberAt("line-1 ")).toBe("1");
+    // Two digits from the start, though only one-digit lines fit: a column that grew under the view would wrap every
+    // line again, and G would land short.
+    expect(numberAt("line-1 ")).toBe(" 1");
     await d.key("g", { shift: true });
     await d.flush();
     expect(numberAt("line-40 ")).toBe("40");

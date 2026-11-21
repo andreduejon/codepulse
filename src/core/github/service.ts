@@ -16,7 +16,9 @@ import type {
   GitHubJob,
   GitHubJobFetchResult,
   GitHubProviderConfig,
+  GitHubPullRequest,
   GitHubRepo,
+  GitHubResult,
   GitHubWorkflowRun,
   GraphQLFetchResult,
 } from "./types";
@@ -40,6 +42,18 @@ export interface GitHubApiPort {
     signal?: AbortSignal,
   ) => Promise<GitHubAnnotation[] | null>;
   fetchJobLog: (repo: GitHubRepo, token: string, jobId: number, signal?: AbortSignal) => Promise<string>;
+  /** The repository's open pull requests. */
+  fetchOpenPullRequests: (
+    repo: GitHubRepo,
+    token: string,
+    signal?: AbortSignal,
+  ) => Promise<GitHubResult<GitHubPullRequest[]>>;
+  /** The pull requests merged or closed most recently. */
+  fetchClosedPullRequests: (
+    repo: GitHubRepo,
+    token: string,
+    signal?: AbortSignal,
+  ) => Promise<GitHubResult<GitHubPullRequest[]>>;
 }
 
 /** The cache: finished runs and their jobs per commit, and job logs. */
@@ -109,6 +123,16 @@ export function createGitHubService(ports: GitHubServicePorts) {
   const queriedSHAs = new Set<string>();
   /** After a 401: no automatic requests until a Reload. */
   let authFrozen = false;
+  /** The open pull requests and those merged or closed most recently, each list as last read (kept on a failure). */
+  let pullRequests: GitHubPullRequest[] = [];
+  let closedPullRequests: GitHubPullRequest[] = [];
+  /** Whether a list was read for this repository: the first fetch reads one, refreshes and Reloads read it again. */
+  let pullsRead = false;
+  /**
+   * The pull request lists on their way: a newer read stops them (an older answer never overwrites a newer one), and
+   * so does a reset. They run beside the fetch of the runs, outside the lifecycle's own requests.
+   */
+  let pullsRequest: AbortController | null = null;
   /** Skip unsupported WorkflowRun.jobs after the first retry. */
   let jobsUnsupported = false;
 
@@ -183,6 +207,45 @@ export function createGitHubService(ports: GitHubServicePorts) {
     publishBadges();
     await persistTerminalRuns(repoPath, shas, epoch);
     return { firstError, failure: failed?.failure, failedSHAs };
+  }
+
+  /**
+   * The open pull requests and the ones merged or closed most recently, read with each fetch of the window (two
+   * requests side by side). A list that fails keeps its last one and only goes to Debug (the API port says why, once):
+   * the runs say what is wrong with the token or the host.
+   */
+  async function fetchPullRequests(signal?: AbortSignal): Promise<void> {
+    const epoch = lifecycle().getEpoch();
+    const repoPath = app.repoPath();
+    const repo = ports.repo();
+    const token = ports.token(ports.config().tokenEnvVar);
+    if (!repo || !token) return;
+    pullsRequest?.abort();
+    const request = new AbortController();
+    pullsRequest = request;
+    const stop = () => request.abort();
+    signal?.addEventListener("abort", stop, { once: true });
+    // Aborted (with the fetch they run beside, by a newer read, by a reset, by the lifecycle's own stop: suspended or
+    // disposed, as its requests are): nothing to say.
+    const [open, closed] = await lifecycle()
+      .runRequest(
+        listSignal =>
+          Promise.all([
+            ports.api.fetchOpenPullRequests(repo, token, listSignal).catch(() => null),
+            ports.api.fetchClosedPullRequests(repo, token, listSignal).catch(() => null),
+          ]),
+        request.signal,
+      )
+      .catch(() => [null, null] as const);
+    signal?.removeEventListener("abort", stop);
+    if (pullsRequest === request) pullsRequest = null;
+    if (request.signal.aborted || !lifecycle().isCurrent(epoch, repoPath)) return;
+    if (open && !open.error) {
+      pullRequests = open.data;
+      pullsRead = true;
+    }
+    if (closed && !closed.error) closedPullRequests = closed.data;
+    ports.onDataChange();
   }
 
   /**
@@ -274,6 +337,9 @@ export function createGitHubService(ports: GitHubServicePorts) {
     // An explicit retry asks again for every target, also when a fetch it waited behind just marked them queried.
     const unqueried = retry ? allSHAs : allSHAs.filter(sha => !queriedSHAs.has(sha));
     lifecycle().noteFetchStarted();
+    // The pull requests on the first fetch and on a Reload (a refresh reads them again too), beside the runs: they
+    // never hold up what the runs say.
+    if (!pullsRead || retry) void fetchPullRequests(signal);
     if (unqueried.length === 0) return;
     if (showStatus) app.setStatus(providerLoading());
     try {
@@ -308,6 +374,7 @@ export function createGitHubService(ports: GitHubServicePorts) {
     const shas = [...new Set([...runningSHAs, ...collectTopSHAs(app.graphRows(), ports.config().fetchDepth)])];
     if (shas.length === 0) return;
     try {
+      void fetchPullRequests(signal);
       const { firstError, failure } = await fetchForSHAs(shas, signal);
       if (signal?.aborted || !lifecycle().isCurrent(epoch, repoPath)) return;
       rememberAuthError(failure);
@@ -329,6 +396,11 @@ export function createGitHubService(ports: GitHubServicePorts) {
     jobsCache.clear();
     jobsRunVersion.clear();
     queriedSHAs.clear();
+    pullsRequest?.abort();
+    pullsRequest = null;
+    pullRequests = [];
+    closedPullRequests = [];
+    pullsRead = false;
     authFrozen = false;
     jobsUnsupported = false;
     ports.onDataChange();
@@ -414,7 +486,14 @@ export function createGitHubService(ports: GitHubServicePorts) {
 
     const fetched = await lifecycle().runRequest(signal => ports.api.fetchRunJobs(repo, token, run.id, signal), signal);
     if (signal?.aborted || !lifecycle().isCurrent(epoch, repoPath)) return { jobs: [], error: null };
-    if (fetched.error) return fallback ?? fetched;
+    if (fetched.error) {
+      // An expired token here freezes automatic requests as the runs' own 401 does, and says so.
+      if (fetched.failure === "auth") {
+        rememberAuthError(fetched.failure);
+        app.setStatus(providerError(GITHUB_BANNER.tokenExpired));
+      }
+      return fallback ?? fetched;
+    }
     // REST lists every attempt, so its jobs know theirs (1 where the host does not say).
     const listed = fetched.jobs.map(job => (job.runAttempt === undefined ? { ...job, runAttempt: 1 } : job));
     const jobs = await withAnnotations(listed, signal);
@@ -457,6 +536,16 @@ export function createGitHubService(ports: GitHubServicePorts) {
   return {
     /** A commit's runs, or null before any were read. Not reactive: the adapter makes it so. */
     getCommitData: (sha: string) => commitDataCache.get(sha) ?? null,
+    /** The open pull requests whose branch points at this commit, by number. Not reactive: the adapter makes it so. */
+    pullRequestsAt: (sha: string): GitHubPullRequest[] =>
+      pullRequests.filter(pr => pr.headSha.toLowerCase() === sha.toLowerCase()).sort((a, b) => a.number - b.number),
+    /** The merged or closed ones whose branch pointed at this commit, last ended first. Not reactive. */
+    closedPullRequestsAt: (sha: string): GitHubPullRequest[] =>
+      closedPullRequests
+        .filter(pr => pr.headSha.toLowerCase() === sha.toLowerCase())
+        .sort((a, b) => (b.closedAt ?? "").localeCompare(a.closedAt ?? "")),
+    /** Every pull request it holds, open and recently ended: the Dashboard's events. Not reactive. */
+    heldPullRequests: (): GitHubPullRequest[] => [...pullRequests, ...closedPullRequests],
     /** Every run held for the open repository. Not reactive: the adapter makes it so. */
     heldEntries: () => [...commitDataCache.values()],
     queriedSHAs,

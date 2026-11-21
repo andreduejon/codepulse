@@ -1,0 +1,282 @@
+=== shot 1: chips (200x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                        Status         Last run                Actions           Pull requests          Info
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+    █                           bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request…   2             running            Reload commit
+    │                                                                                                                                         total workflow runs                                    2
+    █                           e6209dd  feat(api): add a health endpoint                                    1             45m ago            ├─ ▸ Deploy to shop-prod with a long workflow… 28m ago ✓
+    │                                                                                                                                         └─ ▸ CI #813                                   34m ago ✓
+    █                           3447db9   v0.42.0   main   origin/ma…   PR #122   +2  docs: rewrite the RE   2             28m ago
+    │
+    │ █                         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry…   1             4h ago
+    │ │
+    █─╯                         64ddc8a  feat(payments): retry failed payments with exponential backoff, …   1             51m ago
+    │
+    █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······
+    │
+    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······
+    │ │
+    │ █                         0166f71   PR #23  feat(i18n): add French                                    ·······        ·······
+    │ │
+    │ █─╮                       5245790  Merge branch 'main' into feature/i18n                              ·······        ·······
+    │ │ │
+    │ █ │                       484821c  feat(i18n): add German                                             ·······        ·······
+    │ │ │
+    │ █ │                       3ad11a2  feat(i18n): extract the checkout strings                           ·······        ·······
+    │ │ │
+    █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                     ·······        ·······
+    │ │ │ │
+    │ │ │ █                     9d1b361   PR #9  fix(search): ignore accents                                ·······        ·······
+    │ │ │ │
+    │ │ │ █                     cce93f9  feat(search): search as you type                                   ·······        ·······
+    │ │ │ │
+    │ │ │ █─╮                   ae57e03  Merge branch 'main' into feature/search                            ·······        ·······
+    │ │ │ │ │
+    │ │ │ █ │                   a89a18f  feat(search): highlight matching words                             ·······        ·······
+    │ │ │ │ │
+    │ │ │ █ │                   52defc5  feat(search): rank results by popularity                           ·······        ·······
+
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                           normal   search   path   ancestry
+  │
+  │   customer-notification-service   shop   shop-web                                                                 main   86 commits
+  │
+
+                                                              tab Jenkins · enter/→ show details · shift ←/→ switch project · ↑/↓ navigate       ✓ passed  ● running  ✗ failed  – skipped  ○ cancelled
+
+
+=== shot 2: pulls (200x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                        Status         Last run                Actions           Pull requests          Info
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+    █                           bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request    2             running            Reload commit
+    │                                                                                                                                         total pull requests                                    2
+    █                           e6209dd  feat(api): add a health endpoint                                    1             45m ago            ├─ ▸ PR #124 release: dev into main             5m ago ◀
+    │                                                                                                                                         └─ ▸ PR #125 release: dev into release/1.x      5m ago ◀
+    █                           3447db9   v0.42.0   main   origin/ma…   PR #122   +2  docs: rewrite the R…   2             28m ago
+    │
+    │ █                         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry…   1             4h ago
+    │ │
+    █─╯                         64ddc8a  feat(payments): retry failed payments with exponential backoff, …   1             51m ago
+    │
+    █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······
+    │
+    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······
+    │ │
+    │ █                         0166f71   PR #23  feat(i18n): add French                                    ·······        ·······
+    │ │
+    │ █─╮                       5245790  Merge branch 'main' into feature/i18n                              ·······        ·······
+    │ │ │
+    │ █ │                       484821c  feat(i18n): add German                                             ·······        ·······
+    │ │ │
+    │ █ │                       3ad11a2  feat(i18n): extract the checkout strings                           ·······        ·······
+    │ │ │
+    █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                     ·······        ·······
+    │ │ │ │
+    │ │ │ █                     9d1b361   PR #9  fix(search): ignore accents                                ·······        ·······
+    │ │ │ │
+    │ │ │ █                     cce93f9  feat(search): search as you type                                   ·······        ·······
+    │ │ │ │
+    │ │ │ █─╮                   ae57e03  Merge branch 'main' into feature/search                            ·······        ·······
+    │ │ │ │ │
+    │ │ │ █ │                   a89a18f  feat(search): highlight matching words                             ·······        ·······
+    │ │ │ │ │
+    │ │ │ █ │                   52defc5  feat(search): rank results by popularity                           ·······        ·······
+
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                           normal   search   path   ancestry
+  │
+  │   customer-notification-service   shop   shop-web                                                                 main   86 commits
+  │
+
+                                                                     tab Jenkins · enter reload · esc back · ←/→ switch tab · ↑/↓ navigate                         ◀ open  ◀ draft  ✓ merged  ○ closed
+
+
+=== shot 3: files (200x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                        Status         Last run                Actions           Pull requests          Info
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+    █─╮                         bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request    2             running            Reload commit
+    │ │                                                                                                                                       total pull requests                                    2
+    █ │                         e6209dd  feat(api): add a health endpoint                                    1             45m ago            ├─ ▾ PR #124 release: dev into main             5m ago ◀
+    │ │                                                                                                                                       │  ├─ dev → main
+    █◀╯                         3447db9   v0.42.0   main   origin/ma…   PR #122   +2  docs: rewrite the R…   2             28m ago            │  ├─ @ana-lima
+    │                                                                                                                                         │  └─ ▾ src/
+    │ █                         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry…   1             4h ago             │     ├─ ▾ api/
+    │ │                                                                                                                                       │     │  ├─ health.ts                           A +14 -0
+    █─╯                         64ddc8a  feat(payments): retry failed payments with exponential backoff, …   1             51m ago            │     │  └─ metrics.ts                          A +19 -0
+    │                                                                                                                                         │     └─ index.ts                               M  +5 -0
+    █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······            └─ ▸ PR #125 release: dev into release/1.x      5m ago ◀
+    │
+    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······
+    │ │
+    │ █                         0166f71   PR #23  feat(i18n): add French                                    ·······        ·······
+    │ │
+    │ █─╮                       5245790  Merge branch 'main' into feature/i18n                              ·······        ·······
+    │ │ │
+    │ █ │                       484821c  feat(i18n): add German                                             ·······        ·······
+    │ │ │
+    │ █ │                       3ad11a2  feat(i18n): extract the checkout strings                           ·······        ·······
+    │ │ │
+    █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                     ·······        ·······
+    │ │ │ │
+    │ │ │ █                     9d1b361   PR #9  fix(search): ignore accents                                ·······        ·······
+    │ │ │ │
+    │ │ │ █                     cce93f9  feat(search): search as you type                                   ·······        ·······
+    │ │ │ │
+    │ │ │ █─╮                   ae57e03  Merge branch 'main' into feature/search                            ·······        ·······
+    │ │ │ │ │
+    │ │ │ █ │                   a89a18f  feat(search): highlight matching words                             ·······        ·······
+    │ │ │ │ │
+    │ │ │ █ │                   52defc5  feat(search): rank results by popularity                           ·······        ·······
+
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                           normal   search   path   ancestry
+  │
+  │   customer-notification-service   shop   shop-web                                                                 main   86 commits
+  │
+
+                                                          tab Jenkins · enter collapse · o open · esc back · ←/→ switch tab · ↑/↓ navigate                         ◀ open  ◀ draft  ✓ merged  ○ closed
+
+
+=== shot 4: diff (200x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                        Status         Last run                Actions           Pull requests          Info
+  ──────────────────                                                                                                                                                                ──────────────────
+    █─╮                  Diff · [2/3] · 3447db9..bf08113 · src/api/metrics.ts · unified                                                                               esc close
+    │ │                                                                                                                                                                                              2
+    █ │                  A · +19                                                                                                                                                              5m ago ◀
+    │ │
+    █◀╯                  ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+    │                    Lines (none) → 1–19
+    │ █                     1  + /** Prometheus metrics: request counts and durations by route. */
+    │ │                     2  + const EXPORTER_VERSION = "^15.1.0";                                                                                                                          A +14 -0
+    █─╯                     3  +                                                                                                                                                              A +19 -0
+    │                       4  + const requests = new Map<string, { count: number; seconds: number }>();                                                                                      M  +5 -0
+    █                       5  +                                                                                                                                                    /1.x      5m ago ◀
+    │                       6  + export function record(route: string, seconds: number): void {
+    █─╮                     7  +   const entry = requests.get(route) ?? { count: 0, seconds: 0 };
+    │ │                     8  +   entry.count += 1;
+    │ █                     9  +   entry.seconds += seconds;
+    │ │                    10  +   requests.set(route, entry);
+    │ █─╮                  11  + }
+    │ │ │                  12  +
+    │ █ │                  13  + export function metrics(): Response {
+    │ │ │                  14  +   const lines = ["# TYPE http_requests_total counter"];
+    │ █ │                  15  +   for (const [route, { count }] of requests) lines.push(`http_requests_total{route="${route}"} ${count}`);
+    │ │ │                  16  +   lines.push("# TYPE http_request_seconds_sum counter");
+    █─┼─┼─╮                17  +   for (const [route, { seconds }] of requests) lines.push(`http_request_seconds_sum{route="${route}"} ${seconds}`);
+    │ │ │ │                18  +   return new Response(`${lines.join("\n")}\n`, { headers: { "x-exporter": EXPORTER_VERSION } });
+    │ │ │ █                19  + }
+    │ │ │ │              ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+    │ │ │ █
+    │ │ │ │
+    │ │ │ █─╮
+    │ │ │ │ │
+    │ │ │ █ │
+    │ │ │ │ │
+    │ │ │ █ │
+
+  │
+  │   Dashboard   Gi                                                                                       ← previous file · → next file · b blame · v file · c view · w nowrap
+  │
+  │   customer-notification-service   shop   shop-web                                                                 main   86 commits
+  │
+
+                                                         tab Jenkins · enter view diff · o open · esc back · ←/→ switch tab · ↑/↓ navigate                         ◀ open  ◀ draft  ✓ merged  ○ closed
+
+
+=== shot 5: next-file (200x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                        Status         Last run                Actions           Pull requests          Info
+  ──────────────────                                                                                                                                                                ──────────────────
+    █─╮                  Diff · [3/3] · 3447db9..bf08113 · src/index.ts · unified                                                                                     esc close
+    │ │                                                                                                                                                                                              2
+    █ │                  +5                                                                                                                                                                   5m ago ◀
+    │ │
+    █◀╯                  ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+    │                    Lines 1–4 → 1–6
+    │ █                   1  1    import { serve } from "bun";
+    │ │                      2  + import { metrics } from "./api/metrics";                                                                                                                    A +14 -0
+    █─╯                      3  + import { health } from "./api/health";                                                                                                                      A +19 -0
+    │                     2  4    import { cartRoutes } from "./cart/routes";                                                                                                                 M  +5 -0
+    █                     3  5                                                                                                                                                      /1.x      5m ago ◀
+    │                     4  6    const port = Number(process.env.PORT ?? 8080);
+    █─╮                  ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+    │ │                  Lines 7–12 → 9–17 · serve({
+    │ █                   7  9      port,
+    │ │                   8 10      fetch(request) {
+    │ █─╮                 9 11        const url = new URL(request.url);
+    │ │ │                   12  +     const probe = health(request);
+    │ █ │                   13  +     if (probe) return probe;
+    │ │ │                   14  +     if (url.pathname === "/metrics") return metrics();
+    │ █ │                10 15        if (url.pathname.startsWith("/cart")) return cartRoutes(request);
+    │ │ │                11 16        return new Response(`Not found: ${url.pathname}`, { status: 404 });
+    █─┼─┼─╮              12 17      },
+    │ │ │ │              ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+    │ │ │ █
+    │ │ │ │
+    │ │ │ █
+    │ │ │ │
+    │ │ │ █─╮
+    │ │ │ │ │
+    │ │ │ █ │
+    │ │ │ │ │
+    │ │ │ █ │
+
+  │
+  │   Dashboard   Gi                                                                                       ← previous file · → next file · b blame · v file · c view · w nowrap
+  │
+  │   customer-notification-service   shop   shop-web                                                                 main   86 commits
+  │
+
+                                                         tab Jenkins · enter view diff · o open · esc back · ←/→ switch tab · ↑/↓ navigate                         ◀ open  ◀ draft  ✓ merged  ○ closed
+
+
+=== shot 6: back (200x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                        Status         Last run                Actions           Pull requests          Info
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+    █─╮                         bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request    2             running            Reload commit
+    │ │                                                                                                                                       total pull requests                                    2
+    █ │                         e6209dd  feat(api): add a health endpoint                                    1             45m ago            ├─ ▾ PR #124 release: dev into main             5m ago ◀
+    │ │                                                                                                                                       │  ├─ dev → main
+    █◀╯                         3447db9   v0.42.0   main   origin/ma…   PR #122   +2  docs: rewrite the R…   2             28m ago            │  ├─ @ana-lima
+    │                                                                                                                                         │  └─ ▾ src/
+    │ █                         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry…   1             4h ago             │     ├─ ▾ api/
+    │ │                                                                                                                                       │     │  ├─ health.ts                           A +14 -0
+    █─╯                         64ddc8a  feat(payments): retry failed payments with exponential backoff, …   1             51m ago            │     │  └─ metrics.ts                          A +19 -0
+    │                                                                                                                                         │     └─ index.ts                               M  +5 -0
+    █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······            └─ ▸ PR #125 release: dev into release/1.x      5m ago ◀
+    │
+    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······
+    │ │
+    │ █                         0166f71   PR #23  feat(i18n): add French                                    ·······        ·······
+    │ │
+    │ █─╮                       5245790  Merge branch 'main' into feature/i18n                              ·······        ·······
+    │ │ │
+    │ █ │                       484821c  feat(i18n): add German                                             ·······        ·······
+    │ │ │
+    │ █ │                       3ad11a2  feat(i18n): extract the checkout strings                           ·······        ·······
+    │ │ │
+    █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                     ·······        ·······
+    │ │ │ │
+    │ │ │ █                     9d1b361   PR #9  fix(search): ignore accents                                ·······        ·······
+    │ │ │ │
+    │ │ │ █                     cce93f9  feat(search): search as you type                                   ·······        ·······
+    │ │ │ │
+    │ │ │ █─╮                   ae57e03  Merge branch 'main' into feature/search                            ·······        ·······
+    │ │ │ │ │
+    │ │ │ █ │                   a89a18f  feat(search): highlight matching words                             ·······        ·······
+    │ │ │ │ │
+    │ │ │ █ │                   52defc5  feat(search): rank results by popularity                           ·······        ·······
+
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                           normal   search   path   ancestry
+  │
+  │   customer-notification-service   shop   shop-web                                                                 main   86 commits
+  │
+
+                                                         tab Jenkins · enter view diff · o open · esc back · ←/→ switch tab · ↑/↓ navigate                         ◀ open  ◀ draft  ✓ merged  ○ closed
+
+

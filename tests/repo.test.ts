@@ -27,6 +27,14 @@ function assertNotNull<T>(value: T, label = "value"): asserts value is NonNullab
 }
 
 describe("repo.ts parsing", () => {
+  test("parseRefs — a comma inside a branch name stays one ref", () => {
+    expect(parseRefs("HEAD -> feature,one, origin/feature,one, tag: v1,2", new Set(["origin"]))).toEqual([
+      { name: "feature,one", type: "branch", isCurrent: true },
+      { name: "origin/feature,one", type: "remote", isCurrent: false },
+      { name: "v1,2", type: "tag", isCurrent: false },
+    ]);
+  });
+
   test("parseRefs — empty/blank string returns []", () => {
     const refs = parseRefs("", new Set());
     expect(refs.length).toBe(0);
@@ -428,84 +436,58 @@ describe("parseStatusPorcelain", () => {
 });
 
 describe("parseDiffTreeOutput", () => {
+  /** Git's -z output: every entry NUL-ended. */
+  const z = (...entries: string[]) => entries.map(entry => `${entry}\0`).join("");
+
   test("parses combined raw + numstat output", () => {
-    const output = [
-      ":100644 100644 abc1234 def5678 M\tsrc/app.tsx",
-      ":000000 100644 0000000 abc1234 A\tsrc/new-file.ts",
-      ":100644 000000 abc1234 0000000 D\told-file.ts",
-      "",
+    const output = z(
+      ":100644 100644 abc1234 def5678 M",
+      "src/app.tsx",
+      ":000000 100644 0000000 abc1234 A",
+      "src/new-file.ts",
+      ":100644 000000 abc1234 0000000 D",
+      "old-file.ts",
       "12\t3\tsrc/app.tsx",
       "45\t0\tsrc/new-file.ts",
       "0\t10\told-file.ts",
-    ].join("\n");
-
-    const files = parseDiffTreeOutput(output);
-    expect(files).toHaveLength(3);
-
-    const app = files.find(f => f.path === "src/app.tsx");
-    assertNotNull(app, "app");
-    expect(app.additions).toBe(12);
-    expect(app.deletions).toBe(3);
-    expect(app.status).toBe("M");
-
-    const newFile = files.find(f => f.path === "src/new-file.ts");
-    assertNotNull(newFile, "newFile");
-    expect(newFile.additions).toBe(45);
-    expect(newFile.deletions).toBe(0);
-    expect(newFile.status).toBe("A");
-
-    const deleted = files.find(f => f.path === "old-file.ts");
-    assertNotNull(deleted, "deleted");
-    expect(deleted.additions).toBe(0);
-    expect(deleted.deletions).toBe(10);
-    expect(deleted.status).toBe("D");
+    );
+    expect(parseDiffTreeOutput(output)).toEqual([
+      { path: "src/app.tsx", additions: 12, deletions: 3, status: "M" },
+      { path: "src/new-file.ts", additions: 45, deletions: 0, status: "A" },
+      { path: "old-file.ts", additions: 0, deletions: 10, status: "D" },
+    ]);
   });
 
-  test("handles rename status (R100)", () => {
-    const output = [":100644 100644 abc1234 def5678 R100\told-name.ts\tnew-name.ts", "", "0\t0\told-name.ts"].join(
-      "\n",
+  test("a rename is its new path", () => {
+    const output = z(
+      ":100644 100644 abc1234 def5678 R100",
+      "old-name.ts",
+      "new-name.ts",
+      "0\t0\t",
+      "old-name.ts",
+      "new-name.ts",
     );
-
-    const files = parseDiffTreeOutput(output);
-    expect(files).toHaveLength(1);
-    expect(files[0].path).toBe("old-name.ts");
-    expect(files[0].status).toBe("R");
+    expect(parseDiffTreeOutput(output)).toEqual([{ path: "new-name.ts", additions: 0, deletions: 0, status: "R" }]);
   });
 
   test("handles binary files (- additions/deletions)", () => {
-    const output = [":100644 100644 abc1234 def5678 M\timage.png", "", "-\t-\timage.png"].join("\n");
-
-    const files = parseDiffTreeOutput(output);
-    expect(files).toHaveLength(1);
-    expect(files[0].path).toBe("image.png");
-    expect(files[0].additions).toBe(0);
-    expect(files[0].deletions).toBe(0);
-    expect(files[0].status).toBe("M");
+    const output = z(":100644 100644 abc1234 def5678 M", "image.png", "-\t-\timage.png");
+    expect(parseDiffTreeOutput(output)).toEqual([{ path: "image.png", additions: 0, deletions: 0, status: "M" }]);
   });
 
   test("returns empty array for empty output", () => {
     expect(parseDiffTreeOutput("")).toHaveLength(0);
-    expect(parseDiffTreeOutput("\n\n")).toHaveLength(0);
+    expect(parseDiffTreeOutput("\0")).toHaveLength(0);
   });
 
   test("defaults to M status when raw line is missing", () => {
-    // Only numstat, no raw lines — status should default to "M"
-    const output = "5\t2\tsrc/file.ts\n";
-
-    const files = parseDiffTreeOutput(output);
-    expect(files).toHaveLength(1);
-    expect(files[0].status).toBe("M");
+    expect(parseDiffTreeOutput(z("5\t2\tsrc/file.ts"))[0].status).toBe("M");
   });
 
-  test("handles paths with tabs (pathParts.join)", () => {
-    // Pathological case: a path containing a tab character
-    const output = "10\t5\tpath\twith\ttabs\n";
-
-    const files = parseDiffTreeOutput(output);
-    expect(files).toHaveLength(1);
-    expect(files[0].path).toBe("path\twith\ttabs");
-    expect(files[0].additions).toBe(10);
-    expect(files[0].deletions).toBe(5);
+  test("a name with a tab, a newline or a quote stays exact", () => {
+    const names = ["path\twith\ttabs", "two\nlines", 'say "hi"'];
+    const output = z(...names.flatMap(name => [":100644 100644 a b M", name]), ...names.map(name => `1\t2\t${name}`));
+    expect(parseDiffTreeOutput(output).map(file => file.path)).toEqual(names);
   });
 });
 

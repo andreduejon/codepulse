@@ -78,8 +78,9 @@ test("provider badges switch directly; panel width switches between two and thre
     await setup.mockMouse.click(x, providersLine);
     expect(app.state.activeProviderView()).toBe("github-actions");
     await setup.flush();
-    expect(providerSpan()?.fg).toEqual(RGBA.fromHex(themes["catppuccin-mocha"].githubActionsBg));
-    expect(providerSpan()?.bg).toEqual(RGBA.fromHex(themes["catppuccin-mocha"].backgroundElementActive));
+    // The selected provider is filled in its own color, like the selected project: it decides the whole view.
+    expect(providerSpan()?.fg).toEqual(RGBA.fromHex(themes["catppuccin-mocha"].githubActionsFg));
+    expect(providerSpan()?.bg).toEqual(RGBA.fromHex(themes["catppuccin-mocha"].githubActionsBg));
     setMouseEnabled(false);
     await setup.mockMouse.click(lines()[providersLine].indexOf("Jenkins") + 2, providersLine);
     expect(app.state.activeProviderView()).toBe("github-actions");

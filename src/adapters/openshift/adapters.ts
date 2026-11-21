@@ -18,6 +18,7 @@ export function openShiftAdapters(cacheRoot?: string, registry?: ProviderCacheRe
       followOpenShiftLog: (...args) => api.followOpenShiftLog(...args),
       fetchOpenShiftObject: (...args) => api.fetchOpenShiftObject(...args),
       fetchOpenShiftEvents: (...args) => api.fetchOpenShiftEvents(...args),
+      fetchOpenShiftWarnings: (...args) => api.fetchOpenShiftWarnings(...args),
     },
     cache: maxEntries => new OpenShiftCache({ root: cacheRoot, maxEntries, registry }),
     token: envVar => api.getOpenShiftToken(envVar),

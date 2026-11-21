@@ -1,6 +1,6 @@
 === shot 1: log (200x45) ===
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-  Graph                         Commit   Description                                                        Status         Last Run                      Actions                       Info
+  Graph                         Commit   Description                                                        Status         Last run                      Actions                       Info
   ──────────────────                                                                                                                                                                ──────────────────
     █                    GitHub · CI #812 · test · 5m 17s                                                                                                             esc close
     │                                                                                                                                                                                                1
@@ -47,7 +47,7 @@
 
 === shot 2: issues (200x45) ===
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-  Graph                         Commit   Description                                                        Status         Last Run                      Actions                       Info
+  Graph                         Commit   Description                                                        Status         Last run                      Actions                       Info
   ──────────────────                                                                                                                                                                ──────────────────
     █                    GitHub · CI #812 · test · 5m 17s · issues only                                                                                               esc close
     │                                                                                                                                                                                                1
@@ -94,7 +94,7 @@
 
 === shot 3: search (200x45) ===
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-  Graph                         Commit   Description                                                        Status         Last Run                      Actions                       Info
+  Graph                         Commit   Description                                                        Status         Last run                      Actions                       Info
   ──────────────────                                                                                                                                                                ──────────────────
     █                    GitHub · CI #812 · test · 5m 17s                                                                                                             esc close
     │                                                                                                                                                                                                1
@@ -141,15 +141,15 @@
 
 === shot 4: back (200x45) ===
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-  Graph                         Commit   Description                                                        Status         Last Run                      Actions                       Info
+  Graph                         Commit   Description                                                        Status         Last run                      Actions                       Info
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
-    █                           bf08113   dev   origin/dev  feat(api): export request metrics                2             running            Reload commit
+    █                           bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request…   2             running            Reload commit
     │                                                                                                                                         total workflow runs                                    1
     █                           e6209dd  feat(api): add a health endpoint                                    1             45m ago            └─ ▾ CI #812  attempt 2                        51m ago ✗
     │                                                                                                                                            ├─ build                                            ✓
-    █                           3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the RE…   2             28m ago               ├─ test                                             ✗
+    █                           3447db9   v0.42.0   main   origin/ma…   PR #122   +2  docs: rewrite the R…   2             28m ago               ├─ test                                             ✗
     │                                                                                                                                            │  ├─ Set up job                                    ✓
-    │ █                         6adc455   feature/payments-r…   origin/feature/pay…  wip(payments): retry…   1             4h ago                │  ├─ Checkout                                      ✓
+    │ █                         6adc455   feature/payme…   origin/featur…   PR #123  wip(payments): retry…   1             4h ago                │  ├─ Checkout                                      ✓
     │ │                                                                                                                                          │  ├─ Install dependencies                          ✓
     █─╯                         64ddc8a  feat(payments): retry failed payments with exponential backoff, a   1             51m ago               │  ├─ Run tests                                     ✗
     │                                                                                                                                            │  ├─ Upload coverage                               –
@@ -157,7 +157,7 @@
     │                                                                                                                                            │     ├─ ✗ src/payments/retry.test.ts:40  Expected
     █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······               │     ├─ ✗ src/payments/gateway-client-with-a-long…
     │ │                                                                                                                                          │     ├─ ! src/payments/retry.ts:19  'delay' is as…
-    │ █                         0166f71  feat(i18n): add French                                             ·······        ·······               │     └─ ✗ Process completed with exit code 1.
+    │ █                         0166f71   PR #23  feat(i18n): add French                                    ·······        ·······               │     └─ ✗ Process completed with exit code 1.
     │ │                                                                                                                                          ├─ deploy                                           –
     │ █─╮                       5245790  Merge branch 'main' into feature/i18n                              ·······        ·······               └─ ▸ attempt 1                               2h ago ✗
     │ │ │
@@ -167,7 +167,7 @@
     │ │ │
     █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                     ·······        ·······
     │ │ │ │
-    │ │ │ █                     9d1b361  fix(search): ignore accents                                        ·······        ·······
+    │ │ │ █                     9d1b361   PR #9  fix(search): ignore accents                                ·······        ·······
     │ │ │ │
     │ │ │ █                     cce93f9  feat(search): search as you type                                   ·······        ·······
     │ │ │ │

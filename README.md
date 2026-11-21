@@ -120,8 +120,9 @@ The [demo guide](docs/demo.md) covers its options and the headless mode for chec
 ## Roadmap
 
 Codepulse is working toward `1.0.0` by stabilizing provider behavior,
-configuration, cache semantics, and cross-platform distribution. See the
-[changelog](CHANGELOG.md) for completed releases.
+configuration, cache semantics, and cross-platform distribution. The
+[roadmap](ROADMAP.md) has the next releases, the [changelog](CHANGELOG.md) the
+completed ones.
 
 ## License
 

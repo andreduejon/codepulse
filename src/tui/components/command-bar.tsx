@@ -230,8 +230,10 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
                   <text
                     flexShrink={0}
                     wrapMode="none"
-                    fg={selected() ? colors().bg : hovered() ? t().foreground : t().foregroundMuted}
-                    bg={t().backgroundElementActive}
+                    // The selected provider decides the whole view: filled in its color, like the selected
+                    // project. The modes are second to it: their selected one is only its text in the accent.
+                    fg={selected() ? colors().fg : hovered() ? t().foreground : t().foregroundMuted}
+                    bg={selected() ? colors().bg : t().backgroundElementActive}
                     onMouseOver={() => setHoveredProvider(view)}
                     onMouseOut={() => setHoveredProvider(null)}
                     onMouseDown={event => {

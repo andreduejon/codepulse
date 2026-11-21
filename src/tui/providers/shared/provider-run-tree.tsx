@@ -381,9 +381,11 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     }
   };
 
-  const toggleRun = (run: ProviderTreeRun<TRaw>) => {
+  /** Opens or closes a run; opening one moves the cursor to its first (failed) job, unless `stay`. */
+  const toggleRun = (run: ProviderTreeRun<TRaw>, stay = false) => {
     const opening = !expandedRuns().has(run.id);
     const wasFocusedRun =
+      !stay &&
       props.detailCursorIndex() === flatItems().findIndex(item => item.kind === "run" && item.run.id === run.id);
     if (!opening) abortRunFetch(run.id);
     setExpandedRuns(prev => {
@@ -393,7 +395,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
       return next;
     });
     if (opening && !loadedRuns().has(run.id) && !loadingRuns().has(run.id)) {
-      setPendingFocusRunId(run.id);
+      if (!stay) setPendingFocusRunId(run.id);
       const initialJobs = props.getInitialJobsForRun?.(run) ?? [];
       if (initialJobs.length > 0 && !fetchedJobs().has(run.id)) {
         setFetchedJobs(prev => {
@@ -515,7 +517,8 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     if (opened.targetOpenedKey === key) return;
     const open = () => {
       opened.targetOpenedKey = key;
-      if (!untrack(expandedRuns).has(id)) untrack(() => toggleRun(run));
+      // The cursor stays on the event's own row, the run.
+      if (!untrack(expandedRuns).has(id)) untrack(() => toggleRun(run, true));
     };
     if (props.detailFocused() || untrack(fetchedJobs).has(id)) {
       open();

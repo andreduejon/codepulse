@@ -362,6 +362,11 @@ async function log() {
   const opened = reportMemory("log of 20,000 lines open");
   report("log of 20,000 lines open: JavaScript heap added", opened.heap - before.heap, "MB");
   report("log of 20,000 lines: key G", await perKey(setup, "G", 1), "ms");
+  // Wrapped lines stay windowed: only those near the screen are mounted.
+  report("log of 20,000 lines: key w (wrap)", await perKey(setup, "w", 1), "ms");
+  const wrapped = reportMemory("log of 20,000 lines wrapped");
+  report("log of 20,000 lines wrapped: JavaScript heap added", wrapped.heap - opened.heap, "MB");
+  await perKey(setup, "w", 1);
   setOpen(false);
   await setup.renderOnce();
   const closed = memory();

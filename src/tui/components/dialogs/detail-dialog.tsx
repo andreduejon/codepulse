@@ -48,7 +48,8 @@ export function DetailDialog(
         <DialogTitleBar title="Details" onClose={props.onClose} />
         <Show when={props.message}>
           {message => (
-            <box flexDirection="column" width="100%" flexShrink={0}>
+            // 1+4 from the dialog's border, as the title and the content.
+            <box flexDirection="column" width="100%" flexShrink={0} paddingX={4}>
               <MessageBox
                 kind={message().kind}
                 source={message().source}

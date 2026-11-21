@@ -1,0 +1,47 @@
+=== shot 1: saved (200x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                        Resources      Events                   Resources            Events             Info
+  ──────────────────                                                                                                                                                                ──────────────────
+    █                    OpenShift · Pod · shop-test · shop-api-7d9f8-x2k4q · events · 2 warnings                                                                     esc close                   live
+    │                                                                                                                                                                                               21
+    █                     1  STATUS       REASON                        MESSAGE                                                                                                                      5
+    │                     2  waiting      CrashLoopBackOff              back-off 5m0s restarting failed container                                                                                    1
+    █                     3  last run     Error · exit 1 · 14 restarts                                                                                                                          Failed
+    │                     4  Ready False  ContainersNotReady            containers with unready status: [api]                                                                                        1
+    │ █                   5                                                                                                                                                         ended docker-build
+    │ │                   6  OpenShift events failed: 500                                                                                                                                            1
+    █─╯                   7                                                                                                                                                                     2h ago
+    │                     8  Saved warnings                                                                                                                                                          1
+    █                     9  LAST SEEN  TYPE     REASON     COUNT  MESSAGE                                                                                                                      2h ago
+    │                    10  just now   Warning  BackOff       61  Back-off restarting failed container api in pod shop-api-7d9f8-x2k4q                                                              1
+    █─╮                  11  1m ago     Warning  Unhealthy     42  Readiness probe failed: HTTP probe failed with statuscode: 503 (GET http://10.128.2.14:8080/health/ready)                    2h ago
+    │ │                                                                                                                                                                                             16
+    │ █                                                                                                                                                                                              1
+    │ │                                                                                                                                                                                Available False
+    │ █─╮                                                                                                                                                                                            1
+    │ │ │                                                                                                                                                                            Progressing False
+    │ █ │                                                                                                                                                                                            1
+    │ │ │                                                                                                                                                                                      waiting
+    │ █ │                                                                                                                                                                                            1
+    │ │ │                                                                                                                                                                                     last run
+    █─┼─┼─╮                                                                                                                                                                                          1
+    │ │ │ │                                                                                                                                                                                      ended
+    │ │ │ █                                                                                                                                                                                          1
+    │ │ │ │                                                                                                                                                                                     Failed
+    │ │ │ █                                                                                                                                                                                          2
+    │ │ │ │                                                                                                                                                                                   just now
+    │ │ │ █─╮                                                                                                                                                                                  25m ago
+    │ │ │ │ │                                                                                                                                                                                        1
+    │ │ │ █ │                                                                                                                                                                                   1m ago
+    │ │ │ │ │                                                                                                                                                                                        1
+    │ │ │ █ │                                                                                                                                                                                  18m ago
+                                                                                                                                                                                                     1
+  │                                                                                                                                                                                            30m ago
+  │   Dashboard   Gi                                                                                                            / search · c view · w wrap · r refresh · o open                      1
+  │
+  │   customer-notification-service   shop   shop-web                                                                 main   86 commits       │
+  │                                                                                                                                           │     No permission to list events in shop-prod   ✕
+                                                                                                                                              │     The token needs list on events.
+                                                               tab Snyk · enter events · o open · esc back · ←/→ switch tab · ↑/↓ navigate    │
+
+

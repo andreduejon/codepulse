@@ -1,0 +1,408 @@
+=== shot 1: log (240x100) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+   Graph  Commit   Branch                Time   Event                                                                                                                                     Vulnerabilities        Dependencies         Info
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+   │      ────────────────────────────── Today · Mon, Mar 2 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    Show in Snyk
+   █      3447db9  main                  09:30  ▲ scan · 4 vulnerabilities · 1 critical · 3 high · 0 medium · 0 low                                                                   Rescan commit
+   █      bf08113  dev                   09:30  ▲ scan · 4 vulnerabilities · 1 critical · 3 high · 0 medium · 0 low                                                                   Copy scan as JSON
+   █      bf08113  dev                   09:30  ● Deploy preview #78 running
+   █      bf08113  dev                   09:30  ● CI #814 running                                                                                                                     Group by                                      [severity]
+   █      bf08113  dev                   09:28  ● dev #7 running                                                                                                                      Enter vulnerability filter...                          4
+   █      bf08113  dev                   09:27  ✓ build shop-api-44 complete in shop-dev
+   █      3447db9  main                  09:01  ✓ Deploy to shop-prod with a long workflow name #77 passed                                                                            ▾ CRITICAL                                             1
+   █      3447db9  main                  09:00  ✓ main #42 passed                                                                                                                     └─ ▸ CVE-2022-23540                                9.1 ●
+   █      64ddc8a  main                  09:00  ! BackOff · pod shop-api-7d9f8-x2k4q in shop-test · 61 times                                                                          ▾ HIGH                                                 3
+   █      3447db9  docs/readme           09:00  ✓ PR #122 merged · docs: rewrite the README for the new cart flow                                                                     ├─ ▸ CVE-2026-10001                                8.2 ●
+   │                                                                                                                                                                                  ├─ ▸ CVE-2020-8203                                 7.5 ●
+   █      64ddc8a  main                  08:59  ! Unhealthy · pod shop-api-7d9f8-x2k4q in shop-test · 42 times                                                                        └─ ▸ CVE-2024-4068                                 7.5 ●
+   █      3447db9  main                  08:55  ✓ CI #813 passed                                                                                                                      · MEDIUM                                               0
+   █      e6209dd  dev                   08:44  ○ CI #811 cancelled                                                                                                                   · LOW                                                  0
+   █      e6209dd  dev                   08:43  ○ dev #6 aborted
+   █      64ddc8a  main                  08:42  ! OOMKilling · pod shop-api-7d9f8-oom7k in shop-test
+   █      3447db9  main                  08:40  ✓ build shop-api-43 complete in shop-dev
+   █      bf08113  dev                   08:40  ◀ PR #124 opened · release: dev into main
+   █      bf08113  dev                   08:40  ◀ PR #125 opened · release: dev into release/1.x
+   █      64ddc8a  main                  08:38  ✗ CI #812 failed
+   █      64ddc8a  main                  08:35  ! BackOff · pod shop-cache-0 in shop-test · 3 times
+   █      3447db9  main                  08:30  docs: rewrite the README for the new cart flow 🚀 and explain how discounts are rounded
+   █      64ddc8a  main                  08:30  ! FailedCreate · replica set shop-api-7d9f8 in shop-test · 3 times
+   █      64ddc8a  main                  08:20  ! ProgressDeadlineExceeded · deployment shop-api in shop-test
+   │
+   █      3447db9  docs/readme           07:30  ◀ PR #122 opened · docs: rewrite the README for the new cart flow
+   │
+   █      64ddc8a  main                  06:45  ✗ main #41 failed
+   █      69ddc1f  feature/dark-mode     06:30  ◀ PR #119 opened · feat(theme): dark mode
+   █      64ddc8a  main                  06:15  ! BuildFailed · build shop-api-41 in shop-dev
+   █      64ddc8a  main                  06:12  ! FailedMount · pod shop-api-41-build in shop-dev · 2 times
+   │
+   █      1b1b130  experiment/graph-la…  05:30  ○ PR #116 closed · experiment: compare both graph layouts
+   │
+   █      6adc455  feature/payments-re…  04:31  ✗ CI #815 failed
+   █      6adc455  feature/payments-re…  04:30  ◀ PR #123 opened · feat(payments): retry failed payments with exponential backoff
+   │
+   █      6adc455  feature/payments-re…  03:54  ✗ feature/payments-retry-with-a-really-long-branch-name #3 failed
+   █      64ddc8a  main                  03:10  ✓ build shop-api-42 complete in shop-dev
+   │
+   █      64ddc8a  main                  02:54  ✗ build shop-api-41 failed in shop-dev
+   █      64ddc8a  main                  02:49  ○ build shop-api-39 cancelled in shop-dev
+   █      64ddc8a  main                  02:30  feat(payments): retry failed payments with exponential backoff, and a subject long enough to need cutting
+   │
+   │      ────────────────────────────── Yesterday · Sun, Mar 1 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   █      917f7b3  main                  13:30  perf(cart): cache price lookups
+   │
+   │      ────────────────────────────── Sat, Feb 28 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   █      1bb16fb  main                  01:30  Merge pull request #23 from demo/feature/i18n
+   █      0166f71  feature/i18n          01:30  ✓ PR #23 merged · feat(i18n): German and French checkout
+   │
+   │      ────────────────────────────── Fri, Feb 27 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   █      fe7db4d  main                  21:30  Merge pull request #9 from demo/feature/search
+   █      9d1b361  feature/search        21:30  ✓ PR #9 merged · feat(search): search as you type
+   │
+   █      179f8b7  main                  15:30  Merge pull request #20 from demo/feature/a11y
+   │
+   █      0d02d96  main                  11:30  Merge pull request #22 from demo/chore/eslint-9
+   │
+   █      bd35bdd  main                  05:30  Merge pull request #21 from demo/bugfix/cart-badge
+   │
+   │      ────────────────────────────── Thu, Feb 26 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   █      0166f71  feature/i18n          09:30  ◀ PR #23 opened · feat(i18n): German and French checkout
+   │
+   █      95f9e6a  main                  03:30  Merge branch 'release/1.x'
+   │
+   │      ────────────────────────────── Wed, Feb 25 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   █      2ca8640  main                  17:30  Revert "feat(cart): free shipping over 50"
+   │
+   █      f0f9926  main                  13:30  feat(cart): free shipping over 50
+   │
+   █      525816f  main                  07:30  Merge branch 'import/legacy-scripts'
+   │
+   █      82e5a6f  main                  03:30  Merge branches 'deps/lodash', 'deps/axios', 'deps/jest' and 'deps/typescript'
+   │
+   │      ────────────────────────────── Tue, Feb 24 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   █      3e157f9  main                  13:30  Merge pull request #16 from demo/feature/pricing
+   │
+   █      455b7cd  main                  11:30  Merge pull request #15 from demo/feature/inventory
+
+
+
+
+
+
+
+
+
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                                                           Git   GitHub   Jenkins   OpenShift   Snyk
+  │
+  │   customer-notification-service   shop   shop-web                                                                                                                 52 events
+  │
+
+                                                                                                               tab Git · enter show in Snyk · → details · r refresh · ↑/↓ navigate           ● upgrade  ● override  ● no fix  ! mature exploit
+
+
+=== shot 2: merged (240x100) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+   Graph  Commit   Branch                Time   Event                                                                                                                                      Actions           Pull requests          Info
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+   │      ────────────────────────────── Today · Mon, Mar 2 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    Show in GitHub
+   █      3447db9  main                  09:30  ▲ scan · 4 vulnerabilities · 1 critical · 3 high · 0 medium · 0 low                                                                   Reload commit
+   █      bf08113  dev                   09:30  ▲ scan · 4 vulnerabilities · 1 critical · 3 high · 0 medium · 0 low                                                                   total pull requests                                    1
+   █      bf08113  dev                   09:30  ● Deploy preview #78 running                                                                                                          └─ PR #23 feat(i18n): German and French check…  2d ago ✓
+   █      bf08113  dev                   09:30  ● CI #814 running
+   █      bf08113  dev                   09:28  ● dev #7 running
+   █      bf08113  dev                   09:27  ✓ build shop-api-44 complete in shop-dev
+   █      3447db9  main                  09:01  ✓ Deploy to shop-prod with a long workflow name #77 passed
+   █      3447db9  main                  09:00  ✓ main #42 passed
+   █      64ddc8a  main                  09:00  ! BackOff · pod shop-api-7d9f8-x2k4q in shop-test · 61 times
+   █      3447db9  docs/readme           09:00  ✓ PR #122 merged · docs: rewrite the README for the new cart flow
+   │
+   █      64ddc8a  main                  08:59  ! Unhealthy · pod shop-api-7d9f8-x2k4q in shop-test · 42 times
+   █      3447db9  main                  08:55  ✓ CI #813 passed
+   █      e6209dd  dev                   08:44  ○ CI #811 cancelled
+   █      e6209dd  dev                   08:43  ○ dev #6 aborted
+   █      64ddc8a  main                  08:42  ! OOMKilling · pod shop-api-7d9f8-oom7k in shop-test
+   █      3447db9  main                  08:40  ✓ build shop-api-43 complete in shop-dev
+   █      bf08113  dev                   08:40  ◀ PR #124 opened · release: dev into main
+   █      bf08113  dev                   08:40  ◀ PR #125 opened · release: dev into release/1.x
+   █      64ddc8a  main                  08:38  ✗ CI #812 failed
+   █      64ddc8a  main                  08:35  ! BackOff · pod shop-cache-0 in shop-test · 3 times
+   █      3447db9  main                  08:30  docs: rewrite the README for the new cart flow 🚀 and explain how discounts are rounded
+   █      64ddc8a  main                  08:30  ! FailedCreate · replica set shop-api-7d9f8 in shop-test · 3 times
+   █      64ddc8a  main                  08:20  ! ProgressDeadlineExceeded · deployment shop-api in shop-test
+   │
+   █      3447db9  docs/readme           07:30  ◀ PR #122 opened · docs: rewrite the README for the new cart flow
+   │
+   █      64ddc8a  main                  06:45  ✗ main #41 failed
+   █      69ddc1f  feature/dark-mode     06:30  ◀ PR #119 opened · feat(theme): dark mode
+   █      64ddc8a  main                  06:15  ! BuildFailed · build shop-api-41 in shop-dev
+   █      64ddc8a  main                  06:12  ! FailedMount · pod shop-api-41-build in shop-dev · 2 times
+   │
+   █      1b1b130  experiment/graph-la…  05:30  ○ PR #116 closed · experiment: compare both graph layouts
+   │
+   █      6adc455  feature/payments-re…  04:31  ✗ CI #815 failed
+   █      6adc455  feature/payments-re…  04:30  ◀ PR #123 opened · feat(payments): retry failed payments with exponential backoff
+   │
+   █      6adc455  feature/payments-re…  03:54  ✗ feature/payments-retry-with-a-really-long-branch-name #3 failed
+   █      64ddc8a  main                  03:10  ✓ build shop-api-42 complete in shop-dev
+   │
+   █      64ddc8a  main                  02:54  ✗ build shop-api-41 failed in shop-dev
+   █      64ddc8a  main                  02:49  ○ build shop-api-39 cancelled in shop-dev
+   █      64ddc8a  main                  02:30  feat(payments): retry failed payments with exponential backoff, and a subject long enough to need cutting
+   │
+   │      ────────────────────────────── Yesterday · Sun, Mar 1 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   █      917f7b3  main                  13:30  perf(cart): cache price lookups
+   │
+   │      ────────────────────────────── Sat, Feb 28 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   █      1bb16fb  main                  01:30  Merge pull request #23 from demo/feature/i18n
+   █      0166f71  feature/i18n          01:30  ✓ PR #23 merged · feat(i18n): German and French checkout
+   │
+   │      ────────────────────────────── Fri, Feb 27 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   █      fe7db4d  main                  21:30  Merge pull request #9 from demo/feature/search
+   █      9d1b361  feature/search        21:30  ✓ PR #9 merged · feat(search): search as you type
+   │
+   █      179f8b7  main                  15:30  Merge pull request #20 from demo/feature/a11y
+   │
+   █      0d02d96  main                  11:30  Merge pull request #22 from demo/chore/eslint-9
+   │
+   █      bd35bdd  main                  05:30  Merge pull request #21 from demo/bugfix/cart-badge
+   │
+   │      ────────────────────────────── Thu, Feb 26 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   █      0166f71  feature/i18n          09:30  ◀ PR #23 opened · feat(i18n): German and French checkout
+   │
+   █      95f9e6a  main                  03:30  Merge branch 'release/1.x'
+   │
+   │      ────────────────────────────── Wed, Feb 25 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   █      2ca8640  main                  17:30  Revert "feat(cart): free shipping over 50"
+   │
+   █      f0f9926  main                  13:30  feat(cart): free shipping over 50
+   │
+   █      525816f  main                  07:30  Merge branch 'import/legacy-scripts'
+   │
+   █      82e5a6f  main                  03:30  Merge branches 'deps/lodash', 'deps/axios', 'deps/jest' and 'deps/typescript'
+   │
+   │      ────────────────────────────── Tue, Feb 24 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   █      3e157f9  main                  13:30  Merge pull request #16 from demo/feature/pricing
+   │
+   █      455b7cd  main                  11:30  Merge pull request #15 from demo/feature/inventory
+
+
+
+
+
+
+
+
+
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                                                           Git   GitHub   Jenkins   OpenShift   Snyk
+  │
+  │   customer-notification-service   shop   shop-web                                                                                                                 52 events
+  │
+
+                                                                                                    tab Git · enter show in GitHub · → details · o open · r refresh · ↑/↓ navigate                         ◀ open  ◀ draft  ✓ merged  ○ closed
+
+
+=== shot 3: draft (240x100) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+   Graph  Commit   Branch                Time   Event                                                                                                                                      Actions           Pull requests          Info
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+   │      ────────────────────────────── Today · Mon, Mar 2 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    Show in GitHub
+   █      3447db9  main                  09:30  ▲ scan · 4 vulnerabilities · 1 critical · 3 high · 0 medium · 0 low                                                                   Reload commit
+   █      bf08113  dev                   09:30  ▲ scan · 4 vulnerabilities · 1 critical · 3 high · 0 medium · 0 low                                                                   total pull requests                                    1
+   █      bf08113  dev                   09:30  ● Deploy preview #78 running                                                                                                          └─ ▸ PR #119 feat(theme): dark mode             2h ago ◀
+   █      bf08113  dev                   09:30  ● CI #814 running
+   █      bf08113  dev                   09:28  ● dev #7 running
+   █      bf08113  dev                   09:27  ✓ build shop-api-44 complete in shop-dev
+   █      3447db9  main                  09:01  ✓ Deploy to shop-prod with a long workflow name #77 passed
+   █      3447db9  main                  09:00  ✓ main #42 passed
+   █      64ddc8a  main                  09:00  ! BackOff · pod shop-api-7d9f8-x2k4q in shop-test · 61 times
+   █      3447db9  docs/readme           09:00  ✓ PR #122 merged · docs: rewrite the README for the new cart flow
+   │
+   █      64ddc8a  main                  08:59  ! Unhealthy · pod shop-api-7d9f8-x2k4q in shop-test · 42 times
+   █      3447db9  main                  08:55  ✓ CI #813 passed
+   █      e6209dd  dev                   08:44  ○ CI #811 cancelled
+   █      e6209dd  dev                   08:43  ○ dev #6 aborted
+   █      64ddc8a  main                  08:42  ! OOMKilling · pod shop-api-7d9f8-oom7k in shop-test
+   █      3447db9  main                  08:40  ✓ build shop-api-43 complete in shop-dev
+   █      bf08113  dev                   08:40  ◀ PR #124 opened · release: dev into main
+   █      bf08113  dev                   08:40  ◀ PR #125 opened · release: dev into release/1.x
+   █      64ddc8a  main                  08:38  ✗ CI #812 failed
+   █      64ddc8a  main                  08:35  ! BackOff · pod shop-cache-0 in shop-test · 3 times
+   █      3447db9  main                  08:30  docs: rewrite the README for the new cart flow 🚀 and explain how discounts are rounded
+   █      64ddc8a  main                  08:30  ! FailedCreate · replica set shop-api-7d9f8 in shop-test · 3 times
+   █      64ddc8a  main                  08:20  ! ProgressDeadlineExceeded · deployment shop-api in shop-test
+   │
+   █      3447db9  docs/readme           07:30  ◀ PR #122 opened · docs: rewrite the README for the new cart flow
+   │
+   █      64ddc8a  main                  06:45  ✗ main #41 failed
+   █      69ddc1f  feature/dark-mode     06:30  ◀ PR #119 opened · feat(theme): dark mode
+   █      64ddc8a  main                  06:15  ! BuildFailed · build shop-api-41 in shop-dev
+   █      64ddc8a  main                  06:12  ! FailedMount · pod shop-api-41-build in shop-dev · 2 times
+   │
+   █      1b1b130  experiment/graph-la…  05:30  ○ PR #116 closed · experiment: compare both graph layouts
+   │
+   █      6adc455  feature/payments-re…  04:31  ✗ CI #815 failed
+   █      6adc455  feature/payments-re…  04:30  ◀ PR #123 opened · feat(payments): retry failed payments with exponential backoff
+   │
+   █      6adc455  feature/payments-re…  03:54  ✗ feature/payments-retry-with-a-really-long-branch-name #3 failed
+   █      64ddc8a  main                  03:10  ✓ build shop-api-42 complete in shop-dev
+   │
+   █      64ddc8a  main                  02:54  ✗ build shop-api-41 failed in shop-dev
+   █      64ddc8a  main                  02:49  ○ build shop-api-39 cancelled in shop-dev
+   █      64ddc8a  main                  02:30  feat(payments): retry failed payments with exponential backoff, and a subject long enough to need cutting
+   │
+   │      ────────────────────────────── Yesterday · Sun, Mar 1 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   █      917f7b3  main                  13:30  perf(cart): cache price lookups
+   │
+   │      ────────────────────────────── Sat, Feb 28 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   █      1bb16fb  main                  01:30  Merge pull request #23 from demo/feature/i18n
+   █      0166f71  feature/i18n          01:30  ✓ PR #23 merged · feat(i18n): German and French checkout
+   │
+   │      ────────────────────────────── Fri, Feb 27 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   █      fe7db4d  main                  21:30  Merge pull request #9 from demo/feature/search
+   █      9d1b361  feature/search        21:30  ✓ PR #9 merged · feat(search): search as you type
+   │
+   █      179f8b7  main                  15:30  Merge pull request #20 from demo/feature/a11y
+   │
+   █      0d02d96  main                  11:30  Merge pull request #22 from demo/chore/eslint-9
+   │
+   █      bd35bdd  main                  05:30  Merge pull request #21 from demo/bugfix/cart-badge
+   │
+   │      ────────────────────────────── Thu, Feb 26 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   █      0166f71  feature/i18n          09:30  ◀ PR #23 opened · feat(i18n): German and French checkout
+   │
+   █      95f9e6a  main                  03:30  Merge branch 'release/1.x'
+   │
+   │      ────────────────────────────── Wed, Feb 25 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   █      2ca8640  main                  17:30  Revert "feat(cart): free shipping over 50"
+   │
+   █      f0f9926  main                  13:30  feat(cart): free shipping over 50
+   │
+   █      525816f  main                  07:30  Merge branch 'import/legacy-scripts'
+   │
+   █      82e5a6f  main                  03:30  Merge branches 'deps/lodash', 'deps/axios', 'deps/jest' and 'deps/typescript'
+   │
+   │      ────────────────────────────── Tue, Feb 24 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   █      3e157f9  main                  13:30  Merge pull request #16 from demo/feature/pricing
+   │
+   █      455b7cd  main                  11:30  Merge pull request #15 from demo/feature/inventory
+
+
+
+
+
+
+
+
+
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                                                           Git   GitHub   Jenkins   OpenShift   Snyk
+  │
+  │   customer-notification-service   shop   shop-web                                                                                                                 52 events
+  │
+
+                                                                                                    tab Git · enter show in GitHub · → details · o open · r refresh · ↑/↓ navigate                         ◀ open  ◀ draft  ✓ merged  ○ closed
+
+
+=== shot 4: show-in-github (240x100) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                                                                Status         Last run                Actions           Pull requests          Info
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+    █─╮                         bf08113   dev   origin/dev   PR #124   PR #125  feat(api): export request metrics                                    2             running            Reload commit
+    │ │                                                                                                                                                                               total pull requests                                    2
+    █ │                         e6209dd  feat(api): add a health endpoint                                                                            1             45m ago            ├─ ▸ PR #124 release: dev into main             5m ago ◀
+    │ │                                                                                                                                                                               └─ ▸ PR #125 release: dev into release/1.x      5m ago ◀
+    █◀╯                         3447db9   v0.42.0   main   origin/main   origin/HEAD   stash (1)   PR #122  docs: rewrite the README for the new …   2             28m ago
+    │
+    │ █                         6adc455   feature/payments-retry-with-a…   origin/feature/payments-retry…   PR #123  wip(payments): retry policy …   1             4h ago
+    │ │
+    █─╯                         64ddc8a  feat(payments): retry failed payments with exponential backoff, and a subject long enough to need cutting   1             51m ago
+    │
+    █                           917f7b3  perf(cart): cache price lookups                                                                            ·······        ·······
+    │
+    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                                                              ·······        ·······
+    │ │
+    │ █                         0166f71   PR #23  feat(i18n): add French                                                                            ·······        ·······
+    │ │
+    │ █─╮                       5245790  Merge branch 'main' into feature/i18n                                                                      ·······        ·······
+    │ │ │
+    │ █ │                       484821c  feat(i18n): add German                                                                                     ·······        ·······
+    │ │ │
+    │ █ │                       3ad11a2  feat(i18n): extract the checkout strings                                                                   ·······        ·······
+    │ │ │
+    █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                                                             ·······        ·······
+    │ │ │ │
+    │ │ │ █                     9d1b361   PR #9  fix(search): ignore accents                                                                        ·······        ·······
+    │ │ │ │
+    │ │ │ █                     cce93f9  feat(search): search as you type                                                                           ·······        ·······
+    │ │ │ │
+    │ │ │ █─╮                   ae57e03  Merge branch 'main' into feature/search                                                                    ·······        ·······
+    │ │ │ │ │
+    │ │ │ █ │                   a89a18f  feat(search): highlight matching words                                                                     ·······        ·······
+    │ │ │ │ │
+    │ │ │ █ │                   52defc5  feat(search): rank results by popularity                                                                   ·······        ·······
+    │ │ │ │ │
+    │ │ │ █ │                   9cc5545  feat(search): index product names                                                                          ·······        ·······
+    │ │ │ │ │
+    █─┼─┼─┼─┼─╮                 179f8b7  Merge pull request #20 from demo/feature/a11y                                                              ·······        ·······
+    │ │ │ │ │ │
+    │ │ │ │ │ █                 cac0f32  fix(a11y): announce cart updates                                                                           ·······        ·······
+    │ │ │ │ │ │
+    │ │ │ │ │ █                 ef3bff7  fix(a11y): label the cart buttons                                                                          ·······        ·······
+    │ │ │ │ │ │
+    ├─┼─╯ │ │ │
+    █─┼─╮ │ │ │                 0d02d96  Merge pull request #22 from demo/chore/eslint-9                                                            ·······        ·······
+    │ │ │ │ │ │
+    │ │ █ │ │ │                 337db73  chore(lint): move to ESLint 9                                                                              ·······        ·······
+    │ │ │ │ │ │
+    █─┼─┼─┼─┼─┼─╮               bd35bdd  Merge pull request #21 from demo/bugfix/cart-badge                                                         ·······        ·······
+    │ │ │ │ │ │ │
+    │ │ │ │ │ │ █               8912f9e  fix(cart): update the badge after removing an item                                                         ·······        ·······
+    │ │ │ │ │ │ │
+    │ │ │ │ │ │ │ █             f2a62b2   gh-pages   origin/gh-pages  docs: publish the 1.4.2 release notes                                         ·······        ·······
+    │ │ │ │ │ │ │ │
+    │ │ │ │ │ │ │ █             4f0f657  docs: document the cart API                                                                                ·······        ·······
+    │ │ │ │ │ │ │ │
+    │ │ │ │ │ │ │ █             c480ba6  docs: add the getting started page                                                                         ·······        ·······
+    │ │ │ │ │ │ │ │
+    │ │ │ │ │ │ │ █             693b2b9  docs: start the documentation site                                                                         ·······        ·······
+    │ │ │ │ │ │ │
+    │ │ │ │ │ │ │   █           69ddc1f   feature/dark-mode   PR #119  wip(theme): contrast tweaks                                                  ·······        ·······
+    │ │ │ │ │ │ │   │
+    │ │ │ │ │ │ │   █           ef040ee  feat(theme): follow the system setting                                                                     ·······        ·······
+    │ │ │ │ │ │ │   │
+    │ │ │ │ │ │ │   █           a141fb6  feat(theme): dark mode                                                                                     ·······        ·······
+    │ │ │ │ │ │ │   │
+    │ │ │ │ │ │ │ █ │           e37842a   origin/feature/metrics-dashbo…   PR #127  feat(metrics): export as CSV                                    ·······        ·······
+    │ │ │ │ │ │ │ │ │
+    │ │ │ │ │ │ │ █ │           a5e9d6b  feat(metrics): weekly totals                                                                               ·······        ·······
+    │ │ │ │ │ │ │ │ │
+    │ │ │ │ │ │ │ █ │           c639b50  feat(metrics): sales dashboard                                                                             ·······        ·······
+    │ │ │ │ │ │ │ │ │
+    ├─┼─┼─┼─┼─┼─┼─┼─╯
+    ├─┼─┼─┼─┼─┼─┼─╯
+    ├─┼─┼─┼─┼─┼─╯
+    ├─┼─┼─┼─┼─╯
+    ├─┼─╯ │ │
+    ├─╯   │ │
+    █─╮   │ │                   95f9e6a  Merge branch 'release/1.x'                                                                                 ·······        ·······
+    │ │   │ │
+    │ █   │ │                   c12ac20   v1.4.2   origin/release/1.x  chore(release): 1.4.2                                                        ·······        ·······
+    │ │   │ │
+    │ █   │ │                   d5e3e7e  fix(payments): time out after 30 seconds                                                                   ·······        ·······
+    │ │   │ │
+    │ █   │ │                   15eb851   v1.4.1   release/1.x  chore(release): 1.4.1                                                               ·······        ·······
+    │ │   │ │
+    │ █─╮ │ │                   b25482f  Merge branch 'hotfix/discount-overflow' into release/1.x                                                   ·······        ·······
+    │ │ │ │ │
+    █ │ │ │ │                   2ca8640  Revert "feat(cart): free shipping over 50"                                                                 ·······        ·······
+
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                                                                   normal   search   path   ancestry
+  │
+  │   customer-notification-service   shop   shop-web                                                                                                         main   86 commits
+  │
+
+                                                                                                     tab Jenkins · enter files · o open · esc back · ←/→ switch tab · ↑/↓ navigate                         ◀ open  ◀ draft  ✓ merged  ○ closed
+
+

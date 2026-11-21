@@ -53,8 +53,12 @@ export interface ProviderGraphColumns {
     dimmed: boolean;
     widths: GraphColumnWidths;
   }>;
-  /** Names it adds after a commit's refs (OpenShift: the namespaces that run it). */
-  refs?: (badge: GraphBadge | undefined) => readonly string[];
+  /**
+   * Names it adds after a commit's refs, in its colour (OpenShift: the namespaces that run it; GitHub: the pull
+   * requests whose branch points at it), muted ones dimmed (a draft). A `whole` one is never shortened (`PR #12345`:
+   * a cut number reads as another): when it does not fit, it goes into `+N`.
+   */
+  refs?: (sha: string, badge: GraphBadge | undefined) => readonly { name: string; muted?: boolean; whole?: boolean }[];
   /** A line at the end of the graph about what it holds for commits the graph doesn't show. */
   unseen?: (shown: ReadonlySet<string>, badges: ReadonlyMap<string, GraphBadge>) => string | null;
 }

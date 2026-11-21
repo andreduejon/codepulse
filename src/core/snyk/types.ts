@@ -64,6 +64,8 @@ export interface SnykFinding {
   cves?: string[];
   project: string | null;
   targetFile: string | null;
+  /** Its versions aren't SemVer (Maven, Gradle, sbt): `1.2.3-1` is a later build, not a prerelease. */
+  notSemver?: boolean;
 }
 
 export interface SnykScanResult {

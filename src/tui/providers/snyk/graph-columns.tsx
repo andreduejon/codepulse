@@ -26,7 +26,7 @@ const SEVERITIES: { severity: SnykSeverity; label: string }[] = [
   { severity: "low", label: "L" },
 ];
 
-/** The date column's width, like CI's Last Run: fits absolute dates with the partial marker (`16. Jun 12:30 ?`). */
+/** The date column's width, like CI's Last run: fits absolute dates with the partial marker (`16. Jun 12:30 ?`). */
 export const LAST_SCAN_COL_WIDTH = DATE_COL_WIDTH;
 /** Four ` C0 ` chips (16) + three `gap={1}` (3) + padding before the date (2). */
 const SEVERITY_CHIPS_WIDTH = 21;
@@ -115,7 +115,7 @@ export function SnykColumnHeaders(props: Readonly<{ first: number; second: numbe
       </box>
       <box flexShrink={0} width={props.second}>
         <text wrapMode="none" truncate fg={color()}>
-          <strong>Last Scan</strong>
+          <strong>Last scan</strong>
         </text>
       </box>
     </>

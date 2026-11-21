@@ -122,7 +122,7 @@ test("the graph's search bar closes when the dashboard shows", async () => {
 test("another repository brings its own auto fetch, auto refresh, page size and branches", async () => {
   const { app, setup, dispose } = await launch(path =>
     path === other
-      ? { autoFetchSeconds: 60, autoRefreshSeconds: 120, pageSize: 500, showAllBranches: false }
+      ? { autoFetchSeconds: 60, autoRefreshSeconds: 120, pageSize: 500, showAllBranches: false, branch: "release" }
       : { autoFetchSeconds: 0, autoRefreshSeconds: 30, pageSize: 200, showAllBranches: true },
   );
   try {
@@ -135,6 +135,8 @@ test("another repository brings its own auto fetch, auto refresh, page size and 
     expect(app.state.autoRefreshInterval()).toBe(120_000);
     expect(app.state.maxCount()).toBe(500);
     expect(app.state.showAllBranches()).toBe(false);
+    // Its configured branch: the graph's branch view, so every page and refresh keeps to it.
+    expect(app.state.viewingBranch()).toBe("release");
   } finally {
     await dispose();
   }

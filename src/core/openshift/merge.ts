@@ -2,7 +2,10 @@
  * OpenShift builds as the cache keeps them, and converting between them and resources: plain functions, no storage.
  * The cache (cache.ts) and the provider service (core/openshift/service.ts) both use them.
  */
+
+import { buildStatus } from "./resources";
 import type { OpenShiftCacheLimit, OpenShiftResource, OpenShiftStatus } from "./types";
+import type { OpenShiftWarning } from "./warnings";
 
 export interface OpenShiftCachedBuild {
   id: string;
@@ -19,6 +22,25 @@ export interface OpenShiftCachedBuild {
 export interface OpenShiftCacheEntry {
   sha: string;
   builds: OpenShiftCachedBuild[];
+  /** The Kubernetes warnings about the commit's resources: kept with its builds, evicted with them. */
+  warnings?: OpenShiftWarning[];
+}
+
+function isOpenShiftWarning(value: unknown): value is OpenShiftWarning {
+  if (typeof value !== "object" || value === null) return false;
+  const entry = value as OpenShiftWarning;
+  return (
+    typeof entry.id === "string" &&
+    typeof entry.namespace === "string" &&
+    typeof entry.kind === "string" &&
+    typeof entry.name === "string" &&
+    typeof entry.reason === "string" &&
+    typeof entry.message === "string" &&
+    typeof entry.count === "number" &&
+    (entry.uid === undefined || typeof entry.uid === "string") &&
+    (entry.firstSeen === null || typeof entry.firstSeen === "string") &&
+    (entry.lastSeen === null || typeof entry.lastSeen === "string")
+  );
 }
 
 export interface OpenShiftCacheOptions {
@@ -26,12 +48,14 @@ export interface OpenShiftCacheOptions {
   maxEntries?: OpenShiftCacheLimit;
 }
 
-const STATUSES = new Set<OpenShiftStatus>(["pass", "fail", "running", "unknown"]);
+const STATUSES = new Set<OpenShiftStatus>(["pass", "fail", "running", "cancelled", "unknown"]);
 
 export function isOpenShiftCacheEntry(value: unknown): value is OpenShiftCacheEntry {
   if (typeof value !== "object" || value === null) return false;
   const entry = value as OpenShiftCacheEntry;
   if (typeof entry.sha !== "string" || !Array.isArray(entry.builds)) return false;
+  if (entry.warnings !== undefined && !(Array.isArray(entry.warnings) && entry.warnings.every(isOpenShiftWarning)))
+    return false;
   return entry.builds.every(
     build =>
       typeof build === "object" &&
@@ -68,13 +92,21 @@ export function toCachedBuild(resource: OpenShiftResource): OpenShiftCachedBuild
   };
 }
 
+/**
+ * How a saved build ended. Its saved object says so: a build cached before cancelled was a status of its own was saved
+ * as failed. The Resources tab and the Dashboard read it the same way.
+ */
+export function cachedBuildStatus(build: OpenShiftCachedBuild): OpenShiftStatus {
+  return build.status === "fail" && buildStatus(build.object) === "cancelled" ? "cancelled" : build.status;
+}
+
 export function cachedBuildToResource(build: OpenShiftCachedBuild): OpenShiftResource {
   return {
     id: build.id,
     kind: "Build",
     namespace: build.namespace,
     name: build.name,
-    status: build.status,
+    status: cachedBuildStatus(build),
     imageRefs: build.imageRefs,
     commitSha: build.commitSha,
     uid: build.uid,

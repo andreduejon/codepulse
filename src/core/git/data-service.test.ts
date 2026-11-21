@@ -71,6 +71,7 @@ function harness(pageSize = 3) {
       cursorIndex: () => app.cursor,
       selectedCommit: () => app.rows[app.cursor]?.commit ?? null,
       viewingBranch: () => null,
+      error: () => null,
       showAllBranches: () => true,
       maxCount: () => pageSize,
       fetching: () => app.fetching,

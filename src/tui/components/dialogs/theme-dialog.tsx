@@ -180,7 +180,7 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void; onSel
         paddingX={1}
         paddingY={1}
       >
-        <DialogTitleBar title="Color Theme" onClose={props.onClose} />
+        <DialogTitleBar title="Color theme" onClose={props.onClose} />
 
         <Show when={!showDetails()}>
           {/* Theme list — scrollable when terminal height is small */}

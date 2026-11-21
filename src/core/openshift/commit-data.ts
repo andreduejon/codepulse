@@ -5,7 +5,9 @@
 
 import type { GraphBadge } from "../provider-model";
 import { cachedBuildToResource, mergeById, type OpenShiftCacheEntry } from "./merge";
+import { isTerminalBuildStatus } from "./resources";
 import type { OpenShiftCommitData, OpenShiftListedInventory, OpenShiftNamespaceData, OpenShiftResource } from "./types";
+import { mergeWarnings } from "./warnings";
 
 /** A graph badge with no resources, for a commit that only carries namespace markers. */
 export function emptyGraphBadge(sha: string): GraphBadge {
@@ -15,7 +17,7 @@ export function emptyGraphBadge(sha: string): GraphBadge {
     badge: "unknown",
     ...none,
     resourceCount: 0,
-    lanes: { live: { ...none }, cache: { ...none } },
+    lanes: { live: { ...none } },
     latestRunAt: "",
     latestStatus: "unknown",
   };
@@ -57,7 +59,37 @@ export function commitDataFromCacheEntry(entry: OpenShiftCacheEntry): OpenShiftC
     ns.builds.push(cachedBuildToResource(build));
     namespaces.set(build.namespace, ns);
   }
-  return { sha: entry.sha, namespaces: [...namespaces.values()], liveFetched: false };
+  return {
+    sha: entry.sha,
+    namespaces: [...namespaces.values()],
+    liveFetched: false,
+    ...(entry.warnings?.length ? { warnings: entry.warnings } : {}),
+  };
+}
+
+/**
+ * A commit the build list was asked about, after it answered: a finished Build it held as listed that the list no
+ * longer has is shown from the cache from now on (OpenShift pruned it); an unfinished one is gone. A namespace whose
+ * list failed keeps what it had. The same commit when nothing changed.
+ */
+export function markUnlistedBuilds(
+  commit: OpenShiftCommitData,
+  listed: ReadonlySet<string>,
+  failedNamespaces: ReadonlySet<string>,
+): OpenShiftCommitData {
+  let changed = false;
+  const namespaces = commit.namespaces.map(ns => {
+    if (failedNamespaces.has(ns.namespace)) return ns;
+    const builds = ns.builds.flatMap(build => {
+      if (build.cacheOnly || listed.has(build.id)) return [build];
+      changed = true;
+      return isTerminalBuildStatus(build.status) ? [{ ...build, cacheOnly: true }] : [];
+    });
+    return builds.length === ns.builds.length && builds.every((build, i) => build === ns.builds[i])
+      ? ns
+      : { ...ns, builds };
+  });
+  return changed ? { ...commit, namespaces } : commit;
 }
 
 export function resourceHasImageDigest(resource: OpenShiftResource): boolean {
@@ -96,10 +128,13 @@ export function mergeLiveIntoCommit(
   sha: string,
   liveFetched = false,
 ): OpenShiftCommitData {
+  // Warnings come from their own list (warnings.ts), not from a resource listing: the commit keeps both sides'.
+  const kept = mergeWarnings(base?.warnings ?? [], live?.warnings ?? []);
+  const warnings = kept.length > 0 ? { warnings: kept } : {};
   if (!live) {
     if (!base) return { sha, namespaces: [], liveFetched };
     if (!liveFetched) return base;
-    return { sha, liveFetched: true, namespaces: base.namespaces.map(clearLiveLane) };
+    return { sha, liveFetched: true, namespaces: base.namespaces.map(clearLiveLane), ...warnings };
   }
   if (!base) return { ...live, sha, liveFetched: liveFetched || live.liveFetched };
   const fetched = liveFetched || base.liveFetched || live.liveFetched;
@@ -129,5 +164,6 @@ export function mergeLiveIntoCommit(
     sha,
     namespaces: [...namespaces.values()],
     liveFetched: fetched,
+    ...warnings,
   };
 }

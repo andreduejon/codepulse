@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { applyOpenShiftWatchEvent } from "./resources";
+import { applyOpenShiftWatchEvent, buildOpenShiftCommitMap, extractPod, resourceFromWatchObject } from "./resources";
 import type { OpenShiftListedInventory, OpenShiftResource } from "./types";
 import {
   appendOpenShiftLogFollow,
@@ -105,5 +105,27 @@ describe("shouldFollowOpenShiftLog", () => {
       true,
     );
     expect(shouldFollowOpenShiftLog({ ...pod("app"), kind: "Build", id: "Build:ns:app", status: "pass" })).toBe(false);
+  });
+});
+
+describe("a Pod's own commit", () => {
+  const sha = "a".repeat(40);
+  const labelled = {
+    kind: "Pod",
+    metadata: { name: "solo", namespace: "ns", uid: "u1", labels: { "app.example/commit": sha } },
+    status: { phase: "Running", conditions: [{ type: "Ready", status: "True" }] },
+  };
+
+  test("its label (or annotation) under the configured key places it on that commit, listed or watched", () => {
+    expect(extractPod("ns", labelled, "app.example/commit").commitSha).toBe(sha);
+    const watched = resourceFromWatchObject(labelled, "app.example/commit");
+    expect(watched?.commitSha).toBe(sha);
+    expect(
+      buildOpenShiftCommitMap(watched ? [watched] : [])
+        .get(sha)
+        ?.namespaces[0]?.pods.map(p => p.name),
+    ).toEqual(["solo"]);
+    // Terminating: on no commit, as a matched one.
+    expect(buildOpenShiftCommitMap(watched ? [{ ...watched, terminating: true }] : []).get(sha)).toBeUndefined();
   });
 });

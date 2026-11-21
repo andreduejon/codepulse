@@ -11,6 +11,7 @@ export const BUSY = {
   fetchingStages: "fetching stages...",
   fetchingLog: "fetching log...",
   fetchingObject: "fetching object...",
+  fetchingCommits: "fetching its commits...",
   fetchingEvents: "fetching events...",
   readingFiles: "reading files...",
   readingDiff: "reading diff...",

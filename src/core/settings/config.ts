@@ -280,10 +280,12 @@ export function mergeOptions(cli: { repoPath: string }, config: CodepulseConfig)
   };
 }
 
-/** Apply defined CodepulseConfig fields to a target object. */
+/** Apply defined CodepulseConfig fields to a target object. An empty group or app name removes it. */
 export function applyConfigFields(target: Record<string, unknown>, config: CodepulseConfig): void {
-  if (config.group !== undefined) target.group = config.group;
-  if (config.appName !== undefined) target.appName = config.appName;
+  for (const key of ["group", "appName"] as const) {
+    if (config[key] === "") delete target[key];
+    else if (config[key] !== undefined) target[key] = config[key];
+  }
   if (config.theme !== undefined) target.theme = config.theme;
   if (config.pageSize !== undefined) target.pageSize = config.pageSize;
   if (config.branch !== undefined) target.branch = config.branch;

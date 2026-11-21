@@ -10,7 +10,8 @@ export const GIT_LOG_FORMAT = `%H${RS}%h${RS}%P${RS}%D${RS}%s${RS}%an${RS}%ae${R
 /** @internal Exported for testing. Parse a git ref decoration string into structured RefInfo[]. */
 export function parseRefs(refString: string, remoteNames: Set<string>): RefInfo[] {
   if (!refString.trim()) return [];
-  return refString.split(",").map(rawRef => {
+  // Git puts ", " between refs; a ref name may hold a comma but never a space.
+  return refString.split(", ").map(rawRef => {
     const trimmed = rawRef.trim();
     let isCurrent = false;
     let ref = trimmed;

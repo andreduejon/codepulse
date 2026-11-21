@@ -20,6 +20,7 @@ export const BANNER = {
     unreachable: "Git remote unreachable.",
     authFailed: "Git authentication failed.",
     detailFailed: "Git detail failed.",
+    statusFailed: "Git status failed.",
   } as const),
 } as const;
 
@@ -37,10 +38,11 @@ export function bannerOrFallback(err: unknown, fallback: string, source: DebugEv
   const message = err instanceof Error ? err.message : String(err);
   if (isBanner(message)) return message;
   debugError(source, message);
-  return looksLikeGitDump(message) ? classifyGitFailure(message) : fallback;
+  return looksLikeGitDump(message) ? classifyGitFailure(message, fallback) : fallback;
 }
 
-export function classifyGitFailure(detail: string): string {
+/** A Git failure's banner: a timeout, authentication or an unreachable remote, else `fallback` (what failed). */
+export function classifyGitFailure(detail: string, fallback: string = BANNER.git.fetchFailed): string {
   const text = detail.toLowerCase();
   if (/\btimeout\b|timed out|time out/.test(text)) return BANNER.git.fetchTimedOut;
   if (/authentication failed|permission denied|could not read username|invalid user/.test(text)) {
@@ -51,7 +53,7 @@ export function classifyGitFailure(detail: string): string {
   ) {
     return BANNER.git.unreachable;
   }
-  return BANNER.git.fetchFailed;
+  return fallback;
 }
 
 export function displayBanner(message: string, fallback: string): string {

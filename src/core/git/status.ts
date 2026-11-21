@@ -31,34 +31,35 @@ export function parseStatusPorcelain(output: string): WorkingTreeStatus | null {
 }
 
 /**
- * @internal Exported for testing. Parse combined `git diff-tree --raw --numstat` output
- * into FileChange[]. Both getStashFiles and getCommitDetail use this format.
+ * @internal Exported for testing. Parse combined `git diff-tree --raw --numstat -z` output (or `git diff`'s) into
+ * FileChange[]. Commits, stashes, the working tree and pull requests all read their files this way.
  *
- * Raw lines start with ":" (e.g. ":100644 100644 ... M\tfile.ts") — they provide status.
- * Numstat lines are "adds\tdels\tpath" — they provide +/- stats.
+ * With -z every name is exact, NUL-ended and never quoted (a tab, a newline or a quote in it stays as it is):
+ * raw entries are ":<modes> <shas> <status>\0<path>\0" (a rename or copy: "\0<old>\0<new>\0"), numstat entries
+ * "<adds>\t<dels>\t<path>\0" (a rename or copy: "<adds>\t<dels>\t\0<old>\0<new>\0"). A rename is its new path.
  */
 export function parseDiffTreeOutput(output: string): FileChange[] {
   const statusMap = new Map<string, string>();
   const statMap = new Map<string, { additions: number; deletions: number }>();
-
-  for (const line of output.split("\n")) {
-    if (!line) continue;
-    if (line.startsWith(":")) {
-      const tabIdx = line.indexOf("\t");
-      if (tabIdx === -1) continue;
-      const meta = line.slice(0, tabIdx);
-      const pathPart = line.slice(tabIdx + 1);
-      const statusCode = meta.split(" ").pop() ?? "M";
-      const filePath = pathPart.split("\t")[0];
-      statusMap.set(filePath, statusCode[0]);
-    } else if (line.includes("\t")) {
-      const [additions, deletions, ...pathParts] = line.split("\t");
-      const filePath = pathParts.join("\t");
-      statMap.set(filePath, {
+  const tokens = output.split("\0");
+  for (let i = 0; i < tokens.length; ) {
+    // Git ends a commit's header line with a newline before the first entry (diff-tree with one commit).
+    const token = tokens[i].replace(/^\n+/, "");
+    if (token.startsWith(":")) {
+      const status = token.split(" ").pop()?.[0] ?? "M";
+      const twoPaths = status === "R" || status === "C";
+      statusMap.set(tokens[i + (twoPaths ? 2 : 1)] ?? "", status);
+      i += twoPaths ? 3 : 2;
+    } else if (/^(\d+|-)\t(\d+|-)\t/.test(token)) {
+      const [additions, deletions] = token.split("\t");
+      const named = token.slice(additions.length + deletions.length + 2);
+      const path = named || (tokens[i + 2] ?? "");
+      statMap.set(path, {
         additions: additions === "-" ? 0 : parseInt(additions, 10),
         deletions: deletions === "-" ? 0 : parseInt(deletions, 10),
       });
-    }
+      i += named ? 1 : 3;
+    } else i++;
   }
 
   const files: FileChange[] = [];

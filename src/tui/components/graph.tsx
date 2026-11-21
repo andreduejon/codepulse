@@ -21,6 +21,7 @@ import {
 import { useProviderModules } from "../context/provider-modules";
 import { useAppState } from "../context/state";
 import { dimGraphChars } from "../graph/dim";
+import { type GraphLinePart, withMergePreview } from "../graph/merge-preview";
 import {
   type GraphChar,
   getColorForColumn,
@@ -104,7 +105,7 @@ export function ColumnHeader() {
   const providerColumns = useGraphColumns();
   const dimensions = useTerminalDimensions();
 
-  const { graphWidth } = useGraphDimensions(() => state.maxGraphColumns());
+  const { graphWidth } = useGraphDimensions(() => state.maxGraphColumns() + (state.mergePreviewSpan()?.extra ? 1 : 0));
   const columnWidths = () =>
     budgetedColumnWidths(providerColumns(), state.graphBadges(), dimensions().width, graphWidth());
 
@@ -247,7 +248,10 @@ function GraphLine(
   const commit = () => props.row.commit;
   const padCols = () => state.maxGraphColumns();
 
-  const { viewportActive, graphWidth } = useGraphDimensions(() => state.maxGraphColumns());
+  // A previewed merge's line takes one more column only when every column is taken (never to scroll sideways for).
+  const { viewportActive, graphWidth } = useGraphDimensions(
+    () => state.maxGraphColumns() + (state.mergePreviewSpan()?.extra ? 1 : 0),
+  );
 
   const renderOpts = () => {
     return {
@@ -325,8 +329,13 @@ function GraphLine(
     ];
   };
 
-  const graphContent = () => graphCharsToContent(frameRow(fullGraphChars(), props.row.nodeColumn));
-  const connectorContent = () => graphCharsToContent(frameRow(fullConnectorChars(), null));
+  /** A line with the previewed merge drawn on it, when it runs here. */
+  const withPreview = (chars: GraphChar[], part: GraphLinePart) =>
+    withMergePreview(chars, state.mergePreviewSpan(), props.index, part, t().foregroundMuted);
+  // Drawn on the full-width line, before it is fitted to a sideways-scrolled viewport.
+  const graphContent = () =>
+    graphCharsToContent(frameRow(withPreview(fullGraphChars(), "commit"), props.row.nodeColumn));
+  const connectorContent = () => graphCharsToContent(frameRow(withPreview(fullConnectorChars(), "below"), null));
 
   // Check if the commit row has merge/branch connectors (horizontals, corners, tees).
   // If so, the commit row carries connection info and can't be replaced by a fan-out row.
@@ -359,7 +368,7 @@ function GraphLine(
   // frameRow is passed as a callback to keep buildFanOutDisplay pure.
   const fanOutDisplay = () =>
     buildFanOutDisplay(fullFanOutChars(), canMergeFanOut(), graphContent(), (chars, isCommitRow) =>
-      frameRow(chars, isCommitRow ? props.row.nodeColumn : null),
+      frameRow(withPreview(chars, isCommitRow ? "commit" : "above"), isCommitRow ? props.row.nodeColumn : null),
     );
 
   const fanOutAboveContents = () => fanOutDisplay().fanOutAboveContents;
@@ -378,8 +387,11 @@ function GraphLine(
   const visibleRefs = createMemo((): RowBadge[] => {
     const allRefs = commit().refs;
     const refs: RowBadge[] = [...allRefs].sort((a, b) => (REF_SORT_ORDER[a.type] ?? 9) - (REF_SORT_ORDER[b.type] ?? 9));
-    const names = providerColumns()?.refs?.(badgeOf(state.graphBadges(), commit().hash)) ?? [];
-    return [...refs, ...names.map(name => ({ name, isCurrent: false, namespace: true }))];
+    const names = providerColumns()?.refs?.(commit().hash, badgeOf(state.graphBadges(), commit().hash)) ?? [];
+    return [
+      ...refs,
+      ...names.map(({ name, muted, whole }) => ({ name, isCurrent: false, namespace: true, muted, whole })),
+    ];
   });
 
   // Effective text color for the commit subject (primary column).
@@ -433,7 +445,8 @@ function GraphLine(
       // Each shown badge: its name (cut at `cap`) + 2, one gap between badges and one after them. Short names
       // (`dev`) take only their own width, so they are not folded into `+N` for the room a long name would need.
       const needed = (cap: number) =>
-        kept.reduce((sum, ref) => sum + Math.min(cellWidth(ref.name), cap) + 3, 0) + overflow;
+        kept.reduce((sum, ref) => sum + (ref.whole ? cellWidth(ref.name) : Math.min(cellWidth(ref.name), cap)) + 3, 0) +
+        overflow;
       for (let cap = 30; cap >= 8; cap--) {
         if (needed(cap) <= room) return { shown: kept, hidden, maxLength: cap };
       }
@@ -493,8 +506,8 @@ function GraphLine(
                     color={
                       ri.namespace ? providerColors(t(), state.activeProviderView(), providerModules).bg : laneColor()
                     }
-                    dimmed={ri.type === "stash" || ri.type === "uncommitted" || isDimmed()}
-                    maxLength={refMaxLength()}
+                    dimmed={ri.type === "stash" || ri.type === "uncommitted" || !!ri.muted || isDimmed()}
+                    maxLength={ri.whole ? cellWidth(ri.name) : refMaxLength()}
                     noShrink
                   />
                 )}
@@ -576,7 +589,15 @@ function GraphLine(
 
 /** Sort order for ref badges: tags first, then branches, remotes, HEAD last. */
 /** A badge before the subject: a Git ref, or (OpenShift view) a namespace that runs the commit. */
-type RowBadge = { name: string; type?: RefInfo["type"]; isCurrent: boolean; namespace?: boolean };
+type RowBadge = {
+  name: string;
+  type?: RefInfo["type"];
+  isCurrent: boolean;
+  namespace?: boolean;
+  muted?: boolean;
+  /** Never shortened (a pull request's number): it goes into `+N` instead. */
+  whole?: boolean;
+};
 
 const REF_SORT_ORDER: Record<string, number> = { tag: 0, branch: 1, remote: 2, stash: 3, uncommitted: 4, head: 5 };
 

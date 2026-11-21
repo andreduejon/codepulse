@@ -1,8 +1,8 @@
-import type { KeyEvent, Renderable, ScrollBoxRenderable } from "@opentui/core";
+import type { KeyEvent, ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, type JSX, on, onCleanup, Show, untrack } from "solid-js";
 import { useT } from "../../hooks/use-t";
-import { hasScrollLayout, scheduleScrollIntoView, useScrollSchedule } from "../../utils/scroll";
+import { scheduleScrollIntoView, useScrollSchedule } from "../../utils/scroll";
 
 /**
  * Search inside a log or object viewer: `/` opens the search row, typing jumps to the first hit, Enter keeps the
@@ -170,32 +170,6 @@ export function highlightHits(text: string, term: string, colors: { fg: string; 
  * the width may only grow: a wider column wraps long lines taller, which can push the widest number out of view,
  * and shrinking again would flip between two widths.
  */
-/**
- * The last line on the screen, found by the lines' places; null while a line has no layout yet. For lines of any
- * height (wrapped): lines of one row each can count from the scroll position.
- */
-export function lastVisibleRow(
-  scrollbox: ScrollBoxRenderable,
-  count: number,
-  rowAt: (index: number) => Renderable | undefined,
-): number | null {
-  const origin = scrollbox.content.screenY;
-  const bottom = scrollbox.scrollTop + scrollbox.viewport.height;
-  let low = 0;
-  let high = count - 1;
-  let lastVisible = 0;
-  while (low <= high) {
-    const mid = (low + high) >> 1;
-    const row = rowAt(mid);
-    if (!hasScrollLayout(row)) return null;
-    if ((row as Renderable).screenY - origin < bottom) {
-      lastVisible = mid;
-      low = mid + 1;
-    } else high = mid - 1;
-  }
-  return lastVisible;
-}
-
 export function useVisibleNumberWidth(opts: {
   scrollbox: () => ScrollBoxRenderable | undefined;
   /** The last line on the screen; null while the lines have no layout yet. */

@@ -1,13 +1,16 @@
 import { afterEach, describe, expect, it, mock } from "bun:test";
 import {
   fetchCIDataForSHAs,
+  fetchClosedPullRequests,
   fetchJobAnnotations,
   fetchJobLog,
+  fetchOpenPullRequests,
   fetchRunJobs,
   getGitHubToken,
   isGitHubJobsFieldSchemaError,
   MAX_CHECK_SUITE_PAGES,
   MAX_JOB_PAGES,
+  mapApiPullRequest,
   nextGithubLink,
 } from "../src/adapters/github/api";
 import { getTokenSource } from "../src/adapters/system/token-env";
@@ -1190,5 +1193,140 @@ describe("fetchJobAnnotations", () => {
     expect(urls).toHaveLength(2);
     expect(annotations).toHaveLength(101);
     expect(annotations?.at(-1)).toEqual({ level: "failure", path: "b.ts", line: 9, message: "boom" });
+  });
+});
+
+// ── fetchOpenPullRequests ─────────────────────────────────────────────────
+
+describe("fetchOpenPullRequests", () => {
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  const apiPull = (overrides: Record<string, unknown> = {}) => ({
+    number: 123,
+    title: "feat: retry",
+    html_url: "https://github.com/owner/repo/pull/123",
+    draft: false,
+    user: { login: "mei" },
+    head: { sha: "A".repeat(40), ref: "feature/retry" },
+    base: { ref: "main", sha: "B".repeat(40) },
+    updated_at: "2026-03-02T09:00:00Z",
+    ...overrides,
+  });
+
+  it("reads every page of open pull requests, and leaves out one it cannot read", async () => {
+    const urls: string[] = [];
+    mockFetch(
+      mock(async (input: RequestInfo | URL) => {
+        urls.push(String(input));
+        if (urls.length === 1)
+          return new Response(
+            JSON.stringify([apiPull(), apiPull({ number: "x" }), apiPull({ head: { sha: "nope" } })]),
+            {
+              status: 200,
+              headers: { link: '<https://api.github.com/repos/owner/repo/pulls?state=open&page=2>; rel="next"' },
+            },
+          );
+        return new Response(JSON.stringify([apiPull({ number: 7, draft: true, user: null })]), { status: 200 });
+      }),
+    );
+    const { data, error } = await fetchOpenPullRequests(TEST_REPO, TEST_TOKEN);
+    expect(error).toBeNull();
+    expect(urls[0]).toContain("/pulls?state=open&per_page=100");
+    expect(data).toEqual([
+      {
+        number: 123,
+        title: "feat: retry",
+        url: "https://github.com/owner/repo/pull/123",
+        draft: false,
+        author: "mei",
+        headSha: "a".repeat(40),
+        headRef: "feature/retry",
+        baseRef: "main",
+        baseSha: "b".repeat(40),
+        state: "open",
+        createdAt: "",
+        updatedAt: "2026-03-02T09:00:00Z",
+        closedAt: null,
+      },
+      expect.objectContaining({ number: 7, draft: true, author: "" }),
+    ]);
+  });
+
+  it("a pull request is open, merged (it has a merge time) or closed without merging, with its times", () => {
+    const at = "2026-03-02T09:00:00Z";
+    expect(mapApiPullRequest(apiPull({ created_at: at }))).toMatchObject({
+      state: "open",
+      createdAt: at,
+      closedAt: null,
+    });
+    expect(mapApiPullRequest(apiPull({ state: "closed", merged_at: at, closed_at: at }))).toMatchObject({
+      state: "merged",
+      closedAt: at,
+    });
+    expect(mapApiPullRequest(apiPull({ state: "closed", merged_at: null, closed_at: at }))).toMatchObject({
+      state: "closed",
+      closedAt: at,
+    });
+    // Without a head commit it can't be placed: left out.
+    expect(mapApiPullRequest(apiPull({ head: { ref: "x" } }))).toBeNull();
+  });
+
+  it("closed ones are read page by page back to the Dashboard's longest window, and no further", async () => {
+    const day = 24 * 60 * 60 * 1000;
+    const closed = (number: number, daysAgo: number) =>
+      apiPull({
+        number,
+        state: "closed",
+        merged_at: new Date(Date.now() - daysAgo * day).toISOString(),
+        closed_at: new Date(Date.now() - daysAgo * day).toISOString(),
+        updated_at: new Date(Date.now() - daysAgo * day).toISOString(),
+      });
+    const pages = [[closed(10, 1), closed(9, 12)], [closed(8, 20), closed(7, 40)], [closed(6, 50)]];
+    const urls: string[] = [];
+    mockFetch(
+      mock(async (input: RequestInfo | URL) => {
+        const page = urls.push(String(input));
+        return new Response(JSON.stringify(pages[page - 1] ?? []), {
+          status: 200,
+          headers: {
+            link: `<https://api.github.com/repos/owner/repo/pulls?state=closed&page=${page + 1}>; rel="next"`,
+          },
+        });
+      }),
+    );
+    const { data, error } = await fetchClosedPullRequests(TEST_REPO, TEST_TOKEN);
+    expect(error).toBeNull();
+    expect(urls[0]).toContain("state=closed&sort=updated&direction=desc&per_page=100");
+    // The second page reaches back past 30 days: the third is not asked for.
+    expect(urls).toHaveLength(2);
+    expect(data.map(pr => [pr.number, pr.state])).toEqual([
+      [10, "merged"],
+      [9, "merged"],
+      [8, "merged"],
+      [7, "merged"],
+    ]);
+  });
+
+  it("a 404 goes to Debug once, naming the list and what it usually means", async () => {
+    clearDebugEvents();
+    mockFetch(mock(async () => new Response(null, { status: 404 })));
+    expect((await fetchClosedPullRequests(TEST_REPO, TEST_TOKEN)).error).toBe(GITHUB_BANNER.fetchFailed);
+    const messages = getDebugEvents()
+      .filter(event => event.source === "GitHub" && event.status === "error")
+      .map(event => event.message);
+    expect(messages).toEqual([
+      "Closed pull requests HTTP 404: the token can't see the repository, or lacks Pull requests: Read",
+    ]);
+  });
+
+  it("says why a list failed, an expired token as such", async () => {
+    mockFetch(mock(async () => new Response(null, { status: 401 })));
+    expect(await fetchOpenPullRequests(TEST_REPO, TEST_TOKEN)).toEqual({
+      data: [],
+      error: GITHUB_BANNER.tokenExpired,
+      failure: "auth",
+    });
   });
 });

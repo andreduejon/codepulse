@@ -81,12 +81,13 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
   let blameFetchedForKey: string | null = null;
 
   let scrollboxRef: ScrollBoxRenderable | undefined;
-  const targetKey = () => `${props.target.source}:${props.target.commitHash}:${props.target.filePath}`;
+  const targetKey = () =>
+    `${props.target.source}:${props.target.base ?? ""}:${props.target.commitHash}:${props.target.filePath}`;
   const blameFetched = () => blameFetchedForKey === targetKey();
 
   // ── Load diff reactively (re-runs when target changes) ─────────────
   createEffect(() => {
-    const { commitHash, filePath, source } = props.target;
+    const { commitHash, filePath, source, base } = props.target;
     const request = startAbortableRequest(diffRequestState);
     // Reset blame data for new file (but preserve visibility toggle)
     blameFetchedForKey = null;
@@ -102,8 +103,8 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
     (async () => {
       try {
         const [diffResult, fileResult] = await Promise.all([
-          git.getFileDiff(state.repoPath(), commitHash, filePath, source, request.controller.signal),
-          git.getFileContent(state.repoPath(), commitHash, filePath, source, request.controller.signal),
+          git.getFileDiff(state.repoPath(), commitHash, filePath, source, request.controller.signal, base),
+          git.getFileContent(state.repoPath(), commitHash, filePath, source, request.controller.signal, base),
         ]);
         if (!isActiveAbortableRequest(diffRequestState, request)) return;
         setDiff(diffResult);
@@ -138,6 +139,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
         props.target.filePath,
         props.target.source,
         request.controller.signal,
+        props.target.base,
       );
       if (!isActiveAbortableRequest(blameRequestState, request)) return;
       setBlameLines(result);
@@ -346,6 +348,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
       source: props.target.source,
       fileList: props.target.fileList,
       fileIndex: newIndex,
+      ...(props.target.base ? { base: props.target.base } : {}),
     });
   };
 
@@ -456,7 +459,9 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
         ? props.target.commitHash.slice(0, 7)
         : src === "stash"
           ? `stash:${props.target.commitHash.slice(0, 7)}`
-          : src;
+          : src === "range"
+            ? `${(props.target.base ?? "").slice(0, 7)}..${props.target.commitHash.slice(0, 7)}`
+            : src;
     const counter =
       props.target.fileList.length > 1 ? `[${props.target.fileIndex + 1}/${props.target.fileList.length}]` : "";
     const modeLabel = fullFileMode()
@@ -549,7 +554,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
 
         {/* Diff load error */}
         <Show when={!loading() && !fullFileMode() && !!diffError()}>
-          <box flexGrow={1} flexDirection="column" justifyContent="center" paddingY={2}>
+          <box flexGrow={1} flexDirection="column" justifyContent="center" paddingX={4} paddingY={2}>
             <MessageBox
               kind="error"
               title="Failed to load diff"
@@ -560,7 +565,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
         </Show>
 
         <Show when={!fileLoading() && fullFileMode() && !!fileError()}>
-          <box flexGrow={1} flexDirection="column" justifyContent="center" paddingY={2}>
+          <box flexGrow={1} flexDirection="column" justifyContent="center" paddingX={4} paddingY={2}>
             <MessageBox
               kind="error"
               title="Failed to load file"
