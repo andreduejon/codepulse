@@ -31,7 +31,9 @@ const GIT_TIMEOUT = 30_000;
 const roots: string[] = [];
 afterEach(async () => {
   for (const root of roots) closeProviderCaches(join(root, "cache"));
-  await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })));
+  await Promise.all(
+    roots.splice(0).map(root => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })),
+  );
 });
 
 async function git(cwd: string, ...args: string[]): Promise<string> {

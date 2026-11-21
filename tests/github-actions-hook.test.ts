@@ -130,6 +130,6 @@ test("unsupported GraphQL jobs stay disabled while runs and REST expansion still
     else process.env[tokenEnvVar] = originalToken;
     clearDebugEvents();
     closeProviderCaches(cacheRoot); // Windows cannot delete an open SQLite file
-    rmSync(cacheRoot, { recursive: true, force: true });
+    rmSync(cacheRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 });

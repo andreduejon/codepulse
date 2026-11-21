@@ -18,7 +18,7 @@ afterEach(async () => {
 async function ownPorts() {
   const root = await mkdtemp(join(tmpdir(), "codepulse-ports-"));
   const registry = new ProviderCacheRegistry();
-  cleanup.push(() => rm(root, { recursive: true, force: true }));
+  cleanup.push(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
   cleanup.push(() => registry.close());
   return { root, registry, ports: terminalPorts({ cacheRoot: root, registry }) };
 }

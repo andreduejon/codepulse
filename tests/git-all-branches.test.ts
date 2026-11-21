@@ -41,7 +41,7 @@ test("all branches skip tool refs and stash internals but keep branches, tags an
     expect(subjects.some(subject => subject.includes("WIP on") || subject.startsWith("index on"))).toBe(false);
     expect(await getPathMatchingHashes(root, "file.txt", { all: true })).not.toContain(checkpoint);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 });
 
@@ -54,7 +54,7 @@ test("all branches load an empty repository and a file named HEAD", async () => 
     await git("commit", "-m", "adds HEAD file");
     expect((await getCommits(root, { all: true })).map(commit => commit.subject)).toEqual(["adds HEAD file"]);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 });
 
@@ -80,6 +80,6 @@ test("the commits and the branches of one refresh share one read of the remotes;
     refresh.abort();
     expect((await reading).find(branch => branch.name === "origin/main")?.isRemote).toBe(true);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 });

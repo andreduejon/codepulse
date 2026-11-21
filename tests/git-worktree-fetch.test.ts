@@ -29,6 +29,6 @@ test("last fetch time handles absolute linked-worktree Git directory and spaces"
     await writeFile(resolve(worktree, stdout.trim(), "FETCH_HEAD"), "test fetch\n");
     expect(await getLastFetchTime(worktree)).toBeInstanceOf(Date);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 });

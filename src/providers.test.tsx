@@ -141,7 +141,7 @@ afterEach(async () => {
 
 async function launch() {
   const root = await mkdtemp(join(tmpdir(), "codepulse-fake-provider-"));
-  cleanup.push(() => rm(root, { recursive: true, force: true }));
+  cleanup.push(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
   const repo = join(root, "repo");
   const configPath = join(root, "config.json");
   // Every built-in provider off; the fake one on, with a label of its own and one value its rules refuse.
@@ -362,7 +362,7 @@ test("the root's list takes a module only with the adapters it runs on", () => {
 
 test("startup builds the app from the same list: its module, its settings and its adapters come along", async () => {
   const root = await mkdtemp(join(tmpdir(), "codepulse-fake-startup-"));
-  cleanup.push(() => rm(root, { recursive: true, force: true }));
+  cleanup.push(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
   const repo = join(root, "not-a-repository");
   const configPath = join(root, "config.json");
   await writeFile(configPath, JSON.stringify({ repos: { [repo]: { providers: { fake: { enabled: true } } } } }));

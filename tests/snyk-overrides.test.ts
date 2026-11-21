@@ -125,7 +125,7 @@ describe("projectOverrideRules", () => {
       await writeFile(join(root, "package.json"), JSON.stringify(manifest));
       await run(root);
     } finally {
-      await rm(root, { recursive: true, force: true });
+      await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     }
   };
   const manifest = { overrides: { a: "1.0.0" }, resolutions: { b: "2.0.0" } };

@@ -37,7 +37,7 @@ test("file lists use exact paths for root commits, non-ASCII and space-padded na
     await git("mv", "dir/old.txt", "dir/new.txt");
     expect(paths(await getStagedFiles(root))).toEqual(["A dir/new.txt", "D dir/old.txt"]);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 });
 
@@ -70,7 +70,7 @@ test("merge commits list and diff their files against the first parent", async (
     const diff = await getFileDiff(root, merge, "side.txt", "commit");
     expect(diff.hunks[0]?.lines.map(line => `${line.type} ${line.content}`)).toEqual(["add side"]);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 });
 
@@ -110,7 +110,7 @@ test("a pull request's files and diff are its branch's since it left the target,
     expect(await getRangeFiles(root, "main", "f".repeat(40))).toBeNull();
     expect(await getRangeFiles(root, "--all", head)).toBeNull();
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 });
 
@@ -142,7 +142,7 @@ test("a pull request's renamed file is its old path gone and its new one added; 
     await git(shallow, "fetch", "-q", "--depth", "1", "origin", "main:refs/remotes/origin/main");
     expect(await getRangeFiles(shallow, "origin/main", head)).toBeNull();
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 });
 
@@ -176,7 +176,7 @@ test.skipIf(process.platform === "win32")(
       await writeFile(join(root, "new.txt"), "new\n");
       expect(await getFileBlame(root, head, "new.txt", "unstaged")).toEqual([]);
     } finally {
-      await rm(root, { recursive: true, force: true });
+      await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     }
   },
 );
@@ -211,7 +211,7 @@ test("a stash's untracked files (git stash -u) are listed as added, and their di
     await rm(join(root, ".git", "objects", tree.slice(0, 2), tree.slice(2)), { force: true });
     await expect(getStashFiles(root, stash)).rejects.toThrow();
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 });
 
@@ -258,7 +258,7 @@ test("some refs of the remote are fetched alone: a host's own ref (a pull reques
     expect(await fetchRemoteRefs(clone, ["refs/pull/8/head", "refs/heads/staging"])).toBe(false);
     expect(await fetchRemoteRefs(clone, ["refs/pull/7/head", "refs/heads/gone"])).toBe(false);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 });
 
@@ -274,7 +274,7 @@ test.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
       await expect(getFileDiff(root, "", "secret.txt", "untracked")).rejects.toThrow();
     } finally {
       await chmod(join(root, "secret.txt"), 0o644).catch(() => {});
-      await rm(root, { recursive: true, force: true });
+      await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     }
   },
 );

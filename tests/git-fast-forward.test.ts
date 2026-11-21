@@ -17,7 +17,9 @@ const disposers: (() => void)[] = [];
 
 afterEach(async () => {
   for (const dispose of disposers.splice(0)) dispose();
-  await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })));
+  await Promise.all(
+    roots.splice(0).map(root => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })),
+  );
 });
 
 const git = async (cwd: string, ...args: string[]) => {

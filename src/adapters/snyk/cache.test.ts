@@ -11,7 +11,9 @@ const roots: string[] = [];
 
 afterEach(async () => {
   for (const root of roots) closeProviderCaches(root);
-  await Promise.all(roots.splice(0).map(path => rm(path, { recursive: true, force: true })));
+  await Promise.all(
+    roots.splice(0).map(path => rm(path, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })),
+  );
 });
 
 function result(sha: string): SnykScanResult {

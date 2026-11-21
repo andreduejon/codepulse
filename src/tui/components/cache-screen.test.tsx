@@ -71,7 +71,7 @@ async function fixture(prefix = "codepulse-cache-screen-") {
     contents,
     dispose: async () => {
       closeProviderCaches(root);
-      await rm(root, { recursive: true, force: true });
+      await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     },
   };
 }

@@ -15,7 +15,7 @@ async function cacheRoot() {
 afterEach(async () => {
   for (const root of roots.splice(0)) {
     closeProviderCaches(root);
-    await rm(root, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 });
 

@@ -25,7 +25,9 @@ afterEach(async () => {
     closeProviderCaches(path);
     closeProviderCaches(join(path, "cache"));
   }
-  await Promise.all(roots.splice(0).map(path => rm(path, { recursive: true, force: true })));
+  await Promise.all(
+    roots.splice(0).map(path => rm(path, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })),
+  );
 });
 
 async function root(): Promise<string> {
@@ -1392,7 +1394,7 @@ test("direct dependency scopes come from package.json, falling back to Snyk's fl
     await applyManifestScopes(invalid, root);
     expect(scopes(invalid)).toEqual(scopes(graph("yarn")));
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 });
 

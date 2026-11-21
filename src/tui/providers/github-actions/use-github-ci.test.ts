@@ -76,7 +76,7 @@ async function mountGitHub(
   const root = await mkdtemp(join(tmpdir(), "codepulse-github-hook-"));
   cleanup.push(async () => {
     closeProviderCaches();
-    await rm(root, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
   await options.seed?.(root);
   const ci = spyOn(api, "fetchCIDataForSHAs").mockResolvedValue({

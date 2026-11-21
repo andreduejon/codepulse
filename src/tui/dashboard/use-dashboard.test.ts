@@ -130,7 +130,7 @@ test("while shown, a provider's cache write or a new graph reads the events agai
   const root = await mkdtemp(join(tmpdir(), "codepulse-dashboard-live-"));
   cleanup.push(async () => {
     closeProviderCaches();
-    await rm(root, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
   const cache = new GitHubCache({ root, maxEntries: 200 });
   const write = (sha: string) => cache.write("/shop", { sha, runs: [] });

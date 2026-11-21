@@ -22,7 +22,7 @@ beforeEach(() => {
   clearDebugEvents();
 });
 afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
+  rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   clearDebugEvents();
 });
 

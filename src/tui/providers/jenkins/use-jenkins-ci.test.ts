@@ -85,7 +85,7 @@ async function mountJenkins(
   const root = await mkdtemp(join(tmpdir(), "codepulse-jenkins-hook-"));
   cleanup.push(async () => {
     closeProviderCaches();
-    await rm(root, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
   await options.seed?.(root);
   const answer = options.truncated

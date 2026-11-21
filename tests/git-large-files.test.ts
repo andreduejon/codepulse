@@ -44,6 +44,6 @@ test("file, diff, and blame views stop reading at the byte cap", async () => {
     }
     expect((await getFileBlame(root, head, "big.txt", "commit")).map(line => line.content)).toEqual(["short"]);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 });

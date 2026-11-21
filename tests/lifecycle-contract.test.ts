@@ -73,7 +73,7 @@ function harness<T>(
     options.backend.release();
     await Bun.sleep(20);
     closeProviderCaches(cacheRoot);
-    rmSync(cacheRoot, { recursive: true, force: true });
+    rmSync(cacheRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     if (original === undefined) delete process.env[options.tokenEnv];
     else process.env[options.tokenEnv] = original;
   });

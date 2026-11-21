@@ -55,7 +55,7 @@ async function seed(path: string, repoPath: string, provider: string, accessedAt
 afterEach(async () => {
   for (const path of roots.splice(0)) {
     closeProviderCaches(path);
-    await rm(path, { recursive: true, force: true });
+    await rm(path, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 });
 

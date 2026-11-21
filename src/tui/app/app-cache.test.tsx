@@ -260,6 +260,6 @@ test(":cache groups apps, resets and evicts only selected repository, then resto
     ])
       spy.mockRestore();
     closeProviderCaches(root);
-    await rm(root, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 });

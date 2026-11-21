@@ -43,7 +43,7 @@ function makeRepoConfig(name: string, repoPath: string, repoConfig: Record<strin
 }
 
 afterEach(() => {
-  rmSync(TEST_ROOT, { recursive: true, force: true });
+  rmSync(TEST_ROOT, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 });
 
 describe("provider defaults", () => {
