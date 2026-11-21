@@ -85,6 +85,8 @@ async function mountGitHub(
     error: null,
   });
   cleanup.push(() => ci.mockRestore());
+  const pulls = spyOn(api, "fetchOpenPullRequests").mockResolvedValue({ data: [], error: null });
+  cleanup.push(() => pulls.mockRestore());
   let mounted!: {
     state: ReturnType<typeof createAppState>["state"];
     actions: ReturnType<typeof createAppState>["actions"];

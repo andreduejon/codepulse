@@ -8,6 +8,8 @@ const CONSOLE_KIND_PATH: Record<OpenShiftResourceKind, string> = {
   DeploymentConfig: "deploymentconfigs",
   ImageStreamTag: "imagestreams",
   Pod: "pods",
+  ReplicaSet: "replicasets",
+  ReplicationController: "replicationcontrollers",
 };
 
 /**

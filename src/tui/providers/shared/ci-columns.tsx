@@ -5,7 +5,7 @@
  *
  *   Column 1 (Status): run-count chips — fail, running, neutral (cancelled, skipped, unknown), pass. Zero counts are
  *     skipped. The column grows to fit the widest chips (see `graphColumnWidths`).
- *   Column 2 (Last Run): relative time of the latest run, or `running` in the running colour.
+ *   Column 2 (Last run): relative time of the latest run, or `running` in the running colour.
  */
 
 import type { GraphBadge } from "../../../core/provider-model";
@@ -74,7 +74,7 @@ export function ActionsColumnHeaders(props: Readonly<{ first: number; second: nu
       </box>
       <box flexShrink={0} width={props.second}>
         <text wrapMode="none" truncate fg={color()}>
-          <strong>Last Run</strong>
+          <strong>Last run</strong>
         </text>
       </box>
     </>

@@ -182,6 +182,150 @@ const GATEWAY_FAILURE: TestFailure = {
   ms: 30012.4,
 };
 
+/** An open pull request of the shop: its branch's tip (by commit key) and when it was last updated. */
+export interface FakePull {
+  number: number;
+  title: string;
+  head: string;
+  headRef: string;
+  baseRef: string;
+  /** The commit key its base branch points at, or a commit this clone hasn't. */
+  base: string;
+  author: string;
+  draft?: boolean;
+  createdAgoMin: number;
+  updatedAgoMin: number;
+  /** Merged or closed without merging, so long ago. */
+  ended?: { merged: boolean; agoMin: number };
+}
+
+/**
+ * The shop's open pull requests, one for each way the graph previews a merge: the payments branch into main (the
+ * target moved on, one row above), dev into main (the target below, dev is ahead of it) and into the release branch
+ * (two on one commit; a long line that crosses lanes), a draft far right of the lanes, and the metrics dashboard into
+ * a branch this clone never fetched (no line, its files not here).
+ */
+export function githubPulls(): FakePull[] {
+  return [
+    {
+      number: 123,
+      title: "feat(payments): retry failed payments with exponential backoff",
+      head: "retry",
+      headRef: FEATURE_BRANCH,
+      baseRef: "main",
+      base: "readme",
+      author: "mei-chen",
+      createdAgoMin: 300,
+      updatedAgoMin: 40,
+    },
+    {
+      number: 124,
+      title: "release: dev into main",
+      head: "metrics",
+      headRef: "dev",
+      baseRef: "main",
+      base: "readme",
+      author: "ana-lima",
+      createdAgoMin: 50,
+      updatedAgoMin: 5,
+    },
+    {
+      number: 125,
+      title: "release: dev into release/1.x",
+      head: "metrics",
+      headRef: "dev",
+      baseRef: "release/1.x",
+      base: "rel142",
+      author: "ana-lima",
+      createdAgoMin: 50,
+      updatedAgoMin: 5,
+    },
+    {
+      number: 119,
+      title: "feat(theme): dark mode",
+      head: "dark3",
+      headRef: "feature/dark-mode",
+      baseRef: "dev",
+      base: "metrics",
+      author: "lena-fischer",
+      draft: true,
+      createdAgoMin: 3 * 60,
+      updatedAgoMin: 2 * 60,
+    },
+    {
+      number: 127,
+      title: "feat(metrics): sales dashboard",
+      head: "dash3",
+      headRef: "feature/metrics-dashboard",
+      baseRef: "staging",
+      // On origin only (world.ts): opening it fetches its commits.
+      base: "staging",
+      author: "demo-dev",
+      createdAgoMin: 14400,
+      updatedAgoMin: 3 * 24 * 60,
+    },
+  ];
+}
+
+/**
+ * The shop's pull requests merged or closed most recently, for the Dashboard's log and the Pull requests tab: one
+ * closed without merging and one merged today (on main's tip, so it shows in the graph's first rows), and two merged
+ * days ago (one opened within the Dashboard's window, one before it).
+ */
+export function githubClosedPulls(): FakePull[] {
+  return [
+    {
+      number: 116,
+      title: "experiment: compare both graph layouts",
+      head: "exp3",
+      headRef: "experiment/graph-layout",
+      baseRef: "main",
+      base: "readme",
+      author: "lena-fischer",
+      createdAgoMin: 8 * 24 * 60,
+      updatedAgoMin: 4 * 60,
+      ended: { merged: false, agoMin: 4 * 60 },
+    },
+    {
+      // Rebased onto main: its branch's commit is main's tip, so main's Pull requests tab lists it.
+      number: 122,
+      title: "docs: rewrite the README for the new cart flow",
+      head: "readme",
+      headRef: "docs/readme",
+      baseRef: "main",
+      base: "readme",
+      author: "demo-dev",
+      createdAgoMin: 2 * 60,
+      updatedAgoMin: 30,
+      ended: { merged: true, agoMin: 30 },
+    },
+    {
+      number: 23,
+      title: "feat(i18n): German and French checkout",
+      head: "i18n3",
+      headRef: "feature/i18n",
+      baseRef: "main",
+      base: "readme",
+      author: "sam-okafor",
+      createdAgoMin: 4 * 24 * 60,
+      updatedAgoMin: (2 * 24 + 8) * 60,
+      ended: { merged: true, agoMin: (2 * 24 + 8) * 60 },
+    },
+    {
+      number: 9,
+      title: "feat(search): search as you type",
+      head: "search5",
+      headRef: "feature/search",
+      baseRef: "main",
+      base: "readme",
+      author: "mei-chen",
+      createdAgoMin: 12 * 24 * 60,
+      updatedAgoMin: (2 * 24 + 12) * 60,
+      ended: { merged: true, agoMin: (2 * 24 + 12) * 60 },
+    },
+  ];
+}
+
 export function githubRuns(state: DemoState, phase: Phase): FakeRun[] {
   const s = state.shas;
   const w = state.webShas;
@@ -1027,24 +1171,76 @@ export function openShiftWorld(state: DemoState, phase: Phase): OpenShiftWorld {
       status: { phase: "Complete", outputDockerImageReference: imageOf(sha), completionTimestamp: created(endedMin) },
     });
   completeBuild("shop-api-40", s.rounding, 2 * 24 * 60, "main");
+  // Cancelled when 41 started (start policy SerialLatestOnly): neutral, not a failure. A fixed uid keeps the others'.
   add("shop-dev", "Build", {
     kind: "Build",
     metadata: {
-      name: "shop-api-41",
+      name: "shop-api-39",
       namespace: "shop-dev",
-      uid: nextUid(),
+      uid: "uid-shop-api-39",
       labels: { [COMMIT_KEY]: s.payments },
-      creationTimestamp: created(400),
+      creationTimestamp: created(410),
     },
-    // A full ref, as a BuildConfig may name it.
-    spec: { source: source("refs/heads/main"), output: { to: { kind: "ImageStreamTag", name: "shop-api:41" } } },
+    spec: { source: source("refs/heads/main"), output: { to: { kind: "ImageStreamTag", name: "shop-api:39" } } },
     status: {
-      phase: "Failed",
-      reason: "DockerBuildFailed",
-      message: "Docker build strategy has failed.",
-      completionTimestamp: created(396),
+      phase: "Cancelled",
+      reason: "CancelledBuild",
+      message: "The build was cancelled by the user.",
+      completionTimestamp: created(401),
     },
   });
+  // By the next phase OpenShift has pruned 41: only codepulse's cache has it. Its uid is still drawn, so the objects
+  // after it keep theirs.
+  const uid41 = nextUid();
+  if (!failed) {
+    // The pod OpenShift ran 41 in: owned by the Build, labeled with its name, no commit's. Its step that failed says
+    // why; the ones before it ended well. Pruned with the Build.
+    add("shop-dev", "Pod", {
+      kind: "Pod",
+      apiVersion: "v1",
+      metadata: {
+        name: "shop-api-41-build",
+        namespace: "shop-dev",
+        uid: "uid-shop-api-41-build",
+        labels: { "openshift.io/build.name": "shop-api-41" },
+        annotations: { "openshift.io/build.name": "shop-api-41" },
+        ownerReferences: [{ apiVersion: "build.openshift.io/v1", kind: "Build", name: "shop-api-41", uid: uid41 }],
+        creationTimestamp: created(400),
+      },
+      status: {
+        phase: "Failed",
+        initContainerStatuses: [
+          { name: "git-clone", state: { terminated: { reason: "Completed", exitCode: 0 } } },
+          { name: "manage-dockerfile", state: { terminated: { reason: "Completed", exitCode: 0 } } },
+        ],
+        containerStatuses: [
+          {
+            name: "docker-build",
+            image: "registry.redhat.io/openshift4/ose-docker-builder",
+            state: { terminated: { reason: "Error", exitCode: 1, message: "error: build error: step 7/9 failed" } },
+          },
+        ],
+      },
+    });
+    add("shop-dev", "Build", {
+      kind: "Build",
+      metadata: {
+        name: "shop-api-41",
+        namespace: "shop-dev",
+        uid: uid41,
+        labels: { [COMMIT_KEY]: s.payments },
+        creationTimestamp: created(400),
+      },
+      // A full ref, as a BuildConfig may name it.
+      spec: { source: source("refs/heads/main"), output: { to: { kind: "ImageStreamTag", name: "shop-api:41" } } },
+      status: {
+        phase: "Failed",
+        reason: "DockerBuildFailed",
+        message: "Docker build strategy has failed.",
+        completionTimestamp: created(396),
+      },
+    });
+  }
   // 41 failed, its re-run 42 made the image shop-test runs.
   completeBuild("shop-api-42", s.payments, 380, "main");
   completeBuild("shop-api-43", s.readme, 50, "main");
@@ -1094,12 +1290,19 @@ export function openShiftWorld(state: DemoState, phase: Phase): OpenShiftWorld {
       }),
     ],
   });
-  pod("shop-test", "shop-api-7d9f8-oom7k", testRs, "shop-api", {
-    ...notReady,
-    containerStatuses: [
-      container(s.payments, { restartCount: 0, state: { terminated: { reason: "OOMKilled", exitCode: 137 } } }),
-    ],
-  });
+  // By the next phase the pod killed for memory is replaced: its warning is about a resource no longer present.
+  if (failed)
+    pod("shop-test", "shop-api-7d9f8-n3w8p", testRs, "shop-api", {
+      ...ready,
+      containerStatuses: [container(s.payments, { ready: true, restartCount: 0, state: { running: {} } })],
+    });
+  else
+    pod("shop-test", "shop-api-7d9f8-oom7k", testRs, "shop-api", {
+      ...notReady,
+      containerStatuses: [
+        container(s.payments, { restartCount: 0, state: { terminated: { reason: "OOMKilled", exitCode: 137 } } }),
+      ],
+    });
   pod("shop-test", "shop-api-7d9f8-ev1ct", testRs, "shop-api", {
     phase: "Failed",
     reason: "Evicted",
@@ -1108,6 +1311,26 @@ export function openShiftWorld(state: DemoState, phase: Phase): OpenShiftWorld {
   pod("shop-test", "shop-api-7d9f8-ok3zz", testRs, "shop-api", {
     ...ready,
     containerStatuses: [container(s.payments, { ready: true, restartCount: 0, state: { running: {} } })],
+  });
+  // A StatefulSet's pod keeps its name: OpenShift recreates shop-cache-0 in every phase, a new object each time. Its
+  // image says its commit. Each earlier one's warning is still listed (cached in the Events tab, a row each).
+  add("shop-test", "Pod", {
+    kind: "Pod",
+    apiVersion: "v1",
+    metadata: {
+      name: "shop-cache-0",
+      namespace: "shop-test",
+      uid: `uid-shop-cache-0-${phase.index}`,
+      labels: { app: "shop-cache" },
+      ownerReferences: [{ kind: "StatefulSet", uid: "uid-shop-cache" }],
+      creationTimestamp: created(5),
+    },
+    status: {
+      ...ready,
+      containerStatuses: [
+        container(s.payments, { name: "cache", ready: true, restartCount: 0, state: { running: {} } }),
+      ],
+    },
   });
   deployment("shop-test", "shop-batch", s.rounding, 0, {});
 
@@ -1185,6 +1408,19 @@ export function openShiftWorld(state: DemoState, phase: Phase): OpenShiftWorld {
       ],
     ],
     [
+      // A warning about a ReplicaSet, which no commit holds: the Events tab opens it on its events only.
+      "shop-test/ReplicaSet/shop-api-7d9f8",
+      [
+        event(
+          "Warning",
+          "FailedCreate",
+          'Error creating: pods "shop-api-7d9f8-" is forbidden: exceeded quota: compute-resources, requested: limits.memory=1Gi',
+          3,
+          30,
+        ),
+      ],
+    ],
+    [
       "shop-dev/Pod/shop-api-7d9f8-pull9",
       [
         event("Normal", "Scheduled", "Successfully assigned shop-dev/shop-api-7d9f8-pull9 to worker-1", 1, 2),
@@ -1204,10 +1440,39 @@ export function openShiftWorld(state: DemoState, phase: Phase): OpenShiftWorld {
       ],
     ],
     [
+      // One BackOff per shop-cache-0 there was (25, 15, 5 minutes ago): each about its own object, the newest today's.
+      "shop-test/Pod/shop-cache-0",
+      Array.from({ length: phase.index + 1 }, (_, i) => ({
+        ...event(
+          "Warning",
+          "BackOff",
+          "Back-off restarting failed container cache in pod shop-cache-0",
+          3,
+          25 - i * 10,
+        ),
+        metadata: { uid: `ev-shop-cache-0-${i}`, creationTimestamp: iso(now - (55 - i * 10) * MIN) },
+        involvedObject: { uid: `uid-shop-cache-0-${i}` },
+      })),
+    ],
+    [
+      // A warning about the pod 41 ran in: the Events tab shows it with 41's commit. It outlives the pod.
+      "shop-dev/Pod/shop-api-41-build",
+      [
+        event(
+          "Warning",
+          "FailedMount",
+          'MountVolume.SetUp failed for volume "build-ca-bundles" : configmap "shop-api-41-ca" not found',
+          2,
+          168,
+        ),
+      ],
+    ],
+    [
       "shop-dev/Build/shop-api-41",
       [
         event("Normal", "BuildStarted", "Build shop-dev/shop-api-41 is now running", 1, 170),
-        event("Warning", "BuildFailed", "Build shop-dev/shop-api-41 failed", 1, 165),
+        // By the next phase OpenShift has deleted it: only codepulse's cache has it, as (cached).
+        ...(failed ? [] : [event("Warning", "BuildFailed", "Build shop-dev/shop-api-41 failed", 1, 165)]),
       ],
     ],
   ]);

@@ -366,13 +366,16 @@ export class ShaSqliteCache<T extends { sha: string }> {
   /**
    * Merges each commit's new results into its entry, all in one transaction: an entry that comes out the same is not
    * written again, the count limit applies once, and listeners hear of it once, only when something was written.
-   * Reading an entry to merge into doesn't count as using it; writing it does. Returns how many entries it wrote.
+   * Reading an entry to merge into doesn't count as using it; writing it does, unless `touch: false`: an entry only
+   * shown keeps its place for eviction, and one the cache no longer has stays gone (writing it back would evict
+   * another in its place). Returns how many entries it wrote.
    */
   async mergeMany<I>(
     repoPath: string,
     items: readonly { sha: string; incoming: readonly I[] }[],
     merge: (sha: string, existing: T | null, incoming: I[]) => T,
     isCurrent: () => boolean = () => true,
+    options?: { touch?: boolean },
   ): Promise<number> {
     const epoch = this.registry.writeEpoch(this.root);
     if (items.length === 0 || !this.canWrite(epoch) || !isCurrent()) return 0;
@@ -388,11 +391,15 @@ export class ShaSqliteCache<T extends { sha: string }> {
         VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT (provider, repo_hash, sha) DO UPDATE SET
           repo_path = excluded.repo_path, payload = excluded.payload, accessed_at = excluded.accessed_at`);
+      const update = db.query(
+        "UPDATE snapshots SET repo_path = ?, payload = ? WHERE provider = ? AND repo_hash = ? AND sha = ?",
+      );
       const now = Date.now();
       db.transaction(() => {
         for (const item of items) {
           const sha = assertExactSha(item.sha);
           const row = select.get(this.provider, hash, sha);
+          if (!row && options?.touch === false) continue;
           let existing: T | null = null;
           if (row) {
             try {
@@ -406,7 +413,8 @@ export class ShaSqliteCache<T extends { sha: string }> {
           if (!this.isEntry(merged)) throw new InvalidEntryError(this.invalidMessage);
           const payload = JSON.stringify({ ...merged, sha });
           if (row?.payload === payload) continue;
-          upsert.run(this.provider, hash, path, sha, payload, now);
+          if (options?.touch === false) update.run(path, payload, this.provider, hash, sha);
+          else upsert.run(this.provider, hash, path, sha, payload, now);
           written++;
         }
         if (written > 0) this.evict(db, hash);

@@ -96,6 +96,8 @@ export function useRepoSession(opts: {
     actions.setAutoRefreshInterval(nextOptions.autoRefreshInterval);
     actions.setMaxCount(nextOptions.maxCount);
     actions.setShowAllBranches(nextConfig.showAllBranches ?? true);
+    // Its configured branch is its graph's branch view, as at startup: paging and refreshes keep to it.
+    if (nextOptions.branch) actions.setViewingBranch(nextOptions.branch);
     // One update: the loader sets the new path as soon as the active one changes, and nothing may see the new path
     // with the previous repository's branches (Snyk would scan their tips in the wrong repository).
     batch(() => {

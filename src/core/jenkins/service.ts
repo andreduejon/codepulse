@@ -421,6 +421,11 @@ export function createJenkinsService(ports: JenkinsServicePorts) {
       signal,
     );
     if (signal?.aborted || !lifecycle().isCurrent(epoch, repoPath)) return { jobs: [], error: null };
+    // An expired token here freezes automatic requests as the builds' own failure does, and says so.
+    if (result.failure === "auth") {
+      rememberAuthError(result.error, result.failure);
+      app.setStatus(providerError(result.error ?? JENKINS_BANNER.tokenExpired));
+    }
     if (run.status === "completed" && result.error === null && jobsSettled(result.jobs) && reportsKnown(result.jobs)) {
       jobsCache.set(run.id, result);
       await persistTerminalRuns(repoPath, [run.headSha], epoch);

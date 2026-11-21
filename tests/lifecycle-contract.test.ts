@@ -293,6 +293,11 @@ const openshift: ContractFixture = {
       error: null,
       resourceVersions: new Map(),
     });
+    const warnings = spyOn(openShiftApi, "fetchOpenShiftWarnings").mockResolvedValue({
+      warnings: [],
+      denied: [],
+      failed: [],
+    });
     const ends: ((result: OpenShiftWatchResult) => void)[] = [];
     const watch = spyOn(openShiftApi, "watchOpenShiftStream").mockImplementation(
       () => new Promise(resolve => ends.push(resolve)),
@@ -301,6 +306,7 @@ const openshift: ContractFixture = {
       for (const end of ends) end("end");
       inventory.mockRestore();
       live.mockRestore();
+      warnings.mockRestore();
       watch.mockRestore();
     });
     const { provider, mount } = harness(

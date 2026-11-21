@@ -326,6 +326,8 @@ async function renderRefRow(
     lane?: GraphStatusCounts;
     width?: number;
     unseen?: { sha: string; namespaces: NonNullable<GraphBadge["namespaces"]> };
+    /** The provider's own names after the refs, instead of OpenShift's namespaces (GitHub's pull requests). */
+    providerRefs?: { name: string; whole?: boolean }[];
   } = {},
 ) {
   const sha = "f".repeat(40);
@@ -398,7 +400,12 @@ async function renderRefRow(
             get children() {
               // OpenShift's own columns, as the app's provider host gives them.
               return createComponent(GraphColumnsContext.Provider, {
-                value: view => (view === "openshift" ? OPENSHIFT_GRAPH_COLUMNS : null),
+                value: view =>
+                  view !== "openshift"
+                    ? null
+                    : options.providerRefs
+                      ? { ...OPENSHIFT_GRAPH_COLUMNS, refs: () => options.providerRefs ?? [] }
+                      : OPENSHIFT_GRAPH_COLUMNS,
                 get children() {
                   return createComponent(GraphView, {});
                 },
@@ -461,6 +468,30 @@ test("namespaces show next to the refs of the commit they run, in the OpenShift 
   } finally {
     setup.renderer.destroy();
   }
+});
+
+test("a pull request's chip is never shortened: a cut number reads as another, so it goes into +N instead", async () => {
+  const refs: Commit["refs"] = [
+    { name: "feature/a-rather-long-branch-nm", type: "branch", isCurrent: true },
+    { name: "origin/feature/a-rather-long-branch", type: "remote", isCurrent: false },
+  ];
+  const pulls = [
+    { name: "PR #12345", whole: true },
+    { name: "PR #12346", whole: true },
+  ];
+  const shown: string[] = [];
+  for (const width of [64, 90, 120]) {
+    const setup = await renderRefRow(refs, { providerRefs: pulls, width });
+    try {
+      const frame = setup.captureCharFrame();
+      expect(frame).not.toMatch(/PR #\d*…/);
+      shown.push(frame.includes("PR #12345") ? "whole" : "folded");
+    } finally {
+      setup.renderer.destroy();
+    }
+  }
+  // Tight, it folds (the checked-out branch keeps its shortened badge first); with room, it shows whole.
+  expect(shown).toEqual(["folded", "folded", "whole"]);
 });
 
 test("many long refs collapse into +N instead of squeezing the commit subject out", async () => {

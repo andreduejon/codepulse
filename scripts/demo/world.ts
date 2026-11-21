@@ -278,6 +278,24 @@ function fillWorld(root: string, options: DemoOptions, now: number): DemoWorld {
     git(shop, ["branch", "-q", "-u", `origin/${branch}`, branch]);
   // release/1.x is one commit behind origin: someone else pushed the 1.4.2 release.
   git(shop, ["branch", "-q", "-f", "release/1.x", shas.rel141]);
+  // staging is on origin only, one commit past main, never fetched here: PR #127's target. Opening the pull request
+  // fetches it, with refs/pull/127/head (GitHub keeps one for every pull request, a fork's too).
+  const shopRemote = join(remotes, "demo/shop.git");
+  const stagingDate = new Date(now - 26 * 60 * 60_000).toISOString();
+  shas.staging = git(
+    shopRemote,
+    ["commit-tree", `${shas.readme}^{tree}`, "-p", shas.readme ?? "", "-m", "chore(staging): deploy main"],
+    {
+      GIT_AUTHOR_NAME: "Demo Dev",
+      GIT_AUTHOR_EMAIL: "demo.dev@demo.invalid",
+      GIT_COMMITTER_NAME: "Demo Dev",
+      GIT_COMMITTER_EMAIL: "demo.dev@demo.invalid",
+      GIT_AUTHOR_DATE: stagingDate,
+      GIT_COMMITTER_DATE: stagingDate,
+    },
+  );
+  git(shopRemote, ["update-ref", "refs/heads/staging", shas.staging]);
+  git(shopRemote, ["update-ref", "refs/pull/127/head", shas.dash3 ?? ""]);
 
   writeFileSync(join(shop, "README.md"), `${SHOP_README}\nTODO: say how long the retry waits before giving up.\n`);
   const stashDate = new Date(now - 2 * 60_000).toISOString();

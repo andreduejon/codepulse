@@ -9,14 +9,19 @@ diagnostic conventions.
 
 ## Graph status
 
-The graph has two lanes:
+The graph has two columns, named as the detail tabs:
 
-- **Live** — Deployments, DeploymentConfigs, Pods, ImageStreamTags, and running
-  Builds currently observed from OpenShift.
-- **Cache** — terminal Builds persisted locally by commit.
+- **Resources** — what the cluster has of the commit now: Deployments,
+  DeploymentConfigs, Pods, ImageStreamTags and Builds (running or finished, as long as
+  OpenShift lists them), as fail, running, neutral (cancelled, unknown) and pass counts.
+  A muted count follows: Builds only the cache has (see Cached).
+- **Events** — in red what the status of the commit's failing resources says (see
+  Failures), the warnings the cluster still reports about it in the warning colour, the
+  Normal events it lists now in green, then a muted count of the ones shown from the cache
+  (see Warnings).
 
-Both lanes show fail, running, pass, and unknown counts. Empty lanes show
-`·······`. In details, a terminal Build the cluster no longer lists (pruned, or
+A muted count is muted text on grey; the neutral chip has bright text. Empty columns
+show `·······`. In details, a finished Build the cluster no longer lists (pruned, or
 older than the fetch size) shows from the cache with `(cached)` after its name. Builds and
 ImageStreamTags poll while the OpenShift view or the Dashboard is shown. Deployments,
 DeploymentConfigs, and Pods are listed and watched until you leave both.
@@ -26,7 +31,7 @@ DeploymentConfigs, and Pods are listed and watched until you leave both.
 Next to a commit's refs, a badge in the OpenShift colour names each namespace
 that runs that commit now: its Deployments or DeploymentConfigs carry the
 commit's SHA label. The badge only names the namespace: whether it is ready,
-rolling out or failing shows in the Live counts and the details. A
+rolling out or failing shows in the Resources counts and the details. A
 Deployment scaled to 0 runs nothing, so it marks no namespace; details still
 list it with `0 replicas`. Badges
 come from the live list of the whole namespace, so a commit below the fetch size
@@ -90,7 +95,7 @@ snapshot by Build id, preserving its snapshot ID and logs. OpenShift history
 prune does not drop Builds already cached. Every cached commit shows its Builds,
 also below the fetch size, and keeps them through refreshes. Least-recently-accessed
 snapshots evict at the limit, cascading to their log artifacts. Pods, workloads, and
-ImageStreamTags are not written to disk.
+ImageStreamTags are not written to disk; the warnings about them are (see Warnings).
 
 An expired token (401) stops automatic requests: polls, watches, and fetches on
 view switches or selection. The banner reads **Token expired** · OpenShift with
@@ -112,7 +117,8 @@ in full; they cannot be labeled.
 
 Live inventory lists Deployments, DeploymentConfigs, and Pods in the configured
 namespaces, then watches those kinds (`watch=true` from the list
-`resourceVersion`). A 410 Gone or dropped stream lists again. Leave the
+`resourceVersion`). A 410 Gone or one dropped stream ends the other watches too and
+lists again, so no kind stays stale behind the others. Leave the
 OpenShift view and the Dashboard to stop watches. Matching still prefers labels, then
 annotations, then digest / owner-chain:
 
@@ -120,6 +126,10 @@ annotations, then digest / owner-chain:
 Pod → ReplicaSet → Deployment
 Pod → ReplicationController → DeploymentConfig
 ```
+
+A Pod without a label of its own matches a labeled Deployment's selector, unless its
+image digest names another commit: during a rollout the old Pods still match the
+selector but run the previous commit's image, so they stay with that commit.
 
 Terminating Pods are excluded. ImageStreamTags are a match seed only and are
 not written to disk. An overwritten IST annotation moves the tag to the new
@@ -130,6 +140,8 @@ that produced them.
 
 - Terminal Build logs load from the shared database when present, otherwise from
   the Build log API, then cache if the parent snapshot exists. They are not streamed.
+  A Build only the cache has (OpenShift pruned it) gives its saved log or, when nobody
+  opened it while it existed, says *No saved log*; the cluster is not asked.
 - Running Build logs and Pod logs use `?follow=true`. History then tail. Last
   1000 lines. Open at the bottom; stay pinned only if you are already at the
   bottom. When the stream closes the title shows `log ended`. Press `r` to
@@ -139,12 +151,14 @@ that produced them.
   present; otherwise JSON is a live snapshot. Leave the log view or close the
   dialog to abort follow.
 - **Events** starts with what the resource's status says is wrong
-  (`STATUS  REASON  MESSAGE`): what a Pod's containers wait on, how their last run
+  (`STATUS  REASON  MESSAGE`, in red: it is why the resource is `✗`): what a Pod's containers wait on, how their last run
   ended and how often they restarted, its conditions that are False, a workload's failing conditions, a
   Build's failure. The status comes with the object, so it stays after OpenShift
   deletes the events and where events are forbidden. Below it, the events newest
   first: `LAST SEEN  TYPE  REASON  COUNT  MESSAGE`, warnings in the warning colour.
-  Events are read when the dialog opens and are not stored; the title counts the
+  Kubernetes events are only `Normal` or `Warning`, so red comes only from the status.
+  Events are read when the dialog opens (the warnings only the cache has follow them,
+  see Warnings); the title counts the
   warnings (`2 warnings`). OpenShift keeps events for 3 hours by default (plain
   Kubernetes for 1), so an older resource says *No recent events*. Without
   permission to list events the view says so.
@@ -160,19 +174,122 @@ request failed) or a tab notice (some failed) says so.
 ## Status
 
 Resources show the same status symbols as CI runs; graph chips use the same
-colours. A legend below the tree explains them: `✓ ok  ● in progress  ✗ failing`.
+colours. A legend below the tree explains them: `✓ ok  ● in progress  ✗ failing  ○ cancelled`.
 
 - `✓` pass: successful Build, Ready Pod, or fully converged workload.
 - `●` running: active Build, Pending/not-ready Pod, or incomplete workload rollout.
 - `✗` fail: failed Build, fatal container state, replica failure, or failed
   workload progression.
+- `○` cancelled: a Build stopped before it ended (with the start policy `SerialLatestOnly`,
+  a queued build is cancelled when a newer one starts). Neutral, like a cancelled CI run:
+  a grey chip in the graph, not a failure. A Build cancelled before it checked out its
+  source carries no commit, so there is no commit to show it under.
 - `?` unknown: insufficient or indeterminate status (a grey chip in the graph).
 
-Aggregate precedence is fail, running, unknown, then pass.
+Aggregate precedence is fail, running, unknown (and cancelled), then pass.
+
+A row shown only from codepulse's cache says `(cached)` and is muted; its status mark
+keeps its colour. See Cached below.
 
 A failing row shows only its name and `✗`, to keep the tree quiet. Why it fails
 is in the resource dialog's events view: what its containers wait on, exit codes,
 restarts, failing conditions and their messages.
+
+## Warnings
+
+The events in the configured namespaces are read with every build list fetch (Reload and
+auto refresh). codepulse takes them as OpenShift reports them: a warning is never turned
+into a failure, and `✗` comes only from a resource's own status. Events of type `Warning`
+are kept with their commit (below); `Normal` ones (Scheduled, Pulled, BuildStarted) show
+in the **Events** tab only while the cluster lists them, and are never saved (one about a
+resource that is gone says `(cached)` until the cluster's list drops it).
+
+- A warning belongs to the commit whose resource it is about: the same name, and the same
+  uid, so a resource recreated under its old name is another one. One about a ReplicaSet
+  or ReplicationController goes to the commit whose pods it runs, else to its
+  Deployment's or DeploymentConfig's commit. A Deployment keeps its name across commits,
+  and during a rollout the previous commit still holds it through its old pods: its
+  warning goes only to the commit it runs (the one it names), and only when it happened
+  after that commit's rollout began (the later of its newest ReplicaSet's creation and
+  the commit's oldest pod there); an earlier one was the previous commit's and is left
+  out. A warning about a resource no commit has is not kept.
+- Warnings are saved in the commit's snapshot (see Cache), so they outlast the cluster's
+  copy and are evicted with the snapshot by the cache limit. A new warning about a commit
+  in the fetch window counts as a use, as a new build does: a snapshot the limit dropped
+  comes back whole, with everything codepulse holds of the commit (its finished builds,
+  also pruned ones, and its warnings); an older commit only shown from the cache is
+  updated but never written back. Each build list saves every commit codepulse holds this
+  way, so a warning whose own save failed is saved then; one unchanged writes nothing.
+- The graph's **Events** column counts a commit's events, not how often each happened:
+  red for its failures, yellow for the warnings the cluster still reports, green for the
+  Normal events it lists now, muted for those shown from the cache (a warning OpenShift
+  deleted, or an event or failure about a resource that is gone).
+- In **Resources**, a resource OpenShift warns about shows `!` before its status mark,
+  while the cluster still lists one of its warnings.
+- On the **Dashboard** each saved warning is one event at the time it was first seen,
+  with its yellow `!` and how often it happened (`! BackOff · pod shop-api-x2k4q in
+  shop-test · 61 times`); repeating never moves it. Its details open on the **Events**
+  tab with its own row marked: the object it was about, also a pod gone or recreated
+  under its name. A warning saved with two commits is one event, its newest copy. Failures from a resource's status and Normal events are not saved, so they are
+  not on the Dashboard.
+- The **Events** tab starts with **Reload commit** and the count (`total events`), then a
+  tree: namespace, each reason (failures in red, then the warnings' in the warning colour,
+  then the Normal events', each newest first), then the resources it happened to, newest
+  first, each with when (a failure with which part of the status says it). An event is
+  always about one object, so ten pods crash-looping are ten BackOff events under one
+  BackOff row. A resource with two
+  events of one reason (another message) is one row. Enter (or a click) on a resource
+  opens its dialog on the events view, where the whole message is; `o` opens it in the
+  web console. A namespace whose events the token may not list, or whose list failed, is
+  named in a notice under the tab; a failed one shows the warnings it listed before.
+- A reason whose resources are all `(cached)` is muted: it is over. The namespace above
+  it is never muted.
+- The resource dialog's events view ends with a section **Cached (no longer in the
+  cluster)**: the warnings kept about the resource that the cluster's events no longer
+  have, newest first, in the same columns. When the events cannot load, the section is
+  **Saved warnings** and lists every kept one: nothing says whether the cluster still
+  has them.
+
+## Failures
+
+Kubernetes has no failure events: a resource is `✗` because of its own status, and that
+status says why. The **Events** tab lists it first, in red, by its reason, as the resource
+dialog does above the events: a container waiting on `CrashLoopBackOff` or
+`ImagePullBackOff`, one that ended with `Error · exit 1` or `OOMKilled`, an `Evicted`
+pod, a rollout's `ProgressDeadlineExceeded`, a Build's `DockerBuildFailed`. A Pod's
+conditions show only when its containers say nothing. Failures are not saved: they go when
+the resource is fine again, and say `(cached)` once it is gone (a pruned Build).
+
+A Build runs in a pod (`<build>-build`) that OpenShift owns by the Build and labels with
+its name; no commit holds it. A failed Build's pod adds the step that failed (`ended
+docker-build Error · exit 1`; the steps that ended well are not failures), and a warning
+about that pod goes to the Build's commit: by the pod's owner, then its label, and once
+the pod is gone by its name. Enter opens the pod in full while the cluster has it.
+
+## Cached
+
+Something shows from codepulse's cache when the cluster's latest list no longer has its
+uid: a Build OpenShift pruned, a pod that was replaced, an event OpenShift deleted (it
+keeps events for about 3 hours after they last happen). It says `(cached)` and its row is
+muted, in **Resources** and **Events** alike.
+
+- A list that failed changes nothing. Right after start, events read from the cache are
+  cached until their namespace is listed; whether a pod is still there is known once the
+  live list has loaded.
+- In **Events**, a resource is cached when the cluster no longer has it, or no longer has
+  any of its events of that reason. While a problem keeps happening Kubernetes updates the
+  same event (its count and last time), so it stays one; when it starts again after
+  OpenShift deleted it, the new event is a new one beside the cached one. A pod recreated
+  under its old name is a row for each: the one running, then each cached one, so every
+  one's events open.
+- Enter on a cached pod opens its dialog on its events only: there is no log, object or
+  console page for it any more. A pruned Build opens in full: its log and object are
+  cached. A ReplicaSet or ReplicationController the cluster still has opens in full,
+  although no commit holds one; a gone one opens on its events only.
+- In the graph, what only the cache has is the muted count at the end of each column.
+- A finished Build OpenShift prunes while codepulse runs turns `(cached)` with the next build
+  list; one of a commit below the fetch size is never asked about, so it is always shown
+  from the cache.
 
 ## Required read permissions
 
@@ -185,13 +302,14 @@ Configured token needs `list` access for:
 - `deploymentconfigs.apps.openshift.io`
 - `replicationcontrollers`
 - `pods`
-- `events` (only for the resource dialog: its events view and warning count)
+- `events` (for the **Events** tab, and the resource dialog's events view and warning count)
 
 Live freshness also needs `watch` on Deployments, DeploymentConfigs, and Pods
 in each configured namespace. OpenShift/`kubernetes` `view` already has
 `get`/`list`/`watch`. A custom ServiceAccount needs the extra `watch` verb on
 those three kinds; Builds and ImageStreamTags stay `list` only. Without watch,
-the last list stays until Reload. A notice under the **Resources** tab reads **Watch
+the last list stays until Reload. One kind refused says so at once; the other kinds
+keep watching, and the refused one is not asked again until Reload. A notice under the **Resources** tab reads **Watch
 denied** with `Resource data might be stale. Reload to refresh.` below. `live` only appears
 while a watch socket is connected.
 
@@ -217,7 +335,7 @@ rules:
     resources: ["deploymentconfigs"]
     verbs: ["get", "list", "watch"]
   - apiGroups: [""]
-    resources: ["pods", "pods/log", "replicationcontrollers"]
+    resources: ["pods", "pods/log", "replicationcontrollers", "events"]
     verbs: ["get", "list", "watch"]
 ```
 

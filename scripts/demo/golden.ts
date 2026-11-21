@@ -42,7 +42,7 @@ export const GOLDEN_PLAYS: readonly GoldenPlay[] = [
     args: [
       ...COMPACT,
       "--play",
-      "j j enter shot:details tab tab tab tab tab shot:dashboard tab shot:back j shot:after-j",
+      'j j enter shot:details tab tab tab tab tab wait:"shop-cache-0" shot:dashboard tab shot:back j shot:after-j',
     ],
   },
   {
@@ -56,8 +56,102 @@ export const GOLDEN_PLAYS: readonly GoldenPlay[] = [
     ],
   },
   {
+    name: "github-pulls",
+    covers:
+      "GitHub's PR chips on the commits open pull requests' branches point at, a commit's Pull requests tab, a pull " +
+      "request's files and a file's diff in it, and back",
+    args: [
+      ...WIDE,
+      "--play",
+      [
+        'click:GitHub wait:"PR #124" shot:chips click:bf08113 click:"Pull requests" wait:"total pull requests" shot:pulls',
+        'click:"PR #124 release" wait:"metrics.ts" shot:files',
+        'click:"metrics.ts" wait:"esc close" shot:diff right shot:next-file esc shot:back',
+      ].join("\n"),
+    ],
+  },
+  {
+    name: "github-pull-events",
+    covers:
+      "pull requests on the Dashboard: opened, merged, closed, a draft, each at its time; a merged one's details on " +
+      "its Pull requests row, muted with its mark, and the legend",
+    args: [
+      "--size",
+      "240x100",
+      "--play",
+      [
+        'click:Dashboard wait:"PR #23 merged" shot:log',
+        'click:"PR #23 merged" wait:"total pull requests" shot:merged',
+        'click:"PR #119 opened" wait:"total pull requests" shot:draft',
+        // Show in GitHub: the graph's details on the event's own tab.
+        'click:"PR #124 opened" enter wait:"Last run" shot:show-in-github',
+      ].join("\n"),
+    ],
+  },
+  {
+    name: "github-dashboard-diff",
+    covers: "a pull request's file diff from the Dashboard's compact details (the cursor starts on its row), and back",
+    args: [
+      ...COMPACT,
+      "--play",
+      [
+        'click:Dashboard wait:"PR #124 opened" click:"PR #124 opened" enter wait:"total pull requests" shot:details',
+        'enter wait:"metrics.ts" click:"metrics.ts" wait:"esc close" shot:diff esc wait:"Details" shot:back',
+      ].join("\n"),
+    ],
+  },
+  {
+    name: "github-show-in-again",
+    covers: "Show in the same event a second time, after the cursor moved: back on its row (colors name the cursor's)",
+    args: [
+      ...WIDE,
+      "--colors",
+      "--play",
+      [
+        'click:Dashboard wait:"PR #125 opened" click:"PR #125 opened" enter wait:"total pull requests" up up shot:moved',
+        'click:Dashboard wait:"PR #125 opened" click:"PR #125 opened" enter wait:"total pull requests" shot:again',
+      ].join("\n"),
+    ],
+  },
+  {
+    name: "github-show-in",
+    covers:
+      "Show in GitHub back on the commit and view the graph was left on: the event's tab, not the one left open " +
+      "(a pull request's: Pull requests; a run's: its provider's first, Actions)",
+    args: [
+      ...WIDE,
+      "--play",
+      [
+        'click:GitHub wait:"PR #124" click:bf08113 click:Actions wait:"total workflow runs" shot:left-on-actions',
+        'click:Dashboard wait:"PR #124 opened" click:"PR #124 opened" enter wait:"total pull requests" shot:back',
+        'click:Dashboard wait:"CI #814" click:"CI #814 running" enter wait:"total workflow runs" shot:run-back',
+      ].join("\n"),
+    ],
+  },
+  {
+    name: "github-merge-preview",
+    covers:
+      "the graph's preview of the merge of the pull request under the mouse or the cursor, each case: none selected, " +
+      "the target one row above, the target below, a long line crossing lanes, a draft right of the lanes, a target " +
+      "the clone hasn't: its commits fetched on opening, its files shown (no line: the graph has no staging yet)",
+    args: [
+      "--size",
+      "200x100",
+      "--play",
+      [
+        'click:GitHub wait:"PR #124" click:6adc455 click:"Pull requests" wait:"total pull requests" shot:none',
+        'hover:"PR #123 feat" shot:target-above',
+        'click:bf08113 click:"Pull requests" wait:"PR #124 release" hover:"PR #124 release" shot:target-below',
+        // The cursor, not the mouse: Enter (a click) on it.
+        'click:"PR #125 release" wait:"dev → release/1.x" shot:crossing-lanes',
+        'click:69ddc1f click:"Pull requests" wait:"PR #119" hover:"PR #119 feat" shot:draft',
+        'click:e37842a click:"Pull requests" wait:"PR #127 feat" click:"PR #127 feat" wait:"SalesDashboard.tsx" shot:fetched-on-open',
+      ].join("\n"),
+    ],
+  },
+  {
     name: "providers",
-    covers: "each provider tab with its details, a CI log, an OpenShift resource log, Snyk",
+    covers: "each provider tab with its details, OpenShift's Events tab, a CI log, an OpenShift resource log, Snyk",
     args: [
       ...WIDE,
       "--play",
@@ -66,8 +160,61 @@ export const GOLDEN_PLAYS: readonly GoldenPlay[] = [
         'tab wait:"CI #812" right shot:github',
         'esc tab wait:"main #41" right shot:jenkins',
         "esc g tab wait:pull9 right shot:openshift",
+        // The first commit has no warnings yet; the one shop-test runs has several.
+        'right wait:"total events" esc j j j j right right wait:"BackOff" j shot:openshift-events',
         'esc tab wait:"Vulnerabilities" shot:snyk',
       ].join("\n"),
+    ],
+  },
+  {
+    name: "openshift-cached",
+    covers:
+      "the next phases: (cached) in the Events tab (a pruned build, a replaced pod, a deleted event, a build's pod, a " +
+      "pod recreated twice under its name), the Cached section, a pruned build without a saved log, a ReplicaSet",
+    args: [
+      ...WIDE,
+      "--play",
+      [
+        // The next phase has no BuildFailed event any more: only the cache keeps it.
+        'click:OpenShift wait:"64ddc8a" advance type::reload enter',
+        'click:64ddc8a enter right wait:"shop-api-41 (cached)" shot:events',
+        'click:"shop-api-41 (cached)" enter wait:"Cached (no longer" shot:dialog',
+        // Nobody opened 41's log before OpenShift pruned it: the cache has none.
+        'c wait:"No saved log" shot:no-saved-log',
+        // No commit holds a ReplicaSet: its warning opens it all the same.
+        'esc click:"30m ago" enter wait:"exceeded quota" shot:replicaset',
+        // shop-cache-0 is recreated once more: a (cached) row for each earlier one, then today's.
+        'esc advance type::reload enter sleep:2000 click:64ddc8a enter right wait:"shop-cache-0 (cached)" shot:recreated',
+      ].join("\n"),
+    ],
+  },
+  {
+    name: "openshift-events",
+    covers:
+      "OpenShift's Events tab: failures in red, warnings, Normal events, a build's pod; a failing pod's dialog, the build pod's",
+    args: [
+      "--size",
+      "200x60",
+      "--play",
+      [
+        'click:OpenShift wait:"64ddc8a" click:64ddc8a enter right wait:"FailedCreate" shot:tab',
+        // Why the pod is ✗ (its status, red), then its events.
+        'click:waiting enter wait:"LAST SEEN" shot:failing-pod',
+        // The pod 41 ran in: its steps that passed plain, the one that failed red, then its warning.
+        'esc click:"ended docker-build" enter wait:"step 7/9" shot:build-pod',
+      ].join("\n"),
+    ],
+  },
+  {
+    name: "openshift-events-failed",
+    covers:
+      "a resource's events that cannot load: its dialog lists the warnings saved about it, without saying they are gone",
+    args: [
+      ...WIDE,
+      "--openshift",
+      "error:events",
+      "--play",
+      'click:OpenShift wait:"64ddc8a" click:64ddc8a enter right wait:"FailedCreate" click:"just now" enter wait:"Saved warnings" shot:saved',
     ],
   },
   {
@@ -96,6 +243,20 @@ export const GOLDEN_PLAYS: readonly GoldenPlay[] = [
         "j j shot:selected",
         "right shot:panel-focused down shot:panel-down left shot:back",
         "enter shot:shown-in-provider",
+      ].join("\n"),
+    ],
+  },
+  {
+    name: "dashboard-filter-typing",
+    covers:
+      "a filter typed in the Dashboard's details keeps every key: m, q, f and s type, not Menu, quit, fetch or Show in",
+    args: [
+      ...COMPACT,
+      "--play",
+      [
+        'click:Dashboard wait:"scan" click:"scan" enter wait:"Enter vulnerability filter..." click:"Enter vulnerability filter..." type:mqfs wait:"mqfs" shot:compact',
+        // Wide: the side panel's filter, the same keys.
+        'esc esc esc size:230x50 click:"scan" wait:"Enter vulnerability filter..." click:"Enter vulnerability filter..." type:mqfs wait:"mqfs" shot:wide',
       ].join("\n"),
     ],
   },
@@ -146,7 +307,8 @@ export const GOLDEN_PLAYS: readonly GoldenPlay[] = [
       ...WIDE,
       "--colors",
       "--play",
-      'j j click:Dashboard wait:"events" j shot:dashboard tab tab wait:"CI #812" shot:github',
+      'j j click:Dashboard wait:"events" j shot:dashboard tab tab wait:"CI #812" shot:github ' +
+        'click:OpenShift wait:"64ddc8a" click:64ddc8a enter right wait:"FailedCreate" shot:openshift-events',
     ],
   },
 ];

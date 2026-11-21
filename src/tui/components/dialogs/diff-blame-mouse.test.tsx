@@ -292,6 +292,8 @@ test("file arrows respect boundaries and lazy blame follows reactive targets, ca
       "second.ts",
       "commit",
       expect.any(AbortSignal),
+      // A commit has no range base.
+      undefined,
     );
     await d.key("ARROW_LEFT");
     expect(d.target().fileIndex).toBe(0);

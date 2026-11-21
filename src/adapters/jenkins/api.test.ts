@@ -1138,6 +1138,47 @@ describe("fetchJenkinsConsoleLog failures", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  test("a login page, by redirect or answered as HTML, is an authentication failure, not the log", async () => {
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async () =>
+        new Response(null, {
+          status: 302,
+          headers: { location: "https://jenkins.example.com/securityRealm/commenceLogin?from=%2F" },
+        })) as unknown as typeof fetch;
+      await expect(fetchJenkinsConsoleLog(run, "user", "token")).rejects.toThrow(JENKINS_BANNER.authFailed);
+      globalThis.fetch = (async () =>
+        new Response("<html>Sign in</html>", {
+          status: 200,
+          headers: { "content-type": "text/html;charset=utf-8" },
+        })) as unknown as typeof fetch;
+      await expect(fetchJenkinsConsoleLog(run, "user", "token")).rejects.toThrow(JENKINS_BANNER.authFailed);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("a build without stages (no Pipeline REST API, or freestyle) still has its job, so Console and tests", async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: string[] = [];
+    try {
+      globalThis.fetch = (async (input: RequestInfo | URL) => {
+        calls.push(String(input));
+        return String(input).includes("wfapi")
+          ? new Response("Not Found", { status: 404 })
+          : Response.json({ passCount: 3, failCount: 0, skipCount: 0, suites: [] });
+      }) as unknown as typeof fetch;
+      const { jobs, error } = await fetchJenkinsRunJobs(run as JenkinsRun, "user", "token");
+      expect(error).toBeNull();
+      expect(jobs).toHaveLength(1);
+      expect(jobs[0].steps).toEqual([]);
+      expect(jobs[0].tests?.passCount).toBe(3);
+      expect(calls.some(url => url.includes("testReport"))).toBe(true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
 
 describe("fetchJenkinsRunJobs failures", () => {

@@ -94,7 +94,7 @@ test("a partial Snyk scan adds a warning ? after its time; a scan in progress sa
   }
 });
 
-test("Snyk's Last Scan fits an absolute same-year date with the partial marker", async () => {
+test("Snyk's Last scan fits an absolute same-year date with the partial marker", async () => {
   const clock = spyOn(Date, "now").mockReturnValue(new Date(2026, 5, 30, 12).getTime());
   const old: SnykScanResult = { ...scan(true), scannedAt: new Date(2026, 5, 16, 12, 30).toISOString() };
   const setup = await render(() => (

@@ -6,8 +6,9 @@ import { createSignal, Show } from "solid-js";
 import * as browser from "../../../adapters/system/open-url";
 import { OPENSHIFT_BANNER } from "../../../core/openshift/banner";
 import type { OpenShiftEvent, OpenShiftResource } from "../../../core/openshift/types";
+import type { OpenShiftWarning } from "../../../core/openshift/warnings";
 import { createThemeState, ThemeContext } from "../../context/theme";
-import OpenShiftResourceDialog from "./resource-dialog";
+import OpenShiftResourceDialog, { OPENSHIFT_NO_SAVED_LOG } from "./resource-dialog";
 
 const descendants = (node: Renderable): Renderable[] =>
   node.getChildren().flatMap(child => [child, ...descendants(child)]);
@@ -21,6 +22,9 @@ async function renderResource(
   consoleUrl?: string,
   loadEvents?: (resource: OpenShiftResource) => Promise<OpenShiftEvent[]>,
   object: unknown = { objectMarker: "fake-object" },
+  initialView?: "events",
+  savedWarnings: OpenShiftWarning[] = [],
+  eventsOnly = false,
 ) {
   const resource: OpenShiftResource = {
     id: `${kind}/resource`,
@@ -52,6 +56,9 @@ async function renderResource(
             followLog={follow ? followLog : undefined}
             consoleUrl={consoleUrl}
             loadEvents={loadEvents}
+            initialView={initialView}
+            savedWarnings={() => savedWarnings}
+            eventsOnly={eventsOnly}
             onClose={close}
           />
         </Show>
@@ -337,6 +344,11 @@ test("a failed log shows its reason in an error box, and an empty log says so, n
     await d.flush();
     expect(d.frame()).toContain("Failed to load log");
     expect(d.frame()).toContain("OpenShift token expired.");
+    // The box sits 1+4 from the dialog's border, as the title does: its own border in the title's column.
+    const rows = d.frame().split("\n");
+    const titleColumn = rows.find(row => row.includes("OpenShift · Build"))?.indexOf("OpenShift") ?? -1;
+    const boxRow = rows.find(row => row.includes("Failed to load log")) ?? "";
+    expect(boxRow.indexOf("│")).toBe(titleColumn);
     expect(d.frame()).not.toMatch(/\b1 {2}OpenShift token expired/);
     d.loadLog.mockResolvedValueOnce("");
     await d.key("r");
@@ -417,7 +429,9 @@ test("o opens the resource in the web console when its URL is set, and the foote
   }
 });
 
-const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+// One now for the file: rows made a millisecond apart would otherwise sort by that millisecond.
+const NOW = Date.now();
+const minutesAgo = (minutes: number) => new Date(NOW - minutes * 60_000).toISOString();
 
 test("c cycles log, object and events; events are newest first, warnings in the warning color, r refetches", async () => {
   const loadEvents = mock(
@@ -496,6 +510,144 @@ const warning = (reason: string, minutes: number): OpenShiftEvent => ({
   lastSeen: minutesAgo(minutes),
 });
 
+test("opened from the Events tab, the dialog starts on the events; c still cycles to the log", async () => {
+  const loadEvents = mock(
+    async (): Promise<OpenShiftEvent[]> => [
+      { type: "Warning", reason: "BackOff", message: "Back-off restarting", count: 3, lastSeen: null },
+    ],
+  );
+  const d = await renderResource("Pod", false, true, undefined, loadEvents, undefined, "events");
+  try {
+    await Bun.sleep(0);
+    await d.flush();
+    expect(d.frame()).toMatch(/test-resource · events/);
+    expect(d.frame()).toContain("BackOff");
+    expect(d.loadLog).not.toHaveBeenCalled();
+    // Asked once: opening on the events view does not ask again.
+    expect(loadEvents).toHaveBeenCalledTimes(1);
+    await d.key("c");
+    await Bun.sleep(0);
+    await d.flush();
+    expect(d.frame()).toMatch(/test-resource · log/);
+  } finally {
+    d.renderer.destroy();
+  }
+});
+
+test("the events view ends with the warnings only the cache has, newest first, never one the cluster lists", async () => {
+  const saved = (id: string, reason: string, lastSeen: string): OpenShiftWarning => ({
+    id,
+    namespace: "test-ns",
+    kind: "Pod",
+    name: "test-resource",
+    reason,
+    message: `${reason} message`,
+    count: 2,
+    firstSeen: lastSeen,
+    lastSeen,
+  });
+  const live = mock(
+    async (): Promise<OpenShiftEvent[]> => [
+      { id: "live-1", type: "Warning", reason: "BackOff", message: "BackOff message", count: 3, lastSeen: null },
+    ],
+  );
+  const warnings = [
+    saved("live-1", "BackOff", "2026-01-01T03:00:00Z"),
+    saved("old-1", "OOMKilling", "2026-01-01T01:00:00Z"),
+    saved("old-2", "Unhealthy", "2026-01-01T02:00:00Z"),
+  ];
+  const d = await renderResource("Pod", false, true, undefined, live, undefined, "events", warnings);
+  try {
+    await Bun.sleep(0);
+    await d.flush();
+    const rows = d.frame().split("\n");
+    // The title counts the warnings the view shows: the one the cluster lists and the two only the cache has.
+    expect(d.frame()).toMatch(/test-resource · events · 3 warnings/);
+    const title = rows.findIndex(row => row.includes("Cached (no longer in the cluster)"));
+    expect(title).toBeGreaterThan(rows.findIndex(row => row.includes("BackOff message")));
+    expect(rows.findIndex(row => row.includes("Unhealthy message"))).toBeGreaterThan(title);
+    expect(rows.findIndex(row => row.includes("OOMKilling message"))).toBeGreaterThan(
+      rows.findIndex(row => row.includes("Unhealthy message")),
+    );
+    expect(rows.filter(row => row.includes("BackOff message"))).toHaveLength(1);
+  } finally {
+    d.renderer.destroy();
+  }
+  // No live events: the cluster says so, and the cached ones still show.
+  const none = mock(async (): Promise<OpenShiftEvent[]> => []);
+  const gone = await renderResource("Pod", false, true, undefined, none, undefined, "events", warnings.slice(1));
+  try {
+    await Bun.sleep(0);
+    await gone.flush();
+    expect(gone.frame()).toContain("No recent events.");
+    expect(gone.frame()).toContain("Cached (no longer in the cluster)");
+    expect(gone.frame()).toContain("OOMKilling message");
+  } finally {
+    gone.renderer.destroy();
+  }
+});
+
+test("when the events cannot load, the saved warnings show without saying the cluster no longer has them", async () => {
+  const failing = async (): Promise<OpenShiftEvent[]> => {
+    throw new Error("OpenShift events failed: 500");
+  };
+  const saved: OpenShiftWarning = {
+    id: "old-1",
+    namespace: "test-ns",
+    kind: "Pod",
+    name: "test-resource",
+    reason: "OOMKilling",
+    message: "OOMKilling message",
+    count: 1,
+    firstSeen: null,
+    lastSeen: "2026-01-01T01:00:00Z",
+  };
+  const d = await renderResource("Pod", false, true, undefined, failing, undefined, "events", [saved]);
+  try {
+    await Bun.sleep(0);
+    await d.flush();
+    expect(d.frame()).toContain("OpenShift events failed: 500");
+    expect(d.frame()).toContain("Saved warnings");
+    expect(d.frame()).toContain("OOMKilling message");
+    expect(d.frame()).not.toContain("Cached (no longer in the cluster)");
+  } finally {
+    d.renderer.destroy();
+  }
+});
+
+test("a resource that is gone shows only its events: no log or object to switch to, nothing to open", async () => {
+  const loadEvents = mock(
+    async (): Promise<OpenShiftEvent[]> => [
+      { type: "Warning", reason: "OOMKilling", message: "Memory cgroup out of memory", count: 1, lastSeen: null },
+    ],
+  );
+  const d = await renderResource(
+    "Pod",
+    false,
+    true,
+    "https://console.example.com",
+    loadEvents,
+    undefined,
+    "events",
+    [],
+    true,
+  );
+  try {
+    await Bun.sleep(0);
+    await d.flush();
+    expect(d.frame()).toMatch(/test-resource · events/);
+    await d.key("c");
+    await d.flush();
+    expect(d.frame()).toMatch(/test-resource · events/);
+    expect(d.frame()).not.toMatch(/\bview\b|\bopen\b/);
+    expect(d.loadLog).not.toHaveBeenCalled();
+    // The object isn't asked for: what its status said is gone with it.
+    expect(d.loadObject).not.toHaveBeenCalled();
+  } finally {
+    d.renderer.destroy();
+  }
+});
+
 test("the events view starts with what the status says is wrong; the title counts the warnings", async () => {
   const loadEvents = mock(
     async (_resource: OpenShiftResource): Promise<OpenShiftEvent[]> => [
@@ -517,7 +669,9 @@ test("the events view starts with what the status says is wrong; the title count
     expect(frame).toMatch(/waiting\s+CrashLoopBackOff\s+back-off 5m0s restarting failed container/);
     expect(frame).toMatch(/last run\s+Error · exit 1/);
     expect(frame.indexOf("STATUS")).toBeLessThan(frame.indexOf("LAST SEEN"));
-    expect(d.cell("CrashLoopBackOff")?.fg).toEqual(RGBA.fromHex(d.theme.warning));
+    // What the status says is wrong is why it is ✗: red, as a CI log's error lines. Warning events are yellow.
+    expect(d.cell("CrashLoopBackOff")?.fg).toEqual(RGBA.fromHex(d.theme.error));
+    expect(d.cell("Unhealthy")?.fg).toEqual(RGBA.fromHex(d.theme.warning));
     // Loaded once when the dialog opened; the events view reuses them (r refetches).
     expect(loadEvents).toHaveBeenCalledTimes(1);
   } finally {
@@ -641,6 +795,35 @@ test("a read that answers after the dialog closed shows nothing and raises nothi
     expect(errors).not.toHaveBeenCalled();
   } finally {
     errors.mockRestore();
+    setup.renderer.destroy();
+  }
+});
+
+test("a pruned build without a saved log says so, muted, not as a failure", async () => {
+  const resource: OpenShiftResource = {
+    id: "Build/pruned",
+    kind: "Build",
+    namespace: "test-ns",
+    name: "test-pruned",
+    status: "pass",
+    imageRefs: [],
+    cacheOnly: true,
+  };
+  const theme = createThemeState();
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={theme}>
+        <OpenShiftResourceDialog resource={resource} loadLog={async () => ""} onClose={() => {}} />
+      </ThemeContext.Provider>
+    ),
+    { width: 110, height: 20 },
+  );
+  try {
+    await Bun.sleep(0);
+    await setup.flush();
+    expect(setup.captureCharFrame()).toContain(OPENSHIFT_NO_SAVED_LOG);
+    expect(setup.captureCharFrame()).not.toContain("Failed to load log");
+  } finally {
     setup.renderer.destroy();
   }
 });

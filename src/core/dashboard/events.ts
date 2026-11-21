@@ -38,6 +38,8 @@ export interface DashboardEvent {
   url?: string;
   /** Its entry in its provider's tab (a run's, a build's id): the details open and mark it. */
   entry?: string;
+  /** The tab the details open on, when not its provider's first (an OpenShift warning: Events). */
+  tab?: string;
   /** What the side panel shows beside the commit. */
   facts?: DashboardFact[];
 }
@@ -131,8 +133,10 @@ export function dashboardRows(events: readonly DashboardEvent[], options: Dashbo
   const offset = options.utcOffset ?? localOffset;
   const knots = new Map<string, { key: string; app: string; bucket: number; events: DashboardEvent[] }>();
   for (const event of [...events].sort((a, b) => b.time - a.time)) {
-    const bucket = Math.floor((event.time + offset(event.time)) / options.knotMs);
-    const key = `${event.app}\u0000${bucket}`;
+    const utcOffset = offset(event.time);
+    const bucket = Math.floor((event.time + utcOffset) / options.knotMs);
+    // The offset too: the hour the clock repeats when daylight saving ends holds two knots, not one around another.
+    const key = `${event.app}\u0000${bucket}\u0000${utcOffset}`;
     let knot = knots.get(key);
     if (!knot) {
       knot = { key, app: event.app, bucket, events: [] };
@@ -140,9 +144,8 @@ export function dashboardRows(events: readonly DashboardEvent[], options: Dashbo
     }
     knot.events.push(event);
   }
-  const ordered = [...knots.values()].sort(
-    (a, b) => b.bucket - a.bucket || (b.events[0]?.time ?? 0) - (a.events[0]?.time ?? 0),
-  );
+  // By the newest event's time, not the bucket: the local clock repeats an hour when daylight saving ends.
+  const ordered = [...knots.values()].sort((a, b) => (b.events[0]?.time ?? 0) - (a.events[0]?.time ?? 0));
   const rows: DashboardRow[] = [];
   let day: number | null = null;
   for (const knot of ordered) {

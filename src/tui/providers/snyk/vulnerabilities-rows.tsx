@@ -3,6 +3,7 @@ import { For, Show } from "solid-js";
 import { isMatureExploit, type SnykVulnerabilityEntry } from "../../../core/snyk/parser";
 import { useT } from "../../hooks/use-t";
 import { severityColor } from "../../utils/severity";
+import { wrapWords } from "../../utils/wrap-words";
 import { highlightMatch } from "./filter";
 import type { SnykRows } from "./tab-shared";
 import {
@@ -14,7 +15,6 @@ import {
   type Section,
   shortCoordinate,
   toneColor,
-  wrapWords,
 } from "./vulnerabilities-model";
 
 /** What the rows read from the Vulnerabilities tab: cursor order, expansion, filter and widths. */

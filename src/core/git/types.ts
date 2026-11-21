@@ -109,7 +109,7 @@ export interface BlameLine {
 }
 
 /** Identifies the source of a diff request — determines which git command variant to use. */
-export type DiffSource = "commit" | "stash" | "staged" | "unstaged" | "untracked";
+export type DiffSource = "commit" | "stash" | "staged" | "unstaged" | "untracked" | "range";
 
 /** Target for opening the diff+blame dialog. */
 export interface DiffTarget {
@@ -122,6 +122,8 @@ export interface DiffTarget {
   fileList: string[];
   /** Index of `filePath` within `fileList`. */
   fileIndex: number;
+  /** A `range`'s other end: `commitHash` against it (a pull request: where its branch left the target's). */
+  base?: string;
 }
 
 export interface GraphRow {

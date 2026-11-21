@@ -11,7 +11,7 @@ export type ProviderName = (typeof PROVIDERS)[number];
 export const PROVIDER_ERRORS = {
   github: ["401", "rate-limit", "offline", "timeout", "no-token"],
   jenkins: ["401", "offline", "timeout", "no-token"],
-  openshift: ["401", "offline", "timeout", "partial", "watch-denied", "no-token"],
+  openshift: ["401", "offline", "timeout", "partial", "watch-denied", "events", "no-token"],
   snyk: ["no-token", "partial", "no-cli"],
 } as const satisfies Record<ProviderName, readonly string[]>;
 export type ProviderError<P extends ProviderName = ProviderName> = (typeof PROVIDER_ERRORS)[P][number];
@@ -53,7 +53,7 @@ Options
   --size WxH              headless screen size (default ${DEFAULT_SIZE.width}x${DEFAULT_SIZE.height}, up to 1000x1000)
   --github MODE           default, empty, off, or error:401|rate-limit|offline|timeout|no-token
   --jenkins MODE          default, empty, off, or error:401|offline|timeout|no-token
-  --openshift MODE        default, empty, off, or error:401|offline|timeout|partial|watch-denied|no-token
+  --openshift MODE        default, empty, off, or error:401|offline|timeout|partial|watch-denied|events|no-token
   --snyk MODE             default, empty, off, or error:no-token|partial|no-cli
   --setup                 start on a repository the config does not know yet
   --live [SECONDS]        interactive: the world moves on every SECONDS (default ${DEFAULT_LIVE_SECONDS}, up to 86400)

@@ -42,14 +42,20 @@ describe("provider column widths", () => {
     expect(CI_GRAPH_COLUMNS.widths(wide).first).toBe(4 + 4 + 4 + 5 + 3 + 2);
   });
 
-  test("OpenShift Live fits four single-digit chips (15 + padding)", () => {
-    const lanes = {
-      live: { failCount: 1, runningCount: 1, unknownCount: 1, passCount: 1 },
-      cache: { failCount: 0, runningCount: 0, unknownCount: 0, passCount: 2 },
-    };
-    const widths = OPENSHIFT_GRAPH_COLUMNS.widths(new Map([["a", badge({ lanes })]]));
-    expect(widths.first).toBe(15 + 2);
-    expect(widths.second).toBe(DATE_COL_WIDTH);
+  test("OpenShift Resources fits four single-digit chips (15 + padding), and the muted cached count after", () => {
+    const lanes = { live: { failCount: 1, runningCount: 1, unknownCount: 1, passCount: 1 } };
+    expect(OPENSHIFT_GRAPH_COLUMNS.widths(new Map([["a", badge({ lanes })]])).first).toBe(15 + 2);
+    // Four ` 1 ` chips (15), a gap and ` 12 `, then the padding.
+    const cached = OPENSHIFT_GRAPH_COLUMNS.widths(new Map([["a", badge({ lanes, counts: { cached: 12 } })]]));
+    expect(cached.first).toBe(15 + 1 + 4 + 2);
+  });
+
+  test("OpenShift Events fits the warning count and the muted cached one", () => {
+    const widths = OPENSHIFT_GRAPH_COLUMNS.widths(
+      new Map([["a", badge({ counts: { warnings: 120, cachedEvents: 3400 } })]]),
+    );
+    // ` 120 ` (5), a gap, ` 3400 ` (6): wider than the Date column.
+    expect(widths.second).toBe(Math.max(DATE_COL_WIDTH, 5 + 1 + 6));
   });
 });
 

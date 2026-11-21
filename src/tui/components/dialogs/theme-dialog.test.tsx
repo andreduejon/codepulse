@@ -377,7 +377,7 @@ test("theme footer select hover is text-only and only left-click saves without c
     expect(onSelect).toHaveBeenCalledTimes(1);
     expect(onSelect).toHaveBeenCalledWith("nord");
     expect(open()).toBe(true);
-    expect(setup.captureCharFrame()).toContain("Color Theme");
+    expect(setup.captureCharFrame()).toContain("Color theme");
     expect(theme.themeName()).toBe("nord");
     expect(marker("Nord", "✓")?.bg).toEqual(RGBA.fromHex(themes.nord.accent));
     expect(marker("Nord", "✓")?.fg).toEqual(RGBA.fromHex(themes.nord.background));
@@ -692,7 +692,7 @@ test("details replace theme list without resizing, pin predefined metadata, and 
   };
   const descendants = (node: Renderable): Renderable[] =>
     node.getChildren().flatMap(child => [child, ...descendants(child)]);
-  const bounds = () => ({ title: point("Color Theme"), footerY: point("enter select").y });
+  const bounds = () => ({ title: point("Color theme"), footerY: point("enter select").y });
   try {
     await setup.flush();
     await click("Nord");
@@ -868,7 +868,7 @@ test("one empty row separates the last color from the footer, and the footer sit
     await setup.flush();
     const lines = setup.captureCharFrame().split("\n");
     const footer = lines.findIndex(line => line.includes("enter select"));
-    const title = lines.findIndex(line => line.includes("Color Theme"));
+    const title = lines.findIndex(line => line.includes("Color theme"));
     expect(footer).toBeGreaterThan(0);
     // Title, one empty row, content ... content, one empty row, footer.
     expect(lines[title + 1].trim()).toBe("");

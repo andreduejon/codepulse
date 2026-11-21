@@ -27,7 +27,7 @@ test("a crash-looping Pod says why: what it waits on, how its last run ended, it
       ],
     },
   });
-  expect(lines.map(line => line.kind)).toEqual(["header", "warning", "warning", "warning"]);
+  expect(lines.map(line => line.kind)).toEqual(["header", "error", "error", "error"]);
   const [header, waiting, lastRun, ready] = lines.map(line => line.text.trimEnd());
   expect(header).toMatch(/^STATUS\s+REASON\s+MESSAGE$/);
   expect(waiting).toMatch(/^waiting\s+CrashLoopBackOff\s+back-off 5m0s restarting failed container$/);
@@ -107,4 +107,33 @@ test("a healthy resource, or one without its object, has nothing to say", () => 
   expect(texts("Build", { status: { phase: "Complete" } })).toEqual([]);
   expect(texts("Deployment", null)).toEqual([]);
   expect(texts("ImageStreamTag", { status: {} })).toEqual([]);
+});
+
+test("a build pod's steps that ended well are plain; only the one that failed is red", () => {
+  const lines = formatOpenShiftStatus("Pod", {
+    status: {
+      phase: "Failed",
+      initContainerStatuses: [{ name: "git-clone", state: { terminated: { reason: "Completed", exitCode: 0 } } }],
+      containerStatuses: [{ name: "docker-build", state: { terminated: { reason: "Error", exitCode: 1 } } }],
+    },
+  });
+  expect(lines.map(line => [line.kind, line.text.split(/\s{2,}/)[0]])).toEqual([
+    ["header", "STATUS"],
+    ["normal", "ended git-clone"],
+    ["error", "ended docker-build"],
+  ]);
+});
+
+test("a finished build pod's `Ready False` (PodCompleted) is how it ended, not a problem", () => {
+  const lines = formatOpenShiftStatus("Pod", {
+    status: {
+      phase: "Succeeded",
+      conditions: [
+        { type: "Ready", status: "False", reason: "PodCompleted" },
+        { type: "ContainersReady", status: "False", reason: "PodCompleted" },
+      ],
+      containerStatuses: [{ name: "sti-build", state: { terminated: { reason: "Completed", exitCode: 0 } } }],
+    },
+  });
+  expect(lines.filter(line => line.kind === "error")).toEqual([]);
 });

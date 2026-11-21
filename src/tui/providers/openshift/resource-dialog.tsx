@@ -1,5 +1,6 @@
 import { createEffect, createMemo, createSignal, onCleanup, untrack } from "solid-js";
 import type { OpenShiftEvent, OpenShiftResource } from "../../../core/openshift/types";
+import type { OpenShiftWarning } from "../../../core/openshift/warnings";
 import { shouldFollowOpenShiftLog } from "../../../core/openshift/watch";
 import type { LogViewState } from "../../components/dialogs/log-view";
 import { LogViewer, type LogViewerLine } from "../../components/dialogs/log-viewer";
@@ -8,6 +9,7 @@ import { BUSY } from "../../utils/busy-text";
 import { stripTerminalControls } from "../../utils/terminal-text";
 import { openShiftConsoleUrl } from "./console";
 import {
+  formatCachedWarnings,
   formatOpenShiftEvents,
   formatOpenShiftStatus,
   OPENSHIFT_EVENT_KINDS,
@@ -25,9 +27,21 @@ interface OpenShiftResourceDialogProps {
   consoleUrl?: string;
   /** The events about the resource, for the events view (`c`). */
   loadEvents?: (resource: OpenShiftResource) => Promise<OpenShiftEvent[]>;
+  /** The view it opens on (the Events tab opens the events); the log, or the object without one, by default. */
+  initialView?: "events";
+  /**
+   * The resource is gone (its commit no longer has it): only its events, kept by the cluster for a while and by the
+   * cache; no log, object or console page.
+   */
+  eventsOnly?: boolean;
+  /** The warnings codepulse kept about the resource: the events view adds the ones the cluster no longer has. */
+  savedWarnings?: () => readonly OpenShiftWarning[];
 }
 
 type ViewMode = "log" | "json" | "events";
+
+/** A build only the cache has, whose log nobody opened while it existed: codepulse never got it. */
+export const OPENSHIFT_NO_SAVED_LOG = "No saved log. OpenShift pruned the build before its log was opened.";
 
 function resourceHasLog(resource: OpenShiftResource): boolean {
   return resource.kind === "Build" || resource.kind === "Pod";
@@ -36,7 +50,17 @@ function resourceHasLog(resource: OpenShiftResource): boolean {
 export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourceDialogProps>) {
   /** The browser and the environment, through the app's system port. */
   const system = useSystem();
-  const [viewMode, setViewMode] = createSignal<ViewMode>(resourceHasLog(props.resource) ? "log" : "json");
+  const [viewMode, setViewMode] = createSignal<ViewMode>(
+    untrack(() =>
+      (props.initialView === "events" || props.eventsOnly) &&
+      props.loadEvents &&
+      OPENSHIFT_EVENT_KINDS.has(props.resource.kind)
+        ? "events"
+        : resourceHasLog(props.resource)
+          ? "log"
+          : "json",
+    ),
+  );
   const [logText, setLogText] = createSignal<string | null>(null);
   const [logError, setLogError] = createSignal<string | null>(null);
   const [logLoading, setLogLoading] = createSignal(false);
@@ -50,12 +74,14 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
   const [events, setEvents] = createSignal<OpenShiftEvent[] | null>(null);
   const [eventsError, setEventsError] = createSignal<string | null>(null);
   const [eventsLoading, setEventsLoading] = createSignal(false);
-  const canLog = () => resourceHasLog(props.resource) && !!props.loadLog;
+  const canLog = () => !props.eventsOnly && resourceHasLog(props.resource) && !!props.loadLog;
+  /** Its object: what the events view's status comes from, and the JSON view. */
+  const canObject = () => !props.eventsOnly && !!props.loadObject;
   const canEvents = () => !!props.loadEvents && OPENSHIFT_EVENT_KINDS.has(props.resource.kind);
   /** The views `c` cycles through, in order: log, object, events. */
   const viewModes = createMemo((): ViewMode[] => [
     ...(canLog() ? (["log"] as const) : []),
-    "json",
+    ...(canObject() || !canEvents() ? (["json"] as const) : []),
     ...(canEvents() ? (["events"] as const) : []),
   ]);
 
@@ -94,7 +120,7 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
   };
 
   const loadObject = async (force = false) => {
-    if (!props.loadObject) return;
+    if (!props.loadObject || !canObject()) return;
     setObjectLoading(true);
     setObjectError(null);
     try {
@@ -121,7 +147,7 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
       // The events came when the dialog opened (for the title's count); the status above them is in the object.
       untrack(() => {
         if (events() === null && !eventsLoading() && !eventsError()) void loadEvents();
-        if (objectText() === null && !objectLoading()) void loadObject();
+        if (objectText() === null && !objectLoading() && canObject()) void loadObject();
       });
       return;
     }
@@ -154,38 +180,63 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
     void loadLog(false);
   });
 
-  // Events load as the dialog opens, so the title can say there are warnings before you switch to them.
+  // Events load as the dialog opens, so the title can say there are warnings before you switch to them. Opened on the
+  // events view, that view's effect asked already.
   createEffect(() => {
     props.resource.id;
-    if (canEvents()) untrack(() => void loadEvents());
+    if (canEvents())
+      untrack(() => {
+        if (!eventsLoading()) void loadEvents();
+      });
   });
 
   const statusLines = createMemo(() => formatOpenShiftStatus(props.resource.kind, objectValue()));
   /**
-   * What the status says is wrong, then the events. With a status to show, events that failed to load or are gone
-   * become a muted line below it instead of replacing the view.
+   * The kept warnings the cluster's events no longer have: once the events loaded, so none shows twice; or, when they
+   * failed, every kept one, without saying the cluster no longer has them.
    */
+  const cachedLines = createMemo(() =>
+    events() === null && !eventsError()
+      ? []
+      : formatCachedWarnings(props.savedWarnings?.() ?? [], eventsError() ? null : (events() ?? [])),
+  );
+  /** The view has more than the live events: with them failed or gone, a muted line says so instead of replacing it. */
+  const hasMoreThanEvents = () => statusLines().length > 0 || cachedLines().length > 0;
+  /** What the status says is wrong, then the events, then the cached warnings. */
   const eventLines = createMemo((): OpenShiftEventLine[] => {
     const list = formatOpenShiftEvents(events() ?? []);
     const status = statusLines();
-    if (status.length === 0) return list;
+    if (!hasMoreThanEvents()) return list;
     const error = eventsError();
-    const below: OpenShiftEventLine[] = error
+    const live: OpenShiftEventLine[] = error
       ? [{ text: error, kind: "header" }]
       : (events() ?? []).length === 0
         ? [{ text: OPENSHIFT_NO_EVENTS, kind: "header" }]
         : list;
-    return [...status, { text: "", kind: "normal" }, ...below];
+    return [
+      ...(status.length > 0 ? [...status, { text: "", kind: "normal" as const }] : []),
+      ...live,
+      ...cachedLines(),
+    ];
   });
-  const warningCount = () => (events() ?? []).filter(event => event.type === "Warning").length;
-  /** Events show warnings in the warning color and the header muted; log and object lines are plain. */
+  /** The warnings the events view shows: the cluster's, and the kept ones it no longer lists. */
+  const warningCount = () => {
+    const live = events() ?? [];
+    const listed = new Set(live.flatMap(event => (event.id ? [event.id] : [])));
+    const kept = (props.savedWarnings?.() ?? []).filter(warning => !listed.has(warning.id)).length;
+    return live.filter(event => event.type === "Warning").length + kept;
+  };
+  /**
+   * Events: what the status says is wrong in red (why the resource is ✗), warning events in the warning color, the
+   * headers muted. Kubernetes has no error events: red comes only from the status. Log and object lines are plain.
+   */
   const lines = createMemo((): LogViewerLine[] => {
     const mode = viewMode();
     if (mode === "events")
       return eventLines().map((line, index) => ({
         text: line.text,
         lineNo: index + 1,
-        kind: line.kind === "warning" ? "warning" : line.kind === "header" ? "muted" : "normal",
+        kind: line.kind === "header" ? "muted" : line.kind,
       }));
     const text = mode === "log" ? stripTerminalControls(logText() ?? "") : (objectText() ?? "");
     return text.split("\n").map((line, index) => ({ text: line, lineNo: index + 1 }));
@@ -196,12 +247,13 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
       if (logLoading()) return { kind: "loading", text: BUSY.fetchingLog };
       const error = logError();
       if (error) return { kind: "error", title: "Failed to load log", message: error };
-      if (!logText()?.trim()) return { kind: "empty", text: "No log output." };
+      if (!logText()?.trim())
+        return { kind: "empty", text: props.resource.cacheOnly ? OPENSHIFT_NO_SAVED_LOG : "No log output." };
       return null;
     }
     if (viewMode() === "events") {
       if (eventsLoading() || objectLoading()) return { kind: "loading", text: BUSY.fetchingEvents };
-      if (statusLines().length > 0) return null;
+      if (hasMoreThanEvents()) return null;
       const error = eventsError();
       if (error) return { kind: "error", title: "Failed to load events", message: error };
       if ((events() ?? []).length === 0) return { kind: "empty", text: OPENSHIFT_NO_EVENTS };
@@ -214,12 +266,11 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
   };
 
   /** `r` refreshes what is on screen: the object in JSON view, the log (restarting a follow) in log view. */
-  const canRefresh = () =>
-    viewMode() === "json" ? !!props.loadObject : viewMode() === "events" ? canEvents() : canLog();
+  const canRefresh = () => (viewMode() === "json" ? canObject() : viewMode() === "events" ? canEvents() : canLog());
   const refresh = () => {
     if (viewMode() === "events") {
       void loadEvents();
-      if (props.loadObject) void loadObject(true);
+      if (canObject()) void loadObject(true);
       return;
     }
     if (viewMode() === "json") {
@@ -238,7 +289,9 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
   };
 
   const consolePage = () =>
-    openShiftConsoleUrl(props.consoleUrl ?? "", { namespace: props.resource.namespace, resource: props.resource });
+    props.eventsOnly
+      ? null
+      : openShiftConsoleUrl(props.consoleUrl ?? "", { namespace: props.resource.namespace, resource: props.resource });
   const openConsole = () => system.openUrl(consolePage() ?? undefined);
 
   return (

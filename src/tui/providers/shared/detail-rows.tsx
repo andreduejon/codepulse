@@ -34,7 +34,12 @@ export function useDetailRowMouse(opts: {
   });
   const hoverBg = (key: string) =>
     opts.mouseEnabled() && hoveredKey() === key && !opts.inert?.(key) ? t().backgroundElement : undefined;
-  return { mouseRow, hoverBg, clearHover: () => setHoveredKey(null) };
+  return {
+    mouseRow,
+    hoverBg,
+    hovered: () => (opts.mouseEnabled() ? hoveredKey() : null),
+    clearHover: () => setHoveredKey(null),
+  };
 }
 
 export type DetailRowMouse = ReturnType<typeof useDetailRowMouse>;

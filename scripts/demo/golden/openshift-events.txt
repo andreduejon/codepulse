@@ -1,0 +1,186 @@
+=== shot 1: tab (200x60) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                        Resources      Events                   Resources            Events             Info
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+    █                           bf08113   dev   origin/dev   shop-dev  feat(api): export request metrics     2   2          2                 Reload commit                                       live
+    │                                                                                                                                         total events                                          21
+    █                           e6209dd  feat(api): add a health endpoint                                   ·······        ·······            ├─ ▾ shop-dev                                          5
+    │                                                                                                                                         │  ├─ ▾ DockerBuildFailed                              1
+    █                           3447db9   v0.42.0   main   origin/…   shop-pr…   +2  docs: rewrite the RE…   5             ·······            │  │  └─ shop-api-41                              Failed
+    │                                                                                                                                         │  ├─ ▾ Error                                          1
+    │ █                         6adc455   feature/payments-r…   origin/feature/pay…  wip(payments): retry…  ·······        ·······            │  │  └─ shop-api-41-build            ended docker-build
+    │ │                                                                                                                                       │  ├─ ▾ BuildFailed                                    1
+    █─╯                         64ddc8a   shop-test  feat(payments): retry failed payments with exponentia   5   1   3      8   8   5         │  │  └─ shop-api-41                              2h ago
+    │                                                                                                                                         │  ├─ ▾ FailedMount                                    1
+    █                           917f7b3  perf(cart): cache price lookups                                    ·······        ·······            │  │  └─ shop-api-41-build                        2h ago
+    │                                                                                                                                         │  └─ ▾ BuildStarted                                   1
+    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      ·······        ·······            │     └─ shop-api-41                              2h ago
+    │ │                                                                                                                                       └─ ▾ shop-test                                        16
+    │ █                         0166f71  feat(i18n): add French                                             ·······        ·······               ├─ ▾ MinimumReplicasUnavailable                     1
+    │ │                                                                                                                                          │  └─ shop-api                        Available False
+    │ █─╮                       5245790  Merge branch 'main' into feature/i18n                              ·······        ·······               ├─ ▾ ProgressDeadlineExceeded                       1
+    │ │ │                                                                                                                                        │  └─ shop-api                      Progressing False
+    │ █ │                       484821c  feat(i18n): add German                                             ·······        ·······               ├─ ▾ CrashLoopBackOff                               1
+    │ │ │                                                                                                                                        │  └─ shop-api-7d9f8-x2k4q                    waiting
+    │ █ │                       3ad11a2  feat(i18n): extract the checkout strings                           ·······        ·······               ├─ ▾ Error                                          1
+    │ │ │                                                                                                                                        │  └─ shop-api-7d9f8-x2k4q                   last run
+    █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                     ·······        ·······               ├─ ▾ OOMKilled                                      1
+    │ │ │ │                                                                                                                                      │  └─ shop-api-7d9f8-oom7k                      ended
+    │ │ │ █                     9d1b361  fix(search): ignore accents                                        ·······        ·······               ├─ ▾ Evicted                                        1
+    │ │ │ │                                                                                                                                      │  └─ shop-api-7d9f8-ev1ct                     Failed
+    │ │ │ █                     cce93f9  feat(search): search as you type                                   ·······        ·······               ├─ ▾ BackOff                                        2
+    │ │ │ │                                                                                                                                      │  ├─ shop-api-7d9f8-x2k4q                   just now
+    │ │ │ █─╮                   ae57e03  Merge branch 'main' into feature/search                            ·······        ·······               │  └─ shop-cache-0                            25m ago
+    │ │ │ │ │                                                                                                                                    ├─ ▾ Unhealthy                                      1
+    │ │ │ █ │                   a89a18f  feat(search): highlight matching words                             ·······        ·······               │  └─ shop-api-7d9f8-x2k4q                     1m ago
+    │ │ │ │ │                                                                                                                                    ├─ ▾ OOMKilling                                     1
+    │ │ │ █ │                   52defc5  feat(search): rank results by popularity                           ·······        ·······               │  └─ shop-api-7d9f8-oom7k                    18m ago
+    │ │ │ │ │                                                                                                                                    ├─ ▾ FailedCreate                                   1
+    │ │ │ █ │                   9cc5545  feat(search): index product names                                  ·······        ·······               │  └─ shop-api-7d9f8                          30m ago
+    │ │ │ │ │                                                                                                                                    ├─ ▾ ProgressDeadlineExceeded                       1
+    █─┼─┼─┼─┼─╮                 179f8b7  Merge pull request #20 from demo/feature/a11y                      ·······        ·······               │  └─ shop-api                                40m ago
+    │ │ │ │ │ │                                                                                                                                  ├─ ▾ Pulled                                         1
+    │ │ │ │ │ █                 cac0f32  fix(a11y): announce cart updates                                   ·······        ·······               │  └─ shop-api-7d9f8-x2k4q                     2m ago
+    │ │ │ │ │ │                                                                                                                                  ├─ ▾ Started                                        2
+    │ │ │ │ │ █                 ef3bff7  fix(a11y): label the cart buttons                                  ·······        ·······               │  ├─ shop-api-7d9f8-x2k4q                     2m ago
+    │ │ │ │ │ │                                                                                                                                  │  └─ shop-api-7d9f8-oom7k                    20m ago
+    ├─┼─╯ │ │ │                                                                                                                                  └─ ▾ Scheduled                                      1
+    █─┼─╮ │ │ │                 0d02d96  Merge pull request #22 from demo/chore/eslint-9                    ·······        ·······                  └─ shop-api-7d9f8-x2k4q                    44m ago
+    │ │ │ │ │ │
+    │ │ █ │ │ │                 337db73  chore(lint): move to ESLint 9                                      ·······        ·······
+    │ │ │ │ │ │
+    █─┼─┼─┼─┼─┼─╮               bd35bdd  Merge pull request #21 from demo/bugfix/cart-badge                 ·······        ·······
+
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                           normal   search   path   ancestry
+  │
+  │   customer-notification-service   shop   shop-web                                                                 main   86 commits       │
+  │                                                                                                                                           │     No permission to list events in shop-prod   ✕
+                                                                                                                                              │     The token needs list on events.
+                                                                        tab Snyk · enter reload · esc back · ←/→ switch tab · ↑/↓ navigate    │
+
+
+=== shot 2: failing-pod (200x60) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                        Resources      Events                   Resources            Events             Info
+  ──────────────────                                                                                                                                                                ──────────────────
+    █                    OpenShift · Pod · shop-test · shop-api-7d9f8-x2k4q · events · 2 warnings                                                                     esc close                   live
+    │                                                                                                                                                                                               21
+    █                     1  STATUS       REASON                        MESSAGE                                                                                                                      5
+    │                     2  waiting      CrashLoopBackOff              back-off 5m0s restarting failed container                                                                                    1
+    █                     3  last run     Error · exit 1 · 14 restarts                                                                                                                          Failed
+    │                     4  Ready False  ContainersNotReady            containers with unready status: [api]                                                                                        1
+    │ █                   5                                                                                                                                                         ended docker-build
+    │ │                   6  LAST SEEN  TYPE     REASON     COUNT  MESSAGE                                                                                                                           1
+    █─╯                   7  just now   Warning  BackOff       61  Back-off restarting failed container api in pod shop-api-7d9f8-x2k4q                                                         2h ago
+    │                     8  1m ago     Warning  Unhealthy     42  Readiness probe failed: HTTP probe failed with statuscode: 503 (GET http://10.128.2.14:8080/health/ready)                         1
+    █                     9  2m ago     Normal   Pulled        15  Container image "shop-api@sha256:64dd…" already present on machine                                                           2h ago
+    │                    10  2m ago     Normal   Started       15  Started container api                                                                                                             1
+    █─╮                  11  44m ago    Normal   Scheduled      1  Successfully assigned shop-test/shop-api-7d9f8-x2k4q to worker-2                                                             2h ago
+    │ │                                                                                                                                                                                             16
+    │ █                                                                                                                                                                                              1
+    │ │                                                                                                                                                                                Available False
+    │ █─╮                                                                                                                                                                                            1
+    │ │ │                                                                                                                                                                            Progressing False
+    │ █ │                                                                                                                                                                                            1
+    │ │ │                                                                                                                                                                                      waiting
+    │ █ │                                                                                                                                                                                            1
+    │ │ │                                                                                                                                                                                     last run
+    █─┼─┼─╮                                                                                                                                                                                          1
+    │ │ │ │                                                                                                                                                                                      ended
+    │ │ │ █                                                                                                                                                                                          1
+    │ │ │ │                                                                                                                                                                                     Failed
+    │ │ │ █                                                                                                                                                                                          2
+    │ │ │ │                                                                                                                                                                                   just now
+    │ │ │ █─╮                                                                                                                                                                                  25m ago
+    │ │ │ │ │                                                                                                                                                                                        1
+    │ │ │ █ │                                                                                                                                                                                   1m ago
+    │ │ │ │ │                                                                                                                                                                                        1
+    │ │ │ █ │                                                                                                                                                                                  18m ago
+    │ │ │ │ │                                                                                                                                                                                        1
+    │ │ │ █ │                                                                                                                                                                                  30m ago
+    │ │ │ │ │                                                                                                                                                                                        1
+    █─┼─┼─┼─┼─╮                                                                                                                                                                                40m ago
+    │ │ │ │ │ │                                                                                                                                                                                      1
+    │ │ │ │ │ █                                                                                                                                                                                 2m ago
+    │ │ │ │ │ │                                                                                                                                                                                      2
+    │ │ │ │ │ █                                                                                                                                                                                 2m ago
+    │ │ │ │ │ │                                                                                                                                                                                20m ago
+    ├─┼─╯ │ │ │                                                                                                                                                                                      1
+    █─┼─╮ │ │ │                                                                                                                                                                                44m ago
+    │ │ │ │ │ │
+    │ │ █ │ │ │
+    │ │ │ │ │ │
+    █─┼─┼─┼─┼─┼─╮
+                                                                                                                                / search · c view · w wrap · r refresh · o open
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                           normal   search   path   ancestry
+  │
+  │   customer-notification-service   shop   shop-web                                                                 main   86 commits       │
+  │                                                                                                                                           │     No permission to list events in shop-prod   ✕
+                                                                                                                                              │     The token needs list on events.
+                                                               tab Snyk · enter events · o open · esc back · ←/→ switch tab · ↑/↓ navigate    │
+
+
+=== shot 3: build-pod (200x60) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                        Resources      Events                   Resources            Events             Info
+  ──────────────────                                                                                                                                                                ──────────────────
+    █                    OpenShift · Pod · shop-dev · shop-api-41-build · events · 1 warning                                                                          esc close                   live
+    │                                                                                                                                                                                               21
+    █                    1  STATUS                   REASON              MESSAGE                                                                                                                     5
+    │                    2  ended git-clone          Completed · exit 0                                                                                                                              1
+    █                    3  ended manage-dockerfile  Completed · exit 0                                                                                                                         Failed
+    │                    4  ended docker-build       Error · exit 1      error: build error: step 7/9 failed                                                                                         1
+    │ █                  5                                                                                                                                                          ended docker-build
+    │ │                  6  LAST SEEN  TYPE     REASON       COUNT  MESSAGE                                                                                                                          1
+    █─╯                  7  2h ago     Warning  FailedMount      2  MountVolume.SetUp failed for volume "build-ca-bundles" : configmap "shop-api-41-ca" not found                               2h ago
+    │                                                                                                                                                                                                1
+    █                                                                                                                                                                                           2h ago
+    │                                                                                                                                                                                                1
+    █─╮                                                                                                                                                                                         2h ago
+    │ │                                                                                                                                                                                             16
+    │ █                                                                                                                                                                                              1
+    │ │                                                                                                                                                                                Available False
+    │ █─╮                                                                                                                                                                                            1
+    │ │ │                                                                                                                                                                            Progressing False
+    │ █ │                                                                                                                                                                                            1
+    │ │ │                                                                                                                                                                                      waiting
+    │ █ │                                                                                                                                                                                            1
+    │ │ │                                                                                                                                                                                     last run
+    █─┼─┼─╮                                                                                                                                                                                          1
+    │ │ │ │                                                                                                                                                                                      ended
+    │ │ │ █                                                                                                                                                                                          1
+    │ │ │ │                                                                                                                                                                                     Failed
+    │ │ │ █                                                                                                                                                                                          2
+    │ │ │ │                                                                                                                                                                                   just now
+    │ │ │ █─╮                                                                                                                                                                                  25m ago
+    │ │ │ │ │                                                                                                                                                                                        1
+    │ │ │ █ │                                                                                                                                                                                   1m ago
+    │ │ │ │ │                                                                                                                                                                                        1
+    │ │ │ █ │                                                                                                                                                                                  18m ago
+    │ │ │ │ │                                                                                                                                                                                        1
+    │ │ │ █ │                                                                                                                                                                                  30m ago
+    │ │ │ │ │                                                                                                                                                                                        1
+    █─┼─┼─┼─┼─╮                                                                                                                                                                                40m ago
+    │ │ │ │ │ │                                                                                                                                                                                      1
+    │ │ │ │ │ █                                                                                                                                                                                 2m ago
+    │ │ │ │ │ │                                                                                                                                                                                      2
+    │ │ │ │ │ █                                                                                                                                                                                 2m ago
+    │ │ │ │ │ │                                                                                                                                                                                20m ago
+    ├─┼─╯ │ │ │                                                                                                                                                                                      1
+    █─┼─╮ │ │ │                                                                                                                                                                                44m ago
+    │ │ │ │ │ │
+    │ │ █ │ │ │
+    │ │ │ │ │ │
+    █─┼─┼─┼─┼─┼─╮
+                                                                                                                                / search · c view · w wrap · r refresh · o open
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                           normal   search   path   ancestry
+  │
+  │   customer-notification-service   shop   shop-web                                                                 main   86 commits       │
+  │                                                                                                                                           │     No permission to list events in shop-prod   ✕
+                                                                                                                                              │     The token needs list on events.
+                                                               tab Snyk · enter events · o open · esc back · ←/→ switch tab · ↑/↓ navigate    │
+
+

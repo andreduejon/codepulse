@@ -7,13 +7,16 @@ import {
   buildOpenShiftNamespaceMarkers,
   commitLabelSelector,
   commitShaFromItem,
+  openShiftBadgeCounts,
   resourceFromWatchObject,
 } from "../../core/openshift/resources";
 import type { OpenShiftCommitData, OpenShiftResource } from "../../core/openshift/types";
+import { linkWarningsToCommits } from "../../core/openshift/warnings";
 import {
   fetchOpenShiftEvents,
   fetchOpenShiftInventory,
   fetchOpenShiftResources,
+  fetchOpenShiftWarnings,
   MAX_LIST_ITEMS,
   MAX_LIST_PAGES,
 } from "./api";
@@ -110,7 +113,8 @@ describe("fetchOpenShiftInventory", () => {
         ["Running", "running"],
         ["Failed", "fail"],
         ["Error", "fail"],
-        ["Cancelled", "fail"],
+        // Stopped, not failed: neutral, as GitHub's cancelled runs and Jenkins' aborted builds.
+        ["Cancelled", "cancelled"],
         ["mystery", "unknown"],
       ]);
       expect(ns?.imageStreamTags.map(resource => [resource.name, resource.status])).toEqual([
@@ -413,6 +417,89 @@ describe("fetchOpenShiftInventory", () => {
       },
     ]);
     expect(map.get(SHA)?.namespaces[0].pods.map(item => item.name)).toEqual(["app-1"]);
+  });
+
+  test("during a rollout an old pod stays with the commit its image is from, and so does its ReplicaSet's warning", () => {
+    const OLD = "a".repeat(40);
+    const NEW = "b".repeat(40);
+    const pod = (name: string, digest: string, owner: string): OpenShiftResource => ({
+      id: `Pod:ns:${name}`,
+      kind: "Pod",
+      name,
+      namespace: "ns",
+      status: "running",
+      imageRefs: [`app@sha256:${digest}`],
+      labels: { app: "svc" },
+      ownerReferences: [{ kind: "ReplicaSet", uid: owner }],
+    });
+    const tag = (sha: string, digest: string): OpenShiftResource => ({
+      id: `ImageStreamTag:ns:app:${sha.slice(0, 1)}`,
+      kind: "ImageStreamTag",
+      name: `app:${sha.slice(0, 1)}`,
+      namespace: "ns",
+      status: "pass",
+      imageRefs: [`sha256:${digest}`],
+      commitSha: sha,
+    });
+    const deployment: OpenShiftResource = {
+      id: "Deployment:ns:app",
+      uid: "deploy-uid",
+      kind: "Deployment",
+      name: "app",
+      namespace: "ns",
+      status: "running",
+      imageRefs: [],
+      commitSha: NEW,
+      // The selector is the same for every rollout: the old pods match it too.
+      podSelector: { app: "svc" },
+    };
+    const controllers = [
+      {
+        kind: "ReplicaSet" as const,
+        namespace: "ns",
+        uid: "old-rs",
+        createdAt: "2026-03-02T08:00:00Z",
+        ownerReferences: [{ kind: "Deployment", uid: "deploy-uid" }],
+      },
+      {
+        kind: "ReplicaSet" as const,
+        namespace: "ns",
+        uid: "new-rs",
+        createdAt: "2026-03-02T10:00:00Z",
+        ownerReferences: [{ kind: "Deployment", uid: "deploy-uid" }],
+      },
+    ];
+    const map = buildOpenShiftCommitMap(
+      [
+        tag(OLD, "aaa111"),
+        tag(NEW, "bbb222"),
+        deployment,
+        pod("app-old", "aaa111", "old-rs"),
+        pod("app-new", "bbb222", "new-rs"),
+      ],
+      controllers,
+    );
+    expect(map.get(OLD)?.namespaces[0]?.pods.map(item => item.name)).toEqual(["app-old"]);
+    expect(map.get(NEW)?.namespaces[0]?.pods.map(item => item.name)).toEqual(["app-new"]);
+    const linked = linkWarningsToCommits(
+      [
+        {
+          id: "event-old-rs",
+          namespace: "ns",
+          kind: "ReplicaSet",
+          name: "app-old",
+          uid: "old-rs",
+          reason: "FailedCreate",
+          message: "Error creating: pods is forbidden",
+          count: 1,
+          firstSeen: "2026-03-02T08:30:00Z",
+          lastSeen: "2026-03-02T08:30:00Z",
+        },
+      ],
+      map,
+      controllers,
+    );
+    expect([...linked.keys()]).toEqual([OLD]);
   });
 
   test("keeps every ImageStreamTag when they share an ImageStream uid", () => {
@@ -783,7 +870,7 @@ describe("buildOpenShiftGraphBadges", () => {
     return buildOpenShiftGraphBadges(data).get(SHA);
   };
 
-  test.each<[string, OpenShiftResource["status"][], OpenShiftResource["status"]]>([
+  test.each<[string, OpenShiftResource["status"][], "pass" | "fail" | "running" | "unknown"]>([
     ["fail when any matched resource fails", ["pass", "running", "fail"], "fail"],
     ["running when no resource fails and one is running", ["pass", "running"], "running"],
     ["unknown before pass", ["pass", "unknown"], "unknown"],
@@ -802,15 +889,67 @@ describe("buildOpenShiftGraphBadges", () => {
     expect(buildOpenShiftGraphBadges(data).has(SHA)).toBe(false);
   });
 
-  test("puts terminal Builds in cacheCounts and Pods in liveCounts", () => {
+  test("a cancelled Build is neutral: a grey chip, not a failure", () => {
+    const data = buildOpenShiftCommitMap([
+      { ...resource("build-1", "cancelled"), kind: "Build", commitSha: SHA },
+      { ...resource("build-2", "pass"), kind: "Build", commitSha: SHA },
+    ]);
+    const badge = buildOpenShiftGraphBadges(data).get(SHA);
+    expect(badge?.lanes?.live).toEqual({ passCount: 1, failCount: 0, runningCount: 0, unknownCount: 1 });
+    expect(badge?.badge).toBe("unknown");
+  });
+
+  test("Resources counts what the cluster lists now, finished builds too; what only the cache has apart", () => {
     const data = buildOpenShiftCommitMap([
       { ...resource("pod-1", "pass"), kind: "Pod", commitSha: SHA },
       { ...resource("build-1", "fail"), kind: "Build", commitSha: SHA },
       { ...resource("build-2", "running"), kind: "Build", commitSha: SHA },
+      { ...resource("build-0", "pass"), kind: "Build", commitSha: SHA, cacheOnly: true },
     ]);
     const badge = buildOpenShiftGraphBadges(data).get(SHA);
-    expect(badge?.lanes?.live).toEqual({ passCount: 1, failCount: 0, runningCount: 1, unknownCount: 0 });
-    expect(badge?.lanes?.cache).toEqual({ passCount: 0, failCount: 1, runningCount: 0, unknownCount: 0 });
+    expect(badge?.lanes?.live).toEqual({ passCount: 1, failCount: 1, runningCount: 1, unknownCount: 0 });
+    expect(openShiftBadgeCounts(badge).cached).toBe(1);
+  });
+
+  test("Events counts the warnings the cluster still reports; the rest apart, also when only they are left", () => {
+    const warning = {
+      id: "event-1",
+      namespace: "ns",
+      kind: "Pod",
+      name: "gone-pod",
+      reason: "BackOff",
+      message: "Back-off restarting failed container",
+      count: 3,
+      firstSeen: null,
+      lastSeen: null,
+    };
+    const withResources = buildOpenShiftCommitMap([{ ...resource("pod-1", "pass"), commitSha: SHA }]);
+    const quiet = buildOpenShiftGraphBadges(withResources).get(SHA);
+    expect(openShiftBadgeCounts(quiet).warnings).toBeUndefined();
+    expect(openShiftBadgeCounts(quiet).cachedEvents).toBeUndefined();
+    const commit = withResources.get(SHA) as OpenShiftCommitData;
+    const three = [warning, { ...warning, id: "event-2", count: 40 }, { ...warning, id: "event-3" }];
+    const cachedOnes = (_sha: string, entry: { id: string }) => entry.id === "event-3";
+    const warned = buildOpenShiftGraphBadges(new Map([[SHA, { ...commit, warnings: three }]]), cachedOnes).get(SHA);
+    expect(openShiftBadgeCounts(warned)).toMatchObject({ warnings: 2, cachedEvents: 1 });
+    // The pod is gone; its warnings stay with the commit, only in the cache.
+    const onlyWarnings = new Map([[SHA, { sha: SHA, namespaces: [], liveFetched: true, warnings: [warning] }]]);
+    const left = buildOpenShiftGraphBadges(onlyWarnings, () => true).get(SHA);
+    expect(left?.resourceCount).toBe(0);
+    expect(openShiftBadgeCounts(left)).toMatchObject({ cachedEvents: 1 });
+    // Normal events the cluster lists now: green while their resource is there; about a gone one, with the cached.
+    const normal = [
+      { ...warning, id: "pulled", reason: "Pulled" },
+      { ...warning, id: "started", reason: "Started" },
+      { ...warning, id: "killing", reason: "Killing" },
+    ];
+    const live = buildOpenShiftGraphBadges(
+      new Map([[SHA, { ...commit, normalEvents: normal }]]),
+      () => false,
+      (_sha, entry) => entry.id === "killing",
+    ).get(SHA);
+    expect(openShiftBadgeCounts(live)).toMatchObject({ normal: 2, cachedEvents: 1 });
+    expect(openShiftBadgeCounts(live).warnings).toBeUndefined();
   });
 });
 
@@ -1102,6 +1241,7 @@ describe("fetchOpenShiftEvents", () => {
         lastTimestamp: "2026-01-01T00:00:00Z",
       },
       {
+        metadata: { uid: "event-backoff" },
         type: "Warning",
         reason: "BackOff",
         message: "Back-off restarting",
@@ -1123,11 +1263,24 @@ describe("fetchOpenShiftEvents", () => {
           "involvedObject.kind=Pod,involvedObject.name=api-7f9c",
         )}`,
       );
+      // The uid: the resource dialog leaves out a cached warning the cluster still lists.
+      expect(events[0]?.id).toBe("event-backoff");
       expect(events.map(event => [event.reason, event.count, event.lastSeen])).toEqual([
         ["BackOff", 31, "2026-01-01T00:10:00Z"],
         ["Unhealthy", 6, "2026-01-01T00:05:00Z"],
         ["Scheduled", 1, "2026-01-01T00:00:00Z"],
       ]);
+    });
+  });
+
+  test("a resource with a uid asks for its own events: not those of one recreated under its name", async () => {
+    await withFetch(new Response(JSON.stringify({ items: [] }), { status: 200 }), async url => {
+      await fetchOpenShiftEvents("https://api.example.com:6443", "token", { ...pod, uid: "pod-uid" });
+      expect(url()).toBe(
+        `https://api.example.com:6443/api/v1/namespaces/dev/events?fieldSelector=${encodeURIComponent(
+          "involvedObject.kind=Pod,involvedObject.name=api-7f9c,involvedObject.uid=pod-uid",
+        )}`,
+      );
     });
   });
 
@@ -1137,6 +1290,121 @@ describe("fetchOpenShiftEvents", () => {
         "No permission to list events",
       );
     });
+  });
+});
+
+describe("fetchOpenShiftWarnings", () => {
+  const config = { serverUrl: "https://api.example.com:6443", namespaces: ["dev", "prod"], commitShaAnnotation: "x" };
+  const withFetch = async (answer: (url: URL) => Response, run: (urls: string[]) => Promise<void>) => {
+    const originalFetch = globalThis.fetch;
+    const urls: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      urls.push(String(input));
+      return answer(new URL(String(input)));
+    }) as typeof fetch;
+    try {
+      await run(urls);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  };
+
+  test("lists each namespace's warnings: what they are about, how often and when", async () => {
+    const items = [
+      {
+        metadata: { uid: "event-1", creationTimestamp: "2026-01-01T00:00:00Z" },
+        type: "Warning",
+        reason: "BackOff",
+        message: "Back-off restarting\n failed container",
+        count: 31,
+        firstTimestamp: "2026-01-01T00:01:00Z",
+        lastTimestamp: "2026-01-01T00:10:00Z",
+        involvedObject: { kind: "Pod", name: "api-7f9c", uid: "pod-uid", namespace: "dev" },
+      },
+      {
+        metadata: { uid: "event-2" },
+        type: "Warning",
+        reason: "FailedCreate",
+        note: "Error creating: pods is forbidden",
+        series: { count: 6, lastObservedTime: "2026-01-01T00:05:00Z" },
+        eventTime: "2026-01-01T00:02:00Z",
+        regarding: { kind: "ReplicaSet", name: "api-7f9c", uid: "rs-uid" },
+      },
+      {
+        metadata: { uid: "event-3" },
+        type: "Normal",
+        reason: "Pulled",
+        message: "Container image already present on machine",
+        count: 2,
+        lastTimestamp: "2026-01-01T00:09:00Z",
+        involvedObject: { kind: "Pod", name: "api-7f9c", uid: "pod-uid", namespace: "dev" },
+      },
+    ];
+    await withFetch(
+      url => new Response(JSON.stringify({ items: url.pathname.includes("/dev/") ? items : [] }), { status: 200 }),
+      async urls => {
+        const result = await fetchOpenShiftWarnings(config, "token");
+        expect(urls.map(url => decodeURIComponent(url))).toEqual([
+          "https://api.example.com:6443/api/v1/namespaces/dev/events",
+          "https://api.example.com:6443/api/v1/namespaces/prod/events",
+        ]);
+        expect(result.denied).toEqual([]);
+        // A Normal event is shown while the cluster lists it, apart from the warnings, which are kept.
+        expect(result.normal?.map(event => [event.id, event.reason, event.name])).toEqual([
+          ["event-3", "Pulled", "api-7f9c"],
+        ]);
+        expect(result.warnings).toEqual([
+          {
+            id: "event-1",
+            namespace: "dev",
+            kind: "Pod",
+            name: "api-7f9c",
+            uid: "pod-uid",
+            reason: "BackOff",
+            message: "Back-off restarting failed container",
+            count: 31,
+            firstSeen: "2026-01-01T00:01:00Z",
+            lastSeen: "2026-01-01T00:10:00Z",
+          },
+          {
+            id: "event-2",
+            namespace: "dev",
+            kind: "ReplicaSet",
+            name: "api-7f9c",
+            uid: "rs-uid",
+            reason: "FailedCreate",
+            message: "Error creating: pods is forbidden",
+            count: 6,
+            firstSeen: "2026-01-01T00:02:00Z",
+            lastSeen: "2026-01-01T00:05:00Z",
+          },
+        ]);
+      },
+    );
+  });
+
+  test("a namespace whose events the token may not list is named, the others still answer", async () => {
+    await withFetch(
+      url =>
+        url.pathname.includes("/prod/")
+          ? new Response("forbidden", { status: 403 })
+          : new Response(JSON.stringify({ items: [] }), { status: 200 }),
+      async () => {
+        const result = await fetchOpenShiftWarnings(config, "token");
+        expect(result).toEqual({ warnings: [], normal: [], denied: ["prod"], failed: [] });
+      },
+    );
+  });
+
+  test("an expired token stops at the first namespace", async () => {
+    await withFetch(
+      () => new Response("unauthorized", { status: 401 }),
+      async urls => {
+        const result = await fetchOpenShiftWarnings(config, "token");
+        expect(result.failure).toBe("auth");
+        expect(urls).toHaveLength(1);
+      },
+    );
   });
 });
 

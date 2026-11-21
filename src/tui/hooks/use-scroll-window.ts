@@ -15,8 +15,6 @@ export function useScrollWindow(opts: {
   heights: Accessor<readonly number[]>;
   /** At least the scrollbox's height; the terminal's height will do. */
   screenHeight: Accessor<number>;
-  /** False mounts every item, for items whose heights aren't known (wrapped text): no space above or below. */
-  windowed?: Accessor<boolean>;
 }) {
   const offsets = createMemo(() => itemOffsets(opts.heights()));
   const [top, setTop] = createSignal(0);
@@ -54,17 +52,9 @@ export function useScrollWindow(opts: {
     return true;
   }
 
-  const windowed = () => opts.windowed?.() ?? true;
-  const range = createMemo(
-    () =>
-      windowed()
-        ? visibleRange(offsets(), top(), opts.screenHeight(), OVERSCAN)
-        : { start: 0, end: offsets().length - 1 },
-    undefined,
-    {
-      equals: (a, b) => a.start === b.start && a.end === b.end,
-    },
-  );
+  const range = createMemo(() => visibleRange(offsets(), top(), opts.screenHeight(), OVERSCAN), undefined, {
+    equals: (a, b) => a.start === b.start && a.end === b.end,
+  });
 
   return {
     /** The scrollbox to follow (its ref). */
@@ -85,11 +75,11 @@ export function useScrollWindow(opts: {
     },
     /**
      * Scrolls an item into view with `padding` lines around it, now or once the layout holds the items as they are
-     * (they just changed). Only while windowed: false otherwise, and for an item that isn't there.
+     * (they just changed). False for an item that isn't there.
      */
     scrollIntoView: (index: number, padding = 1): boolean => {
       // Untracked: an effect that scrolls to a row must not run again for every change of the list.
-      if (!untrack(windowed) || index < 0 || index >= untrack(offsets).length - 1) return false;
+      if (index < 0 || index >= untrack(offsets).length - 1) return false;
       pending = null;
       if (apply(index, padding)) return true;
       pending = { index, padding, frames: 10 };

@@ -1,5 +1,7 @@
+import { isStatusProblem } from "../../../core/openshift/failures";
 import { openShiftStatusRows } from "../../../core/openshift/resources";
 import type { OpenShiftEvent, OpenShiftResourceKind } from "../../../core/openshift/types";
+import type { OpenShiftWarning } from "../../../core/openshift/warnings";
 import { formatRelativeDate } from "../../utils/date";
 
 /** Kinds whose events say something about a failure. An ImageStreamTag has hardly any. */
@@ -8,13 +10,16 @@ export const OPENSHIFT_EVENT_KINDS: ReadonlySet<OpenShiftResourceKind> = new Set
   "Build",
   "Deployment",
   "DeploymentConfig",
+  "ReplicaSet",
+  "ReplicationController",
 ]);
 
 export const OPENSHIFT_NO_EVENTS = "No recent events. OpenShift keeps them for 3 hours by default.";
 
 export interface OpenShiftEventLine {
   text: string;
-  kind: "header" | "warning" | "normal";
+  /** `error`: what the status says is wrong (why the resource is ✗); `warning`: a Warning event. */
+  kind: "header" | "error" | "warning" | "normal";
 }
 
 /** The events view: a header and one aligned row per event, `LAST SEEN  TYPE  REASON  COUNT  MESSAGE`. */
@@ -54,6 +59,38 @@ export function formatOpenShiftEvents(events: readonly OpenShiftEvent[]): OpenSh
   ];
 }
 
+export const OPENSHIFT_CACHED_WARNINGS = "Cached (no longer in the cluster)";
+/** The kept warnings when the cluster's events did not load: nothing says whether it still has them. */
+export const OPENSHIFT_SAVED_WARNINGS = "Saved warnings";
+
+/**
+ * Below the events: the warnings codepulse kept that the cluster's events no longer have (OpenShift deleted them), in
+ * the same columns, newest first; `live` null when the events failed to load: every kept one, without that claim.
+ * Nothing when there are none.
+ */
+export function formatCachedWarnings(
+  saved: readonly OpenShiftWarning[],
+  live: readonly OpenShiftEvent[] | null,
+): OpenShiftEventLine[] {
+  const listed = new Set((live ?? []).flatMap(event => (event.id ? [event.id] : [])));
+  const cached = saved
+    .filter(warning => !listed.has(warning.id))
+    .sort((a, b) => (b.lastSeen ?? "").localeCompare(a.lastSeen ?? ""));
+  if (cached.length === 0) return [];
+  const events = cached.map(warning => ({
+    type: "Warning",
+    reason: warning.reason,
+    message: warning.message,
+    count: warning.count,
+    lastSeen: warning.lastSeen,
+  }));
+  return [
+    { text: "", kind: "normal" },
+    { text: live ? OPENSHIFT_CACHED_WARNINGS : OPENSHIFT_SAVED_WARNINGS, kind: "header" },
+    ...formatOpenShiftEvents(events),
+  ];
+}
+
 /**
  * Above the events: what the resource's status says is wrong, a header and one aligned row per problem,
  * `STATUS  REASON  MESSAGE`. Nothing when it is fine (or its object is not loaded).
@@ -67,6 +104,10 @@ export function formatOpenShiftStatus(kind: OpenShiftResourceKind, object: unkno
     `${status.padEnd(statusWidth)}  ${reason.padEnd(reasonWidth)}  ${message}`.trimEnd();
   return [
     { text: line("STATUS", "REASON", "MESSAGE"), kind: "header" },
-    ...rows.map(row => ({ text: line(row.status, row.reason, row.message), kind: "warning" as const })),
+    // A step that ended well (a build pod's git clone) is context, not why it failed.
+    ...rows.map(row => ({
+      text: line(row.status, row.reason, row.message),
+      kind: isStatusProblem(row) ? ("error" as const) : ("normal" as const),
+    })),
   ];
 }

@@ -11,6 +11,8 @@ export function buildDiffTarget(
   filePath: string,
   source: DiffSource,
   files: FileChange[],
+  /** A `range`'s base. */
+  base?: string,
 ): DiffTarget {
   const fileList = files.map(f => f.path);
   const fileIndex = Math.max(0, fileList.indexOf(filePath));
@@ -21,5 +23,6 @@ export function buildDiffTarget(
     status: files[fileIndex]?.status,
     fileList,
     fileIndex,
+    ...(base ? { base } : {}),
   };
 }

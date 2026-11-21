@@ -27,6 +27,8 @@ export function useGraphController(opts: {
   navRef: DetailNavRef;
   /** The shown provider's data for a commit: which detail tabs have something. */
   commitData: (sha: string) => unknown;
+  /** A provider tab's label for a commit: null hides a tab only some commits have (GitHub's Pull requests). */
+  tabLabel: (tab: string, sha: string) => string | null | undefined;
   /** Before a row is selected with the mouse: the ancestry follows it, the command bar is left. */
   beforeSelect: (hash: string) => void;
 }) {
@@ -59,6 +61,7 @@ export function useGraphController(opts: {
     getIsJumpNavigation: () => isJumpNavigation,
     detailNavRef: navRef,
     getCommitData: opts.commitData,
+    tabLabel: opts.tabLabel,
     getProviderLoading: () => state.providerStatus().kind === "loading",
   });
 

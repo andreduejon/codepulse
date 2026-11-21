@@ -1,12 +1,14 @@
+import { openShiftBadgeCounts } from "../../../core/openshift/resources";
 import type { OpenShiftStatus } from "../../../core/openshift/types";
-import type { GraphBadge, GraphStatusCounts } from "../../../core/provider-model";
+import type { GraphBadge } from "../../../core/provider-model";
+import { AUTHOR_COL_WIDTH, DATE_COL_WIDTH } from "../../constants";
 import { useAppState } from "../../context/state";
 import type { Theme } from "../../context/theme";
 import { useT } from "../../hooks/use-t";
-import { cachedWidths, chipColumnWidths } from "../graph-column-widths";
+import { cachedWidths, FIRST_COLUMN_PADDING } from "../graph-column-widths";
 import type { ProviderGraphColumns } from "../module";
 import { statusColor } from "../shared/status";
-import { StatusChips, statusCountChips } from "../shared/status-chips";
+import { chipsWidth, type StatusChip, StatusChips, statusCountChips } from "../shared/status-chips";
 
 /** Status colors are semantic tokens, not provider accent (OpenShift brand is red). */
 export function openShiftStatusColor(t: Theme, status: OpenShiftStatus): string {
@@ -17,26 +19,56 @@ export function lookupOpenShiftBadge(badges: ReadonlyMap<string, GraphBadge>, sh
   return badges.get(sha) ?? badges.get(sha.toLowerCase());
 }
 
-function countsForLane(badge: GraphBadge | undefined, lane: "live" | "cache"): GraphStatusCounts | undefined {
-  return badge?.lanes?.[lane];
+/** What only the cache has: muted, after the chips of what the cluster has now. */
+const cachedChip = (theme: Theme, count: number | undefined): StatusChip[] =>
+  count ? [{ text: String(count), fg: theme.foregroundMuted, bg: theme.backgroundElementActive }] : [];
+
+/** Resources: the status counts of what the cluster lists now, then how many only the cache has. */
+function resourceChips(theme: Theme, badge: GraphBadge | undefined): StatusChip[] {
+  return [...statusCountChips(theme, badge?.lanes?.live), ...cachedChip(theme, openShiftBadgeCounts(badge).cached)];
 }
 
-/** Live (author position) or Cache (date position) resource counts, in the shared chip style. */
-export function OpenShiftCountsColumn(
-  props: Readonly<{
-    badge: GraphBadge | undefined;
-    lane: "live" | "cache";
-    active: boolean;
-    dimmed: boolean;
-    width: number;
-  }>,
+/**
+ * Events: what the status of its failing resources says in the fail color, the warnings the cluster still reports in
+ * the warning color, the Normal events it lists now in the pass color, then how many only the cache has.
+ */
+function eventChips(theme: Theme, badge: GraphBadge | undefined): StatusChip[] {
+  const counts = eventCounts(badge);
+  const chip = (count: number | undefined, bg: string): StatusChip[] =>
+    count ? [{ text: String(count), fg: theme.background, bg }] : [];
+  return [
+    ...chip(counts.failures, statusColor(theme, "fail")),
+    ...chip(counts.warnings, theme.warning),
+    ...chip(counts.normal, statusColor(theme, "pass")),
+    ...cachedChip(theme, counts.cachedEvents),
+  ];
+}
+
+/** The chips' texts, for the columns' widths: the same as what is drawn, without a theme. */
+const resourceTexts = (badge: GraphBadge) => {
+  const live = badge.lanes?.live;
+  const counts = live ? [live.failCount, live.runningCount, live.unknownCount, live.passCount] : [];
+  return [...counts, openShiftBadgeCounts(badge).cached ?? 0].filter(count => count > 0).map(String);
+};
+/** The Events column's counts, in the order drawn. */
+function eventCounts(badge: GraphBadge | undefined) {
+  const { failures = 0, warnings = 0, normal = 0, cachedEvents = 0 } = openShiftBadgeCounts(badge);
+  return { failures, warnings, normal, cachedEvents };
+}
+
+const eventTexts = (badge: GraphBadge) =>
+  Object.values(eventCounts(badge))
+    .filter(count => count > 0)
+    .map(String);
+
+function OpenShiftChipsColumn(
+  props: Readonly<{ chips: StatusChip[]; active: boolean; dimmed: boolean; width: number; paddingRight: number }>,
 ) {
-  const t = useT();
   return (
     <StatusChips
-      chips={statusCountChips(t(), countsForLane(props.badge, props.lane))}
+      chips={props.chips}
       width={props.width}
-      paddingRight={props.lane === "live" ? 2 : 0}
+      paddingRight={props.paddingRight}
       active={props.active}
       dimmed={props.dimmed}
     />
@@ -50,50 +82,63 @@ export function OpenShiftColumnHeaders(props: Readonly<{ first: number; second: 
 
   return (
     <>
-      <box flexShrink={0} width={props.first} paddingRight={2}>
+      <box flexShrink={0} width={props.first} paddingRight={FIRST_COLUMN_PADDING}>
         <text wrapMode="none" truncate fg={color()}>
-          <strong>Live</strong>
+          <strong>Resources</strong>
         </text>
       </box>
       <box flexShrink={0} width={props.second}>
         <text wrapMode="none" truncate fg={color()}>
-          <strong>Cache</strong>
+          <strong>Events</strong>
         </text>
       </box>
     </>
   );
 }
 
-/** OpenShift's columns: what runs each commit now (Live) and what its cache saw (Cache), and its namespaces' names. */
+/**
+ * OpenShift's columns, named as its detail tabs: Resources (what the cluster has of the commit now, then muted what
+ * only the cache has) and Events (its failures, the warnings the cluster still reports, the Normal events it lists now, then muted
+ * the cached ones); and its
+ * namespaces' names.
+ */
 export const OPENSHIFT_GRAPH_COLUMNS: ProviderGraphColumns = {
-  widths: cachedWidths(badges =>
-    chipColumnWidths(
-      badges,
-      badge => badge.lanes?.live,
-      badge => badge.lanes?.cache,
-    ),
-  ),
+  widths: cachedWidths(badges => {
+    let first = 0;
+    let second = 0;
+    for (const badge of badges.values()) {
+      first = Math.max(first, chipsWidth(resourceTexts(badge)));
+      second = Math.max(second, chipsWidth(eventTexts(badge)));
+    }
+    return {
+      first: Math.max(AUTHOR_COL_WIDTH, first + FIRST_COLUMN_PADDING),
+      second: Math.max(DATE_COL_WIDTH, second),
+    };
+  }),
   Headers: OpenShiftColumnHeaders,
-  Cells: props => (
-    <>
-      <OpenShiftCountsColumn
-        badge={props.badge}
-        lane="live"
-        active={props.active}
-        dimmed={props.dimmed}
-        width={props.widths.first}
-      />
-      <OpenShiftCountsColumn
-        badge={props.badge}
-        lane="cache"
-        active={props.active}
-        dimmed={props.dimmed}
-        width={props.widths.second}
-      />
-    </>
-  ),
-  // By name only: whether it is ready, rolling out or failing shows in the Live counts and the details.
-  refs: badge => badge?.namespaces?.map(marker => marker.namespace) ?? [],
+  Cells: props => {
+    const t = useT();
+    return (
+      <>
+        <OpenShiftChipsColumn
+          chips={resourceChips(t(), props.badge)}
+          active={props.active}
+          dimmed={props.dimmed}
+          width={props.widths.first}
+          paddingRight={FIRST_COLUMN_PADDING}
+        />
+        <OpenShiftChipsColumn
+          chips={eventChips(t(), props.badge)}
+          active={props.active}
+          dimmed={props.dimmed}
+          width={props.widths.second}
+          paddingRight={0}
+        />
+      </>
+    );
+  },
+  // By name only: whether it is ready, rolling out or failing shows in the counts and the details.
+  refs: (_sha, badge) => badge?.namespaces?.map(marker => ({ name: marker.namespace })) ?? [],
   // Namespaces that run a commit the graph does not show (older than the loaded history, or filtered out), named at
   // the end of the graph since they have no row to carry the badge.
   unseen: (shown, badges) => {

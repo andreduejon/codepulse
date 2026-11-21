@@ -48,6 +48,11 @@ test("the known repositories carry their group and app name", () => {
   ]);
 });
 
+test("an empty group or app name removes it, so it stays gone after a reload", () => {
+  const next = withRepoSettings(document, "/repo/a", { group: "", appName: "" });
+  expect(knownReposIn(next, "file", [])).toEqual([{ path: "/repo/a" }, { path: "/repo/b" }]);
+});
+
 test("writing a repository's settings keeps its other fields and everything else in the document", () => {
   const next = withRepoSettings(document, "/repo/a", { pageSize: 100 });
   expect(next.other).toBe("kept");

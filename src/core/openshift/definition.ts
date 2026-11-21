@@ -13,7 +13,7 @@ import {
 import { definedFields, type SettingsReader, type SettingsSection } from "../settings/provider-section";
 import { OPENSHIFT_BANNER } from "./banner";
 import { openShiftEvents } from "./events";
-import { OPENSHIFT_ID } from "./id";
+import { OPENSHIFT_EVENTS_TAB, OPENSHIFT_ID } from "./id";
 import type { OpenShiftAdapters } from "./service";
 import { DEFAULT_OPENSHIFT_CONFIG } from "./types";
 import {
@@ -51,6 +51,7 @@ export const openShiftProvider: ProviderDefinition<OpenShiftAdapters, OpenShiftS
   displayName: "OpenShift",
   detailLabel: "Resources",
   category: "runtime",
+  moreTabs: [{ id: OPENSHIFT_EVENTS_TAB, label: "Events" }],
   messages: OPENSHIFT_BANNER,
   storedEvents: async (adapters, app) =>
     openShiftEvents(app, await adapters.cache(DEFAULT_PROVIDER_CACHE_LIMIT).peekAll(app)),

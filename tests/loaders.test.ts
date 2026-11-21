@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { createEffect, createRoot, createSignal, untrack } from "solid-js";
 import { gitCli } from "../src/adapters/git/git-cli";
 import { runGit } from "../src/adapters/git/repo";
+import { BANNER } from "../src/core/banner";
 import { isUncommittedHash } from "../src/core/git/types";
 import type { DetailNavRef } from "../src/tui/components/detail-types";
 import { createAppState } from "../src/tui/context/state";
@@ -16,7 +17,10 @@ const disposers: (() => void)[] = [];
 
 afterEach(async () => {
   for (const dispose of disposers.splice(0)) dispose();
-  await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })));
+  // Windows keeps a folder busy while a Git process of a load that just ended is still closing: retry a moment.
+  await Promise.all(
+    roots.splice(0).map(root => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })),
+  );
 });
 
 /** Temp repo on `main`; `commits` are subjects committed in order, each touching file.txt. */
@@ -37,12 +41,18 @@ async function makeRepo(commits: string[]) {
   return { root, git };
 }
 
-function mount(repoPath: string, maxCount: number, withDetail = false, getCommitData?: (sha: string) => unknown) {
+function mount(
+  repoPath: string,
+  maxCount: number,
+  withDetail = false,
+  getCommitData?: (sha: string) => unknown,
+  initialBranch?: string,
+) {
   return createRoot(dispose => {
     disposers.push(dispose);
     const { state, actions } = createAppState(maxCount, 0, 0);
     const [path, setPath] = createSignal(repoPath);
-    const loader = useDataLoader({ repoPath: path, git: gitCli(), state, actions });
+    const loader = useDataLoader({ repoPath: path, git: gitCli(), state, actions, initialBranch });
     if (withDetail) {
       useDetailLoader({
         repoPath: path,
@@ -93,6 +103,25 @@ test("pages through history to the end and keeps the cursor on the selected comm
   expect(state.commits()).toHaveLength(5);
   expect(state.fetching()).toBe(false);
   expect(state.fetchingHistory()).toBe(false);
+});
+
+test("a configured branch scopes the first page, the next pages and a refresh alike", async () => {
+  const { root, git } = await makeRepo(["c1", "c2", "c3"]);
+  await git("checkout", "-b", "side", "HEAD~2");
+  for (const subject of ["s1", "s2"]) {
+    await writeFile(join(root, "side.txt"), `${subject}\n`);
+    await git("add", ".");
+    await git("commit", "-m", subject);
+  }
+  await git("checkout", "main");
+  const { state, loader } = mount(root, 2, false, undefined, "side");
+  await until(() => !state.loading() && state.commits().length > 0, "first page");
+  expect(subjects(state.commits())).toEqual(["s2", "s1"]);
+  await loader.loadMoreData();
+  expect(subjects(state.commits())).toEqual(["s2", "s1", "c1"]);
+  await loader.loadData(undefined, undefined, true);
+  await until(() => !state.loading() && state.commits().length === 3, "refresh");
+  expect(subjects(state.commits())).toEqual(["s2", "s1", "c1"]);
 });
 
 test("switching repositories discards the previous repository's load", async () => {
@@ -369,4 +398,23 @@ test("a refresh shows the selected uncommitted row's new files, also while the w
   await loader.loadData(undefined, undefined, true, true);
   await until(() => (state.uncommittedDetail()?.untracked.length ?? 0) > 0, "the new file");
   expect(state.uncommittedDetail()?.untracked.map(file => file.path)).toEqual(["new.txt"]);
+});
+
+test("a working tree Git can't read shows the history and says so, instead of looking clean", async () => {
+  const { root } = await makeRepo(["c1"]);
+  await writeFile(join(root, "file.txt"), "changed\n");
+  // A broken index: git log still works, git status doesn't.
+  await writeFile(join(root, ".git", "index"), "not an index");
+  const { state, loader } = mount(root, 10);
+  await until(() => !state.loading() && state.commits().length > 0, "history");
+  expect(subjects(state.commits())).toContain("c1");
+  expect(state.error()).toBe(BANNER.git.statusFailed);
+  // Readable again: a quiet refresh with the same history clears it, and a broken one says so again.
+  await rm(join(root, ".git", "index"));
+  await runGit(root, ["reset", "-q"]);
+  await loader.loadData(undefined, undefined, true);
+  await until(() => state.error() === null, "the error cleared");
+  await writeFile(join(root, ".git", "index"), "not an index");
+  await loader.loadData(undefined, undefined, true);
+  await until(() => state.error() === BANNER.git.statusFailed, "the error again");
 });

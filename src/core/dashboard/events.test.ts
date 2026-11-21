@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { githubEvents } from "../github/events";
-import type { GitHubWorkflowRun } from "../github/types";
+import { githubEvents, githubPullEventKind, githubPullEvents } from "../github/events";
+import type { GitHubPullRequest, GitHubWorkflowRun } from "../github/types";
 import { jenkinsEvents } from "../jenkins/events";
 import type { JenkinsRun } from "../jenkins/types";
-import { openShiftEvents } from "../openshift/events";
+import { isOpenShiftWarningEvent, openShiftEvents } from "../openshift/events";
+import { warningTarget } from "../openshift/warnings";
 import { snykEvents } from "../snyk/events";
 import { type DashboardEvent, dashboardRows, gitEvents, keepUnchangedRows } from "./events";
 
@@ -89,6 +90,45 @@ describe("events", () => {
     ).toEqual([
       expect.objectContaining({ source: "openshift", status: "pass", text: "build shop-api-12 complete in shop-dev" }),
     ]);
+    // A cancelled build says so, in the neutral status.
+    expect(
+      openShiftEvents("/repo/shop", [
+        {
+          sha: SHA,
+          builds: [
+            {
+              id: "Build/shop-api-13",
+              name: "shop-api-13",
+              namespace: "shop-dev",
+              status: "cancelled",
+              imageRefs: [],
+              commitSha: SHA,
+              updatedAt: "2026-03-02T10:20:00Z",
+            },
+          ],
+        },
+      ]),
+    ).toEqual([expect.objectContaining({ status: "cancelled", text: "build shop-api-13 cancelled in shop-dev" })]);
+    // One cached as failed before cancelled was a status of its own: its saved object says it was cancelled.
+    expect(
+      openShiftEvents("/repo/shop", [
+        {
+          sha: SHA,
+          builds: [
+            {
+              id: "Build/shop-api-14",
+              name: "shop-api-14",
+              namespace: "shop-dev",
+              status: "fail",
+              imageRefs: [],
+              commitSha: SHA,
+              updatedAt: "2026-03-02T10:20:00Z",
+              object: { status: { phase: "Cancelled" } },
+            },
+          ],
+        },
+      ]),
+    ).toEqual([expect.objectContaining({ status: "cancelled", text: "build shop-api-14 cancelled in shop-dev" })]);
     // A finished build's own end time, also when the build carries no creation time.
     expect(
       openShiftEvents("/repo/shop", [
@@ -169,6 +209,95 @@ describe("events", () => {
   });
 });
 
+describe("OpenShift warnings", () => {
+  const warning = {
+    id: "event-backoff",
+    namespace: "shop-test",
+    kind: "Pod",
+    name: "shop-api-7d9f8-x2k4q",
+    uid: "pod-uid",
+    reason: "BackOff",
+    message: "Back-off restarting failed container api in pod shop-api-7d9f8-x2k4q",
+    count: 61,
+    firstSeen: "2026-03-02T09:00:00Z",
+    lastSeen: "2026-03-02T09:30:00Z",
+  };
+
+  test("a saved warning is one event at the time it was first seen, so repeating never moves it", () => {
+    const events = openShiftEvents("/repo/shop", [
+      { sha: SHA, builds: [], warnings: [warning, { ...warning, id: "event-once", reason: "OOMKilling", count: 1 }] },
+    ]);
+    expect(events.map(event => [event.text, event.time, event.sha])).toEqual([
+      ["BackOff · pod shop-api-7d9f8-x2k4q in shop-test · 61 times", at("2026-03-02T09:00:00Z"), SHA],
+      ["OOMKilling · pod shop-api-7d9f8-x2k4q in shop-test", at("2026-03-02T09:00:00Z"), SHA],
+    ]);
+    // A warning, not how something ended: neutral, never a failure. Its mark is OpenShift's own `!`.
+    expect(events[0]?.status).toBe("unknown");
+    expect(isOpenShiftWarningEvent(events[0] as DashboardEvent)).toBe(true);
+    expect(events[0]?.facts).toEqual([
+      { label: "Namespace", value: "shop-test" },
+      { label: "Resource", value: "Pod shop-api-7d9f8-x2k4q" },
+      { label: "Reason", value: "BackOff" },
+      { label: "Message", value: "Back-off restarting failed container api in pod shop-api-7d9f8-x2k4q" },
+      { label: "Times", value: "61" },
+      { label: "Repeated for", value: "30m 00s" },
+    ]);
+    // Its details open on the Events tab, marking its own row: its reason and the pod by uid.
+    expect([events[0]?.tab, events[0]?.entry]).toEqual(["openshift-events", warningTarget(warning)]);
+  });
+
+  test("one warning saved with two commits is one event; one without a time is left out", () => {
+    const events = openShiftEvents("/repo/shop", [
+      { sha: SHA, builds: [], warnings: [warning] },
+      {
+        sha: "b".repeat(40),
+        builds: [],
+        warnings: [warning, { ...warning, id: "no-time", firstSeen: null, lastSeen: null }],
+      },
+    ]);
+    expect(events.map(event => event.id)).toEqual([`/repo/shop:openshift:warning:shop-test/event-backoff`]);
+  });
+
+  test("of one warning saved with two commits, the newest copy shows, with the same commit whatever the order", () => {
+    const older = {
+      sha: "b".repeat(40),
+      builds: [],
+      warnings: [{ ...warning, count: 1, lastSeen: warning.firstSeen }],
+    };
+    const newer = { sha: SHA, builds: [], warnings: [warning] };
+    for (const entries of [
+      [older, newer],
+      [newer, older],
+    ]) {
+      const [event] = openShiftEvents("/repo/shop", entries);
+      expect([event?.text, event?.sha]).toEqual(["BackOff · pod shop-api-7d9f8-x2k4q in shop-test · 61 times", SHA]);
+    }
+    // The same copy in both: the same commit either way.
+    const twice = [newer, { ...newer, sha: "b".repeat(40) }];
+    expect(openShiftEvents("/repo/shop", twice)[0]?.sha).toBe(openShiftEvents("/repo/shop", twice.reverse())[0]?.sha);
+  });
+
+  test("a build's event is not a warning", () => {
+    const [build] = openShiftEvents("/repo/shop", [
+      {
+        sha: SHA,
+        builds: [
+          {
+            id: "Build/shop-api-13",
+            name: "shop-api-13",
+            namespace: "shop-dev",
+            status: "pass",
+            imageRefs: [],
+            commitSha: SHA,
+            updatedAt: "2026-03-02T10:20:00Z",
+          },
+        ],
+      },
+    ]);
+    expect(isOpenShiftWarningEvent(build as DashboardEvent)).toBe(false);
+  });
+});
+
 describe("event details", () => {
   test("each event carries what its side panel shows, and its page when it has one", () => {
     const [github] = githubEvents("/repo/shop", [
@@ -238,6 +367,20 @@ describe("dashboardRows", () => {
     sha: SHA,
   });
 
+  test("when daylight saving ends and the clock repeats an hour, the newer knot still comes first", () => {
+    // 01:45 summer time, then half an hour later 01:15 winter time: the newer one has the earlier local clock.
+    const older = { ...event("shop", 0), id: "older", time: at("2026-10-25T00:45:00Z") };
+    const newer = { ...event("shop", 0), id: "newer", time: at("2026-10-25T01:15:00Z") };
+    // 02:45 local again, an hour after "older": the same clock time, its own knot.
+    const newest = { ...event("shop", 0), id: "newest", time: at("2026-10-25T01:45:00Z") };
+    const summerUntil = at("2026-10-25T01:00:00Z");
+    const ordered = dashboardRows([older, newer, newest], {
+      knotMs: 30 * 60_000,
+      utcOffset: time => (time < summerUntil ? 2 : 1) * HOUR,
+    }).flatMap(row => (row.kind === "event" ? [row.event.id] : []));
+    expect(ordered).toEqual(["newest", "newer", "older"]);
+  });
+
   test("a knot holds one app's events within one knot, newest first, with a rope row between knots", () => {
     const rows = dashboardRows(
       [event("shop", 52), event("web", 48), event("shop", 41), event("shop", -40), event("web", 12)],
@@ -299,5 +442,51 @@ describe("keepUnchangedRows", () => {
     expect(after[2]).toBe(before[1]);
     // b is in the first knot now, not after a gap.
     expect(after[3]).not.toBe(before[3]);
+  });
+});
+
+describe("GitHub pull requests", () => {
+  const pr = (overrides: Partial<GitHubPullRequest> = {}): GitHubPullRequest => ({
+    number: 123,
+    state: "open",
+    title: "feat(payments): retry",
+    url: "https://github.com/o/r/pull/123",
+    draft: false,
+    author: "mei",
+    headSha: SHA,
+    headRef: "feature/retry",
+    baseRef: "main",
+    baseSha: "",
+    createdAt: "2026-03-01T09:00:00Z",
+    updatedAt: "2026-03-02T09:00:00Z",
+    closedAt: null,
+    ...overrides,
+  });
+
+  test("each is opened at its creation, and merged or closed at its end, on its branch's commit", () => {
+    const events = githubPullEvents("/repo/shop", [
+      pr(),
+      pr({ number: 118, state: "merged", closedAt: "2026-03-02T08:00:00Z" }),
+      pr({ number: 117, state: "closed", closedAt: "2026-03-02T07:00:00Z", createdAt: "" }),
+      pr({ number: 119, draft: true }),
+    ]);
+    expect(events.map(event => [event.text, event.time, event.status])).toEqual([
+      ["PR #123 opened · feat(payments): retry", at("2026-03-01T09:00:00Z"), "unknown"],
+      ["PR #118 opened · feat(payments): retry", at("2026-03-01T09:00:00Z"), "unknown"],
+      ["PR #118 merged · feat(payments): retry", at("2026-03-02T08:00:00Z"), "pass"],
+      // No creation time: only its end.
+      ["PR #117 closed · feat(payments): retry", at("2026-03-02T07:00:00Z"), "cancelled"],
+      // A draft's opening: not ready for review, its mark muted.
+      ["PR #119 opened · feat(payments): retry", at("2026-03-01T09:00:00Z"), "skipped"],
+    ]);
+    expect(events[2]).toMatchObject({
+      sha: SHA,
+      branch: "feature/retry",
+      url: "https://github.com/o/r/pull/123",
+      tab: "github-pulls",
+      entry: "118",
+    });
+    expect(events.map(githubPullEventKind)).toEqual(["opened", "opened", "merged", "closed", "opened"]);
+    expect(githubPullEventKind({ ...events[0], id: "/repo/shop:github-actions:7" } as DashboardEvent)).toBeNull();
   });
 });

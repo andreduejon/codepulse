@@ -48,6 +48,16 @@ export interface GitPort extends DashboardGit {
   ) => Promise<CommitDetail | null>;
   getUncommittedDetail: (repoPath: string, signal?: AbortSignal) => Promise<UncommittedDetail>;
   getStashFiles: (repoPath: string, stashHash: string, signal?: AbortSignal) => Promise<FileChange[]>;
+  /**
+   * What a branch changed since it left another, as a pull request shows it: the files between the commits' merge base
+   * and `head`, and that base. Null when Git hasn't both commits (not fetched) or they share no history.
+   */
+  getRangeFiles: (
+    repoPath: string,
+    base: string,
+    head: string,
+    signal?: AbortSignal,
+  ) => Promise<{ mergeBase: string; files: FileChange[] } | null>;
   /** The commits that touch a path. */
   getPathMatchingHashes: (
     repoPath: string,
@@ -61,6 +71,8 @@ export interface GitPort extends DashboardGit {
     filePath: string,
     source: DiffSource,
     signal?: AbortSignal,
+    /** A `range`'s base: `commitHash` against it. */
+    base?: string,
   ) => Promise<FileDiff>;
   getFileContent: (
     repoPath: string,
@@ -68,6 +80,8 @@ export interface GitPort extends DashboardGit {
     filePath: string,
     source: DiffSource,
     signal?: AbortSignal,
+    /** A `range`'s base: `commitHash` against it. */
+    base?: string,
   ) => Promise<FileContent>;
   getFileBlame: (
     repoPath: string,
@@ -75,8 +89,15 @@ export interface GitPort extends DashboardGit {
     filePath: string,
     source: DiffSource,
     signal?: AbortSignal,
+    /** A `range`'s base: `commitHash` against it. */
+    base?: string,
   ) => Promise<BlameLine[]>;
   fetchRemote: (repoPath: string) => Promise<{ ok: boolean; error?: string }>;
+  /**
+   * Fetches some refs of the remote only: a branch into the remote's branch, another ref (a host's own) as its commits.
+   * True when every valid one arrived.
+   */
+  fetchRemoteRefs: (repoPath: string, refs: readonly string[], signal?: AbortSignal) => Promise<boolean>;
   /** Moves the local branches their remote branches are ahead of, where Git can without a merge. */
   fastForwardBranches: (repoPath: string) => Promise<FastForwardResult>;
 }

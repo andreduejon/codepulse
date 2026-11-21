@@ -24,6 +24,8 @@ export interface DetailKeyOptions {
   detailNavRef: DetailNavRef;
   /** CI data getter — used to keep getAvailableTabs in sync with the detail panel. */
   getCommitData?: (sha: string) => unknown;
+  /** A provider tab's label for a commit: null hides a tab only some commits have (GitHub's Pull requests). */
+  tabLabel?: (tab: string, sha: string) => string | null | undefined;
   /** Returns true while the initial CI fetch is in-flight. */
   getProviderLoading?: () => boolean;
   /**
@@ -60,6 +62,7 @@ export function handleDetailKey(e: KeyEvent, opts: DetailKeyOptions): boolean {
       activeProviderView: state.activeProviderView(),
       getCommitData,
       providerLoading: getProviderLoading?.(),
+      tabLabel: opts.tabLabel,
     });
 
   const scrollCursorIntoView = (direction: -1 | 0 | 1 = 0) => {

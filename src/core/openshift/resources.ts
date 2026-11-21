@@ -1,7 +1,6 @@
 /** OpenShift resources read from the cluster's objects: their status, commit and images, the commit map and the graph's badges. */
 import type { GraphBadge, GraphStatusCounts, NamespaceMarker } from "../provider-model";
 import {
-  isCachedOpenShiftResource,
   OPENSHIFT_WATCH_KINDS,
   type OpenShiftCommitData,
   type OpenShiftControllerReference,
@@ -11,13 +10,15 @@ import {
   type OpenShiftResource,
   type OpenShiftResourceKind,
   type OpenShiftStatus,
+  type OpenShiftStatusRow,
 } from "./types";
+import type { OpenShiftWarning } from "./warnings";
 import { isOpenShiftWatchGone, type OpenShiftWatchEvent } from "./watch";
 
 type AnyObj = Record<string, unknown>;
 
 export function isTerminalBuildStatus(status: OpenShiftStatus): boolean {
-  return status === "pass" || status === "fail";
+  return status === "pass" || status === "fail" || status === "cancelled";
 }
 
 export function normalizeOpenShiftServerUrl(value: string): string {
@@ -211,11 +212,7 @@ function podStatus(pod: unknown): OpenShiftStatus {
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
 
 /** One thing a resource's status says is wrong: `waiting  CrashLoopBackOff  back-off 5m0s restarting…`. */
-export interface OpenShiftStatusRow {
-  status: string;
-  reason: string;
-  message: string;
-}
+export type { OpenShiftStatusRow } from "./types";
 
 /** Workload conditions in the state that says something is wrong; the healthy ones are left out. */
 const PROBLEM_CONDITIONS: Record<string, string> = {
@@ -281,12 +278,16 @@ export function openShiftStatusRows(kind: OpenShiftResourceKind, object: unknown
       .map(value => obj(value) ?? {})
       .filter(condition => PROBLEM_CONDITIONS[String(condition.type)] === condition.status)
       .map(condition => row(`${condition.type} ${condition.status}`, str(condition.reason), condition.message));
-  if (kind === "Build" && buildStatus(object) === "fail")
-    return [row(str(status.phase) ?? "Failed", str(status.reason), status.message)];
+  if (kind === "Build" && buildStatus(object) === "fail") {
+    // Its reason is optional: without one, the phase says it failed.
+    const phase = str(status.phase) ?? "Failed";
+    return [row(phase, str(status.reason) ?? phase, status.message)];
+  }
   return [];
 }
 
-function buildStatus(build: unknown): OpenShiftStatus {
+/** A Build's status from its object's phase. */
+export function buildStatus(build: unknown): OpenShiftStatus {
   const phase = str(obj(build)?.status && obj(obj(build)?.status)?.phase);
   switch (phase) {
     case "Complete":
@@ -297,8 +298,9 @@ function buildStatus(build: unknown): OpenShiftStatus {
       return "running";
     case "Failed":
     case "Error":
-    case "Cancelled":
       return "fail";
+    case "Cancelled":
+      return "cancelled";
     default:
       return "unknown";
   }
@@ -391,6 +393,7 @@ export function extractWorkload(
   return {
     ...baseResource(kind, namespace, item),
     status,
+    ...failingRows(status, kind, item),
     scaledToZero: desiredReplicas(obj(obj(item)?.spec) ?? {}) === 0 || undefined,
     imageRefs: containerImages(obj(item)?.spec),
     commitSha: commitShaFromItem(item, annotationKey),
@@ -398,15 +401,26 @@ export function extractWorkload(
   };
 }
 
-export function extractPod(namespace: string, item: unknown): OpenShiftResource {
+/** A Pod: its own commit label or annotation (under `annotationKey`) first, else its image or workload matches it. */
+export function extractPod(namespace: string, item: unknown, annotationKey?: string): OpenShiftResource {
   const statuses = arr(obj(obj(item)?.status)?.containerStatuses);
   const imageRefs = statuses.flatMap(s => [...imageTokens(str(obj(s)?.image)), ...imageTokens(str(obj(s)?.imageID))]);
   const status = podStatus(item);
+  const commitSha = annotationKey ? commitShaFromItem(item, annotationKey) : undefined;
   return {
     ...baseResource("Pod", namespace, item),
     status,
     imageRefs,
+    ...(commitSha ? { commitSha } : {}),
+    ...failingRows(status, "Pod", item),
   };
+}
+
+/** A failing resource's status rows, kept without its object. */
+function failingRows(status: OpenShiftStatus, kind: OpenShiftResourceKind, item: unknown): Partial<OpenShiftResource> {
+  if (status !== "fail") return {};
+  const rows = openShiftStatusRows(kind, item);
+  return rows.length > 0 ? { statusRows: rows } : {};
 }
 
 export function resourceFromWatchObject(object: unknown, annotationKey: string): OpenShiftResource | null {
@@ -415,7 +429,7 @@ export function resourceFromWatchObject(object: unknown, annotationKey: string):
   if (!kind || !namespace) return null;
   if (kind === "Deployment" || kind === "DeploymentConfig")
     return extractWorkload(kind, namespace, object, annotationKey);
-  if (kind === "Pod") return extractPod(namespace, object);
+  if (kind === "Pod") return extractPod(namespace, object, annotationKey);
   return null;
 }
 
@@ -450,7 +464,8 @@ export function extractController(
 ): OpenShiftControllerReference | null {
   const uid = str(metadata(item).uid);
   if (!uid) return null;
-  return { kind, namespace, uid, ownerReferences: ownerReferences(item) };
+  const createdAt = str(metadata(item).creationTimestamp);
+  return { kind, namespace, uid, ...(createdAt ? { createdAt } : {}), ownerReferences: ownerReferences(item) };
 }
 
 export function openShiftBuildLogUrl(serverUrl: string, namespace: string, buildName: string, follow = false): string {
@@ -523,7 +538,9 @@ export function buildOpenShiftCommitMap(
         : [],
     ),
   );
-  for (const r of resources.filter(r => r.commitSha)) {
+  // A terminating Pod is gone in a moment: on no commit, whether it names its own or is matched.
+  const shown = resources.filter(r => !(r.kind === "Pod" && r.terminating));
+  for (const r of shown.filter(r => r.commitSha)) {
     const sha = r.commitSha;
     if (!sha) continue;
     add(map, sha, r);
@@ -531,19 +548,24 @@ export function buildOpenShiftCommitMap(
     for (const token of r.imageRefs.flatMap(imageDigests)) set.add(token);
     tokensBySha.set(sha, set);
   }
-  for (const r of resources.filter(r => !r.commitSha)) {
-    if (r.kind === "Pod" && r.terminating) continue;
+  for (const r of shown.filter(r => !r.commitSha)) {
+    // The commits its image is from: during a rollout an old pod still matches the Deployment's selector, but runs
+    // the previous commit's image, so a known image wins over the selector.
+    const digests = r.imageRefs.flatMap(imageDigests);
+    const byImage = new Set(
+      [...tokensBySha].filter(([, tokens]) => digests.some(ref => tokens.has(ref))).map(([sha]) => sha),
+    );
     if (r.kind === "Pod") {
       for (const deploy of resources) {
         if (deploy.kind !== "Deployment" && deploy.kind !== "DeploymentConfig") continue;
         if (!deploy.commitSha || deploy.namespace !== r.namespace) continue;
         if (!matchesPodSelector(r.labels, deploy.podSelector)) continue;
+        if (byImage.size > 0 && !byImage.has(deploy.commitSha)) continue;
         add(map, deploy.commitSha, { ...r, commitSha: deploy.commitSha });
         matchedPods.push({ sha: deploy.commitSha, pod: r });
       }
     }
-    for (const [sha, tokens] of tokensBySha) {
-      if (!r.imageRefs.flatMap(imageDigests).some(ref => tokens.has(ref))) continue;
+    for (const sha of byImage) {
       add(map, sha, r);
       if (r.kind === "Pod") matchedPods.push({ sha, pod: r });
     }
@@ -578,7 +600,8 @@ function statusCounts(resources: readonly OpenShiftResource[]): GraphStatusCount
     failCount: resources.filter(r => r.status === "fail").length,
     runningCount: resources.filter(r => r.status === "running").length,
     passCount: resources.filter(r => r.status === "pass").length,
-    unknownCount: resources.filter(r => r.status === "unknown").length,
+    // Neutral, as CI counts its cancelled runs: a grey chip.
+    unknownCount: resources.filter(r => r.status === "unknown" || r.status === "cancelled").length,
   };
 }
 
@@ -606,7 +629,8 @@ export function buildOpenShiftNamespaceMarkers(
     // Scaled to 0, it runs nothing: no badge (the detail panel still lists it, `0 replicas`).
     if (!resource.commitSha || resource.terminating || resource.scaledToZero) continue;
     const state = resource.status === "pass" ? "live" : resource.status === "running" ? "rolling" : resource.status;
-    if (state === "unknown") continue;
+    // Only a Build is ever cancelled; a workload's unknown state marks nothing.
+    if (state === "unknown" || state === "cancelled") continue;
     const sha = resource.commitSha.toLowerCase();
     const states = byCommit.get(sha) ?? new Map<string, NamespaceMarker["state"]>();
     const previous = states.get(resource.namespace);
@@ -627,7 +651,38 @@ export function buildOpenShiftNamespaceMarkers(
   );
 }
 
-export function buildOpenShiftGraphBadges(data: Map<string, OpenShiftCommitData>): Map<string, GraphBadge> {
+/**
+ * A commit's badges: the status counts of what the cluster lists now, and how many resources only the cache has;
+ * the warnings the cluster still reports, and how many only the cache has (`isCachedWarning`; by default none).
+ */
+/** OpenShift's own counts on a graph badge (`GraphBadge.counts`), each only above zero. */
+export interface OpenShiftBadgeCounts {
+  /** Its resources only the cache has: the cluster no longer lists them (Resources, muted). */
+  cached?: number;
+  /** What its failing resources' status says is wrong (Events, red). */
+  failures?: number;
+  /** The warnings the cluster still reports (Events, the warning color). */
+  warnings?: number;
+  /** The Normal events the cluster lists now (Events, green). */
+  normal?: number;
+  /** Its events shown from the cache: a warning OpenShift deleted, or one about a resource that is gone (Events, muted). */
+  cachedEvents?: number;
+}
+
+/** A badge's OpenShift counts. */
+export const openShiftBadgeCounts = (badge: GraphBadge | undefined): OpenShiftBadgeCounts => badge?.counts ?? {};
+
+function badgeCounts(counts: Required<OpenShiftBadgeCounts>): Pick<GraphBadge, "counts"> {
+  const above = Object.entries(counts).filter(([, count]) => count > 0);
+  return above.length > 0 ? { counts: Object.fromEntries(above) } : {};
+}
+
+export function buildOpenShiftGraphBadges(
+  data: Map<string, OpenShiftCommitData>,
+  isCachedWarning: (sha: string, warning: OpenShiftWarning) => boolean = () => false,
+  /** A Normal event or a failure: cached only when what it is about is gone. */
+  isAboutGoneResource: (sha: string, event: OpenShiftWarning) => boolean = () => false,
+): Map<string, GraphBadge> {
   const badges = new Map<string, GraphBadge>();
   for (const [sha, entry] of data) {
     const resources = entry.namespaces.flatMap(ns => [
@@ -637,9 +692,20 @@ export function buildOpenShiftGraphBadges(data: Map<string, OpenShiftCommitData>
       ...ns.builds,
       ...ns.imageStreamTags,
     ]);
-    if (resources.length === 0) continue;
-    const live = resources.filter(r => !isCachedOpenShiftResource(r));
-    const cached = resources.filter(isCachedOpenShiftResource);
+    const warnings = entry.warnings ?? [];
+    const normal = entry.normalEvents ?? [];
+    const cachedWarnings = warnings.filter(warning => isCachedWarning(sha, warning)).length;
+    const warningCount = warnings.length - cachedWarnings;
+    const goneNormal = normal.filter(event => isAboutGoneResource(sha, event)).length;
+    const normalEventCount = normal.length - goneNormal;
+    // A failure is the status of what it is about: shown from the cache once that is gone (a pruned Build).
+    const failures = entry.failures ?? [];
+    const goneFailures = failures.filter(failure => isAboutGoneResource(sha, failure)).length;
+    const failureCount = failures.length - goneFailures;
+    const cachedEventCount = cachedWarnings + goneNormal + goneFailures;
+    if (resources.length === 0 && warnings.length === 0 && normal.length === 0) continue;
+    const listed = resources.filter(resource => !resource.cacheOnly);
+    const cachedCount = resources.length - listed.length;
     const totals = statusCounts(resources);
     const badge = worstStatus(totals);
     badges.set(sha, {
@@ -647,12 +713,16 @@ export function buildOpenShiftGraphBadges(data: Map<string, OpenShiftCommitData>
       badge,
       ...totals,
       resourceCount: resources.length,
-      lanes: {
-        live: statusCounts(live),
-        cache: statusCounts(cached),
-      },
+      lanes: { live: statusCounts(listed) },
       latestRunAt: "",
       latestStatus: badge,
+      ...badgeCounts({
+        cached: cachedCount,
+        failures: failureCount,
+        warnings: warningCount,
+        normal: normalEventCount,
+        cachedEvents: cachedEventCount,
+      }),
     });
   }
   return badges;

@@ -20,6 +20,8 @@ import {
   DEFAULT_AUTO_REFRESH_INTERVAL,
   DEFAULT_MAX_COUNT,
 } from "../../core/settings/config";
+import { type MergePreview, type MergePreviewSpan, mergePreviewSpan as spanOf } from "../graph/merge-preview";
+import { MAX_GRAPH_COLUMNS } from "../graph/viewport";
 import type { MenuTab } from "../hooks/menu-items-types";
 import { createProviderRegistry } from "../providers/provider";
 import { defaultPorts } from "./ports";
@@ -70,12 +72,18 @@ export interface AppState extends Omit<CoreAppState, "detailFor"> {
   detailCursorShortcut: Accessor<CursorShortcut>;
   /** The tab the Menu opens on: the one it was left on, or the one a command (`:providers`) asked for. */
   menuTab: Accessor<MenuTab>;
+  /** The merge the graph previews (a pull request's, while its tab is open), and where its line runs; null for none. */
+  mergePreviewSpan: Accessor<MergePreviewSpan | null>;
+  /** The entry the graph's details put the cursor on for a commit: the Dashboard event "Show in" jumped from. */
+  graphDetailTarget: Accessor<{ sha: string; entry: string } | null>;
 }
 
 export interface AppActions extends Omit<CoreAppActions, "detailFor"> {
   detailFor: (owner: DetailOwner) => DetailSlotActions;
   setDetailCursorShortcut: (shortcut: CursorShortcut) => void;
   setMenuTab: (tab: MenuTab) => void;
+  setMergePreview: (preview: MergePreview | null) => void;
+  setGraphDetailTarget: (target: { sha: string; entry: string } | null) => void;
 }
 
 const AppStateContext = createContext<{ state: AppState; actions: AppActions }>();
@@ -107,6 +115,10 @@ export function createAppState(
   const [searchQuery, setSearchQuery] = createSignal("");
   const [viewingBranch, setViewingBranch] = createSignal<string | null>(null);
   const [menuTab, setMenuTab] = createSignal<MenuTab>("repository");
+  const [graphDetailTarget, setGraphDetailTarget] = createSignal<{ sha: string; entry: string } | null>(null);
+  const [mergePreview, setMergePreview] = createSignal<MergePreview | null>(null, {
+    equals: (a, b) => a?.head === b?.head && a?.base === b?.base && a?.baseRef === b?.baseRef,
+  });
 
   // ── Path filtering ────────────────────────────────────────────────────
   const [pathFilter, setPathFilter] = createSignal<string | null>(null);
@@ -210,6 +222,13 @@ export function createAppState(
   // (mutual exclusion enforced by the keyboard handler / command dispatch).
 
   const highlightMode = createMemo(() => highlightModeOf(ancestrySet(), pathMatchSet(), searchQuery()));
+  // After graphRows, maxGraphColumns and mergePreview (a memo runs at once: AGENTS.md rule 1).
+  // An equal span keeps its object: new rows (a page, a refresh) redraw no line for it.
+  const mergePreviewSpan = createMemo(
+    () => spanOf(graphRows(), mergePreview(), maxGraphColumns(), MAX_GRAPH_COLUMNS),
+    null,
+    { equals: (a, b) => JSON.stringify(a) === JSON.stringify(b) },
+  );
 
   // The last search set, returned again while its matches stay the same: pages and refreshes bring new rows, and an
   // equal set must not make the dimming and navigation that read it run again. (AGENTS.md rule 3: a mutable ref.)
@@ -289,6 +308,8 @@ export function createAppState(
     workingTreeReads,
     viewingBranch,
     menuTab,
+    mergePreviewSpan,
+    graphDetailTarget,
     pathFilter,
     pathMatchSet,
     ancestrySet,
@@ -342,6 +363,8 @@ export function createAppState(
     noteWorkingTreeRead: () => setWorkingTreeReads(count => count + 1),
     setViewingBranch,
     setMenuTab,
+    setMergePreview,
+    setGraphDetailTarget,
     setPathFilter,
     setPathMatchSet,
     setActiveProviderView,

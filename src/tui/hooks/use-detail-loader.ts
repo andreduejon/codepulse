@@ -28,6 +28,8 @@ interface UseDetailLoaderOptions {
    * how the Files tab is disabled when a commit has no changed files.
    */
   getCommitData?: (sha: string) => unknown;
+  /** A provider tab's label for a commit: null hides a tab only some commits have (GitHub's Pull requests). */
+  tabLabel?: (tab: string, sha: string) => string | null | undefined;
   /**
    * Returns true while the initial CI fetch is in-flight.  Passed to
    * getAvailableTabs so the Actions tab is not switched away from prematurely
@@ -58,6 +60,7 @@ export function useDetailLoader({
   getIsJumpNavigation,
   detailNavRef,
   getCommitData,
+  tabLabel,
   getProviderLoading,
 }: UseDetailLoaderOptions): void {
   const details = createCommitDetailService({
@@ -81,14 +84,23 @@ export function useDetailLoader({
     // The Dashboard has details of its own: the graph's wait for it to go.
     if (activeProvider === "dashboard") return;
     const hash = commit?.hash ?? null;
-    if (path === shownFor.path && hash === shownFor.hash && activeProvider === shownFor.view) return;
+    // A jump from the Dashboard opens the event's own tab, once: also back on the commit and view it was left on.
+    const wanted = detailNavRef.pendingTab;
+    detailNavRef.pendingTab = undefined;
+    if (path === shownFor.path && hash === shownFor.hash && activeProvider === shownFor.view) {
+      if (wanted) {
+        setGraphDetail.setDetailActiveTab(wanted);
+        setGraphDetail.setDetailCursorIndex(0);
+      }
+      return;
+    }
     Object.assign(shownFor, { path, hash, view: activeProvider });
     /*
      * The tab starts over, except on a jump to a child or parent: walking the graph keeps the Details tab. The jump's
      * flag is set around the cursor change, and this effect runs inside it.
      */
     if (commit && !getIsJumpNavigation()) {
-      setGraphDetail.setDetailActiveTab(getDefaultDetailTab(commit, activeProvider, state.providers.set));
+      setGraphDetail.setDetailActiveTab(wanted ?? getDefaultDetailTab(commit, activeProvider, state.providers.set));
       setGraphDetail.setDetailCursorIndex(0);
       detailNavRef.pendingJumpDirection = null;
     }
@@ -118,6 +130,7 @@ export function useDetailLoader({
         stashByParent: state.stashByParent(),
         activeProviderView: provider,
         getCommitData,
+        tabLabel,
       });
       if (!available.includes(tab)) {
         setGraphDetail.setDetailActiveTab(getDefaultDetailTab(commit, provider, state.providers.set));
@@ -159,6 +172,7 @@ export function useDetailLoader({
       activeProviderView: state.activeProviderView(),
       getCommitData,
       providerLoading: getProviderLoading?.(),
+      tabLabel,
     });
     if (available.length > 0) {
       setGraphDetail.setDetailActiveTab(available[0]);

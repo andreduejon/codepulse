@@ -64,6 +64,8 @@ test("unsupported GraphQL jobs stay disabled while runs and REST expansion still
           jobs: [{ id: 10, name: "build", status: "completed", conclusion: "success", steps: [] }],
         });
       }
+      // The open pull requests, read beside the runs: none here.
+      if (url === "https://api.github.com/repos/owner/repo/pulls?state=open&per_page=100") return Response.json([]);
       throw new Error(`Unexpected network request: ${url}`);
     }) as typeof fetch;
     const { ci, state } = createRoot(rootDispose => {
@@ -107,7 +109,7 @@ test("unsupported GraphQL jobs stay disabled while runs and REST expansion still
       jobs: [expect.objectContaining({ id: 10, name: "build", status: "completed", conclusion: "success" })],
       error: null,
     });
-    expect(urls).toEqual([
+    expect(urls.filter(url => !url.includes("/pulls?"))).toEqual([
       ...Array(3).fill("https://api.github.com/graphql"),
       "https://api.github.com/repos/owner/repo/actions/runs/1/jobs?per_page=100&filter=all",
     ]);

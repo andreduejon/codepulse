@@ -19,7 +19,7 @@ bun run bench --save       # keep this run as the baseline (scripts/bench/baseli
 | `app` | the whole app: startup until the graph shows, keys, pages of older commits, memory after five pages |
 | `dashboard` | opening the Dashboard on 1,000 events, keys there, the memory it adds |
 | `switching` | switching between the three apps of a group, the memory twelve switches keep |
-| `log` | a CI log of 20,000 lines: opening it, its memory, `G`, the memory kept after ten more opens |
+| `log` | a CI log of 20,000 lines: opening it, its memory, `G`, wrapping it (`w`) and its memory, the memory kept after ten more opens |
 
 Memory is read after a full garbage collection: the process (with OpenTUI's native buffers) and the JavaScript heap.
 The heap is the heap's allocated blocks, so it also counts free space between objects: a change that only moves code

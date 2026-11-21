@@ -1,5 +1,6 @@
 import { createEffect, createMemo, createSignal, For, on, Show, untrack } from "solid-js";
 import type { OpenShiftCommitData, OpenShiftResource, OpenShiftStatus } from "../../../core/openshift/types";
+import { isWarnedNow, type OpenShiftWarning } from "../../../core/openshift/warnings";
 import type { StatusCategory } from "../../../core/status";
 import type { DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
@@ -37,6 +38,8 @@ export interface OpenShiftDetailTabProps {
   /** The resource the tab is shown for (the dashboard's event: a build), marked, with the tab's focus starting on it. */
   targetResourceId?: string;
   targetColor?: string;
+  /** Whether only the cache has a warning: OpenShift deleted it, so it no longer gives its resource `!`. */
+  isCached?: (warning: OpenShiftWarning) => boolean;
 }
 
 type NamespaceData = OpenShiftCommitData["namespaces"][number];
@@ -57,6 +60,7 @@ function statusCategory(status: OpenShiftStatus): StatusCategory {
   if (status === "pass") return "pass";
   if (status === "fail") return "fail";
   if (status === "running") return "running";
+  if (status === "cancelled") return "cancelled";
   return "unknown";
 }
 
@@ -149,6 +153,15 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
   // Namespaces without matched resources are left out of both the tree and the cursor order (no invisible stops).
   const namespaces = createMemo(() => (data()?.namespaces ?? []).filter(ns => namespaceResources(ns).length > 0));
   const resources = createMemo(() => namespaces().flatMap(namespaceResources));
+  /** The resources OpenShift still warns about, by id: they get `!`. What it said is in the Events tab. */
+  const warned = createMemo(() => {
+    const warnings = data()?.warnings ?? [];
+    const isCached = props.isCached ?? (() => false);
+    const ids = resources()
+      .filter(resource => isWarnedNow(resource, warnings, isCached))
+      .map(r => r.id);
+    return ids.length > 0 ? new Set(ids) : null;
+  });
   // Same wording as the CI tabs: the row (re)loads this commit's resources.
   const reloadLabel = () => (data() ? "Reload commit" : "Load commit");
   const reloadHint = () => (data() ? "reload" : "load");
@@ -278,6 +291,7 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
     if (index < 0) return;
     targetFocus.key = key;
     props.setDetailCursorIndex(index);
+    props.navRef?.scrollToCursor?.();
   });
 
   const renderResourceRow = (resource: OpenShiftResource, lead: string, connector: string) => {
@@ -289,7 +303,10 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
         ? t().accent
         : resource.id === props.targetResourceId && props.targetColor
           ? props.targetColor
-          : t().foreground;
+          : // Only the cache has it (the cluster pruned it): history, muted. Its status keeps its color.
+            resource.cacheOnly
+            ? t().foregroundMuted
+            : t().foreground;
     return (
       <box
         {...mouseRow(`resource:${resource.id}`, idx)}
@@ -312,6 +329,13 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
           grow={false}
         />
         <box flexGrow={1} />
+        <Show when={warned()}>
+          {set => (
+            <text selectable={!props.mouseEnabled} flexShrink={0} width={2} wrapMode="none" fg={t().warning}>
+              {set().has(resource.id) ? " !" : "  "}
+            </text>
+          )}
+        </Show>
         <text selectable={!props.mouseEnabled} flexShrink={0} width={2} wrapMode="none" fg={color()}>
           {statusMark(resource.status).padStart(2)}
         </text>

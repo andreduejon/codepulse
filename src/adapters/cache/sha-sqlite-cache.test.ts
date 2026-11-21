@@ -745,3 +745,32 @@ describe("read without touch", () => {
     expect(accessed()).not.toBe(1_000);
   });
 });
+
+describe("merge without touch", () => {
+  test("writes the merged snapshot and leaves its last access alone; one the cache no longer has stays gone", async () => {
+    const root = await cacheRoot();
+    const disk = cache(root);
+    const sha = "d".repeat(40);
+    const fresh = "e".repeat(40);
+    await disk.write("/repo", { sha, value: "old" });
+    setAccess(root, sha, 1_000);
+    await disk.mergeMany(
+      "/repo",
+      [
+        { sha, incoming: ["new"] },
+        { sha: fresh, incoming: ["fresh"] },
+      ],
+      (entrySha, _existing, incoming) => ({ sha: entrySha, value: incoming[0] ?? "" }),
+      () => true,
+      { touch: false },
+    );
+    expect((await disk.read("/repo", sha, { touch: false }))?.value).toBe("new");
+    const accessed = (of: string) =>
+      providerCacheDatabase(root)
+        .query<{ accessed_at: number }, [string]>("SELECT accessed_at FROM snapshots WHERE sha = ?")
+        .get(of)?.accessed_at;
+    expect(accessed(sha)).toBe(1_000);
+    // Writing it back would evict another commit's snapshot and logs in its place.
+    expect(accessed(fresh)).toBeUndefined();
+  });
+});

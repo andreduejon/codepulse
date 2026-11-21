@@ -10,7 +10,7 @@ import type { ProviderStatus } from "../provider-status";
 import { GITHUB_BANNER } from "./banner";
 import type { GitHubCacheEntry } from "./merge";
 import { createGitHubService, type GitHubApiPort, type GitHubCachePort } from "./service";
-import type { GitHubJob, GitHubRepo, GitHubWorkflowRun } from "./types";
+import type { GitHubJob, GitHubJobFetchResult, GitHubPullRequest, GitHubRepo, GitHubWorkflowRun } from "./types";
 import { DEFAULT_GITHUB_CONFIG } from "./types";
 
 const SHA = "a".repeat(40);
@@ -66,9 +66,25 @@ function harness() {
   };
   const api = {
     fetchCIDataForSHAs: mock(async () => ({ ...answer, jobs: new Map() })),
-    fetchRunJobs: mock(async () => ({ jobs: [job], error: null })),
+    fetchRunJobs: mock(async (): Promise<GitHubJobFetchResult> => ({ jobs: [job], error: null })),
     fetchJobAnnotations: mock(async () => []),
     fetchJobLog: mock(async () => "log"),
+    fetchOpenPullRequests: mock(
+      async (
+        _repo?: GitHubRepo,
+        _token?: string,
+        _signal?: AbortSignal,
+      ): Promise<{ data: GitHubPullRequest[]; error: string | null; failure?: ProviderFailure }> => ({
+        data: [],
+        error: null,
+      }),
+    ),
+    fetchClosedPullRequests: mock(
+      async (): Promise<{ data: GitHubPullRequest[]; error: string | null; failure?: ProviderFailure }> => ({
+        data: [],
+        error: null,
+      }),
+    ),
   };
   let lifecycle!: FetchLifecycle;
   const service = createGitHubService({
@@ -147,6 +163,26 @@ test("an expired token stops automatic requests until a Reload", async () => {
   expect(h.app.status.kind).toBe("idle");
 });
 
+test("an expired token on a run's jobs freezes automatic requests too, and says so", async () => {
+  const h = harness();
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  h.api.fetchRunJobs.mockImplementation(async () => ({
+    jobs: [],
+    error: GITHUB_BANNER.tokenExpired,
+    failure: "auth" as const,
+  }));
+  const running = run({ id: 8, status: "in_progress", conclusion: null });
+  await h.service.fetchJobsForRun(running);
+  expect(h.app.status).toEqual({ kind: "error", message: GITHUB_BANNER.tokenExpired });
+  // Another run's jobs and the automatic refresh ask GitHub no more.
+  expect((await h.service.fetchJobsForRun(run({ id: 9, status: "in_progress", conclusion: null }))).error).toBe(
+    GITHUB_BANNER.tokenExpired,
+  );
+  await h.lifecycle.fetchRefresh(undefined, true, false);
+  expect(h.api.fetchRunJobs).toHaveBeenCalledTimes(1);
+  expect(h.api.fetchCIDataForSHAs).toHaveBeenCalledTimes(1);
+});
+
 test("a finished run's jobs are read from GitHub once, then kept", async () => {
   const h = harness();
   await h.lifecycle.fetchInitial(undefined, undefined, true);
@@ -156,4 +192,119 @@ test("a finished run's jobs are read from GitHub once, then kept", async () => {
   expect(second.jobs.map(j => j.id)).toEqual([70]);
   expect(h.api.fetchRunJobs).toHaveBeenCalledTimes(1);
   expect(h.saved.get(SHA)?.jobs?.["7"]?.map(j => j.id)).toEqual([70]);
+});
+
+const pull = (overrides: Partial<GitHubPullRequest> = {}): GitHubPullRequest => ({
+  number: 123,
+  state: "open",
+  createdAt: "2026-03-01T09:00:00Z",
+  closedAt: null,
+  title: "feat(payments): retry failed payments",
+  url: "https://github.com/o/r/pull/123",
+  draft: false,
+  author: "demo-dev",
+  headSha: SHA,
+  headRef: "feature/payments-retry",
+  baseRef: "main",
+  baseSha: "c".repeat(40),
+  updatedAt: "2026-03-02T09:00:00Z",
+  ...overrides,
+});
+
+test("each fetch reads the open pull requests: a commit has those whose branch points at it, by number", async () => {
+  const h = harness();
+  h.api.fetchOpenPullRequests.mockImplementation(async () => ({
+    data: [pull({ number: 130, headSha: SHA.toUpperCase() }), pull(), pull({ number: 99, headSha: "b".repeat(40) })],
+    error: null,
+  }));
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  expect(h.service.pullRequestsAt(SHA).map(pr => pr.number)).toEqual([123, 130]);
+  expect(h.service.pullRequestsAt("b".repeat(40)).map(pr => pr.number)).toEqual([99]);
+  // A refresh reads them again: one merged meanwhile is gone.
+  h.api.fetchOpenPullRequests.mockImplementation(async () => ({ data: [pull()], error: null }));
+  await h.lifecycle.fetchRefresh(undefined, true, true);
+  expect(h.service.pullRequestsAt(SHA).map(pr => pr.number)).toEqual([123]);
+});
+
+test("a pull request list that fails keeps the last one and leaves the runs alone", async () => {
+  const h = harness();
+  h.api.fetchOpenPullRequests.mockImplementation(async () => ({ data: [pull()], error: null }));
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  h.api.fetchOpenPullRequests.mockImplementation(async () => ({ data: [], error: GITHUB_BANNER.fetchFailed }));
+  await h.lifecycle.fetchRefresh(undefined, true, true);
+  expect(h.service.pullRequestsAt(SHA).map(pr => pr.number)).toEqual([123]);
+  expect(h.app.status.kind).toBe("idle");
+  // Another repository starts without them.
+  h.lifecycle.resetCaches();
+  expect(h.service.pullRequestsAt(SHA)).toEqual([]);
+});
+
+test("each fetch also reads the pull requests merged or closed most recently: a commit has those its branch pointed at", async () => {
+  const h = harness();
+  const merged = pull({ number: 118, state: "merged", closedAt: "2026-03-02T08:00:00Z" });
+  const closed = pull({ number: 117, state: "closed", closedAt: "2026-03-02T09:00:00Z" });
+  h.api.fetchOpenPullRequests.mockImplementation(async () => ({ data: [pull()], error: null }));
+  h.api.fetchClosedPullRequests.mockImplementation(async () => ({ data: [merged, closed], error: null }));
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  await Bun.sleep(0);
+  // The chip and the merge preview: open ones only.
+  expect(h.service.pullRequestsAt(SHA).map(pr => pr.number)).toEqual([123]);
+  // Last ended first.
+  expect(h.service.closedPullRequestsAt(SHA).map(pr => pr.number)).toEqual([117, 118]);
+  expect(h.service.heldPullRequests().map(pr => pr.number)).toEqual([123, 118, 117]);
+  // A closed list that fails keeps the last one; the open one still updates.
+  h.api.fetchOpenPullRequests.mockImplementation(async () => ({ data: [], error: null }));
+  h.api.fetchClosedPullRequests.mockImplementation(async () => ({ data: [], error: GITHUB_BANNER.fetchFailed }));
+  await h.lifecycle.fetchRefresh(undefined, true, true);
+  await Bun.sleep(0);
+  expect(h.service.pullRequestsAt(SHA)).toEqual([]);
+  expect(h.service.closedPullRequestsAt(SHA).map(pr => pr.number)).toEqual([117, 118]);
+});
+
+test("an older pull request list that answers after a newer one changes nothing", async () => {
+  const h = harness();
+  let answerFirst!: (value: { data: GitHubPullRequest[]; error: string | null }) => void;
+  h.api.fetchOpenPullRequests.mockImplementationOnce(() => new Promise(resolve => (answerFirst = resolve)));
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  // The refresh's list answers first: no open pull request any more.
+  h.api.fetchOpenPullRequests.mockImplementation(async () => ({ data: [], error: null }));
+  await h.lifecycle.fetchRefresh(undefined, true, true);
+  await Bun.sleep(0);
+  answerFirst({ data: [pull()], error: null });
+  await Bun.sleep(0);
+  expect(h.service.pullRequestsAt(SHA)).toEqual([]);
+});
+
+test("a reset drops the pull request lists still on their way", async () => {
+  const h = harness();
+  let answer!: (value: { data: GitHubPullRequest[]; error: string | null }) => void;
+  let aborted = false;
+  h.api.fetchOpenPullRequests.mockImplementationOnce(
+    (_repo, _token, signal) =>
+      new Promise(resolve => {
+        answer = resolve;
+        signal?.addEventListener("abort", () => (aborted = true));
+      }),
+  );
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  h.lifecycle.resetCaches();
+  answer({ data: [pull()], error: null });
+  await Bun.sleep(0);
+  expect(aborted).toBe(true);
+  expect(h.service.pullRequestsAt(SHA)).toEqual([]);
+});
+
+test("the pull request lists stop with the lifecycle's requests, also once the runs are done", async () => {
+  const h = harness();
+  let aborted = false;
+  h.api.fetchOpenPullRequests.mockImplementationOnce(
+    (_repo, _token, signal) =>
+      new Promise(() => {
+        signal?.addEventListener("abort", () => (aborted = true));
+      }),
+  );
+  await h.lifecycle.fetchInitial(undefined, undefined, true);
+  expect(aborted).toBe(false);
+  h.lifecycle.dispose();
+  expect(aborted).toBe(true);
 });
