@@ -176,7 +176,7 @@
     │ │ │ █ │                   a89a18f  feat(search): highl
     │ │ │ │ │                                                    Dashboard
     │ │ │ █ │                   52defc5  feat(search): rank
-                                                                 codepulse v0.19.0                          ←/→ switch tab · ↑/↓ scroll
+                                                                 codepulse v0.20.0                          ←/→ switch tab · ↑/↓ scroll
   │
   │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                           normal   search   path   ancestry
   │
