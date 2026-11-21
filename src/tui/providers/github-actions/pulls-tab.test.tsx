@@ -9,12 +9,15 @@ import { createThemeState, ThemeContext } from "../../context/theme";
 import { type GitHubDetailSource, githubPullsDetail } from "./detail-entry";
 import { type PullFiles, PullRequestsTab } from "./pulls-tab";
 
+// One now for the file: pull requests made a millisecond apart would otherwise sort by that millisecond.
+const NOW = Date.now();
+
 const SHA = "a".repeat(40);
 
 const pull = (overrides: Partial<GitHubPullRequest> = {}): GitHubPullRequest => ({
   number: 124,
   state: "open",
-  createdAt: new Date(Date.now() - 60 * 60_000).toISOString(),
+  createdAt: new Date(NOW - 60 * 60_000).toISOString(),
   closedAt: null,
   title: "release: dev into main",
   url: "https://github.com/demo/shop/pull/124",
@@ -24,7 +27,7 @@ const pull = (overrides: Partial<GitHubPullRequest> = {}): GitHubPullRequest => 
   headRef: "dev",
   baseRef: "main",
   baseSha: "c".repeat(40),
-  updatedAt: new Date(Date.now() - 5 * 60_000).toISOString(),
+  updatedAt: new Date(NOW - 5 * 60_000).toISOString(),
   ...overrides,
 });
 
@@ -246,7 +249,7 @@ test("the graph previews a merge only for the pull request under the mouse or th
 test("merged and closed ones follow the open ones, muted, not selectable, with their end and mark; the legend says which", async () => {
   const theme = createThemeState();
   const [cursor, setCursor] = createSignal(0);
-  const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+  const ago = (minutes: number) => new Date(NOW - minutes * 60_000).toISOString();
   const navRef: DetailNavRef = {
     itemCount: 0,
     itemRefs: [],

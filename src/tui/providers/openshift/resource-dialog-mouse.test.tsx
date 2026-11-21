@@ -429,7 +429,9 @@ test("o opens the resource in the web console when its URL is set, and the foote
   }
 });
 
-const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+// One now for the file: rows made a millisecond apart would otherwise sort by that millisecond.
+const NOW = Date.now();
+const minutesAgo = (minutes: number) => new Date(NOW - minutes * 60_000).toISOString();
 
 test("c cycles log, object and events; events are newest first, warnings in the warning color, r refetches", async () => {
   const loadEvents = mock(

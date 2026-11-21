@@ -12,7 +12,9 @@ import { OpenShiftEventsTab } from "./events-tab";
 import { namespaceKey, reasonKey } from "./events-tree";
 
 const SHA = "a".repeat(40);
-const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+// One now for the file: two warnings made a millisecond apart would otherwise sort by that millisecond.
+const NOW = Date.now();
+const minutesAgo = (minutes: number) => new Date(NOW - minutes * 60_000).toISOString();
 
 const warning = (overrides: Partial<OpenShiftWarning>): OpenShiftWarning => ({
   id: "event-1",
